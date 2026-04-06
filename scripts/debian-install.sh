@@ -50,12 +50,21 @@ chmod 664 "${APP_DIR}/data/tips.json"
 touch "${APP_DIR}/data/admins.json"
 chown www-data:www-data "${APP_DIR}/data/admins.json"
 chmod 664 "${APP_DIR}/data/admins.json"
-touch "${APP_DIR}/data/leaderboards.json"
-chown www-data:www-data "${APP_DIR}/data/leaderboards.json"
-chmod 664 "${APP_DIR}/data/leaderboards.json"
-touch "${APP_DIR}/data/leaderboard-rate-limit.json"
-chown www-data:www-data "${APP_DIR}/data/leaderboard-rate-limit.json"
-chmod 664 "${APP_DIR}/data/leaderboard-rate-limit.json"
+DATA_FILES=(
+  "leaderboards.json"
+  "leaderboard-rate-limit.json"
+  "analytics.json"
+  "achievements.json"
+  "seasons.json"
+  "webhook-events.json"
+  "suspicious-scores.json"
+  "admin-sessions.json"
+)
+for f in "${DATA_FILES[@]}"; do
+  touch "${APP_DIR}/data/${f}"
+  chown www-data:www-data "${APP_DIR}/data/${f}"
+  chmod 664 "${APP_DIR}/data/${f}"
+done
 
 echo "[4/10] Detecting PHP-FPM socket..."
 PHP_SOCK="$(ls /run/php/php*-fpm.sock 2>/dev/null | head -n 1 || true)"
