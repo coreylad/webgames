@@ -619,3 +619,118 @@ function fetch_tip_tiers(): array
 
     return $tiers;
 }
+
+// ── Admin session store ────────────────────────────────────────────────────
+
+function ensure_admin_sessions_store(): string
+{
+    $dir = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'data';
+    if (!is_dir($dir)) {
+        mkdir($dir, 0775, true);
+    }
+
+    $file = $dir . DIRECTORY_SEPARATOR . 'admin-sessions.json';
+    if (!is_file($file)) {
+        file_put_contents($file, json_encode(['sessions' => []], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    }
+
+    return $file;
+}
+
+function read_admin_sessions_store(): array
+{
+    $file = ensure_admin_sessions_store();
+    $raw  = file_get_contents($file);
+    if ($raw === false || $raw === '') {
+        return ['sessions' => []];
+    }
+
+    $decoded = json_decode($raw, true);
+    return is_array($decoded) ? $decoded : ['sessions' => []];
+}
+
+function write_admin_sessions_store(array $store): void
+{
+    $file = ensure_admin_sessions_store();
+    file_put_contents($file, json_encode($store, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+}
+
+function create_admin_session(string $adminId, string $username, string $ip): array
+{
+    $store = read_admin_sessions_store();
+
+    // Clean up expired sessions (7-day TTL)
+    $cutoff = time() - 604800;
+    $store['sessions'] = array_values(array_filter(
+        $store['sessions'],
+        fn($s) => strtotime((string)($s['createdAt'] ?? '0')) > $cutoff
+    ));
+
+    $token = bin2hex(random_bytes(32));
+
+    $session = [
+        'id'             => generate_id(),
+        'adminId'        => $adminId,
+        'username'       => $username,
+        'token'          => $token,
+        'ip'             => $ip,
+        'userAgent'      => (string)($_SERVER['HTTP_USER_AGENT'] ?? ''),
+        'createdAt'      => now_iso(),
+        'lastActivityAt' => now_iso(),
+        'expiresAt'      => gmdate('c', time() + 604800),
+    ];
+
+    $store['sessions'][] = $session;
+    write_admin_sessions_store($store);
+
+    return $session;
+}
+
+function get_admin_session(string $token): ?array
+{
+    if (trim($token) === '') {
+        return null;
+    }
+
+    $store = read_admin_sessions_store();
+    $now   = time();
+
+    foreach ($store['sessions'] as &$session) {
+        if (!hash_equals((string)($session['token'] ?? ''), $token)) {
+            continue;
+        }
+
+        if (strtotime((string)($session['expiresAt'] ?? '0')) < $now) {
+            continue;
+        }
+
+        $session['lastActivityAt'] = now_iso();
+        write_admin_sessions_store($store);
+
+        return $session;
+    }
+
+    return null;
+}
+
+function destroy_admin_session(string $token): void
+{
+    $store = read_admin_sessions_store();
+    $store['sessions'] = array_values(array_filter(
+        $store['sessions'],
+        fn($s) => !hash_equals((string)($s['token'] ?? ''), $token)
+    ));
+    write_admin_sessions_store($store);
+}
+
+function get_active_admin_sessions(string $adminId): array
+{
+    $store = read_admin_sessions_store();
+    $now   = time();
+
+    return array_values(array_filter(
+        $store['sessions'],
+        fn($s) => ($s['adminId'] ?? '') === $adminId &&
+                  strtotime((string)($s['expiresAt'] ?? '0')) > $now
+    ));
+}

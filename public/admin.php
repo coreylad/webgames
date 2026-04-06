@@ -1,31 +1,40 @@
 <?php
 declare(strict_types=1);
 
-// ── Server-side session gate ──────────────────────────────────────────────
-// Read the session token from the cookie set after JS login.
-// Unauthenticated users never receive the dashboard HTML.
-$authed_user = null;
-$cookie_token = trim((string)($_COOKIE['admin_token'] ?? ''));
+// ── Server-side gate ──────────────────────────────────────────────────────
+$sessions_file = __DIR__ . '/../data/admin-sessions.json';
+$admins_file   = __DIR__ . '/../data/admins.json';
 
-if ($cookie_token !== '') {
-    $sessions_file = __DIR__ . '/../data/admin-sessions.json';
-    if (is_file($sessions_file)) {
-        $raw = (string)file_get_contents($sessions_file);
-        $store = json_decode($raw !== '' ? $raw : '{}', true);
-        foreach (($store['sessions'] ?? []) as $sess) {
-            if (
-                isset($sess['token'], $sess['expiresAt']) &&
-                hash_equals($sess['token'], $cookie_token) &&
-                strtotime((string)$sess['expiresAt']) > time()
-            ) {
-                $authed_user = htmlspecialchars((string)$sess['username'], ENT_QUOTES, 'UTF-8');
-                break;
-            }
+$authed_user = null;
+$needs_setup = true;
+
+// Check if any admins are registered
+if (is_file($admins_file)) {
+    $raw   = (string)file_get_contents($admins_file);
+    $store = json_decode($raw !== '' ? $raw : '{}', true);
+    $needs_setup = count($store['admins'] ?? []) === 0;
+}
+
+// Validate cookie session
+$cookie_token = trim((string)($_COOKIE['admin_token'] ?? ''));
+if ($cookie_token !== '' && is_file($sessions_file)) {
+    $raw   = (string)file_get_contents($sessions_file);
+    $store = json_decode($raw !== '' ? $raw : '{}', true);
+    foreach (($store['sessions'] ?? []) as $sess) {
+        if (
+            isset($sess['token'], $sess['expiresAt']) &&
+            hash_equals($sess['token'], $cookie_token) &&
+            strtotime((string)$sess['expiresAt']) > time()
+        ) {
+            $authed_user = htmlspecialchars((string)$sess['username'], ENT_QUOTES, 'UTF-8');
+            break;
         }
     }
 }
 
 $show_dashboard = $authed_user !== null;
+$show_setup     = $needs_setup && !$show_dashboard;
+$show_login     = !$needs_setup && !$show_dashboard;
 ?><!DOCTYPE html>
 <html lang="en">
 <head>
@@ -125,6 +134,16 @@ $show_dashboard = $authed_user !== null;
             margin-bottom: 1rem;
         }
         .login-error.active { display: block; }
+        .setup-badge {
+            display: inline-block;
+            background: rgba(251,146,60,0.15);
+            border: 1px solid rgba(251,146,60,0.3);
+            color: #fb923c;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            padding: 0.25rem 0.75rem;
+            margin-bottom: 1rem;
+        }
 
         /* ── Header ── */
         .header {
@@ -276,8 +295,36 @@ $show_dashboard = $authed_user !== null;
 </head>
 <body>
 
-<!-- Login Screen — shown by PHP when no valid session cookie -->
-<div class="login-container<?= $show_dashboard ? '' : ' active' ?>" id="loginContainer">
+<!-- First-time setup — only shown by PHP when admins.json is empty -->
+<div class="login-container<?= $show_setup ? ' active' : '' ?>" id="setupContainer">
+    <div class="login-card">
+        <div class="setup-badge">First-time setup</div>
+        <h1>Create Admin Account</h1>
+        <p class="subtitle">No admins exist yet. Create your account to continue.</p>
+        <div class="login-error" id="setupError"></div>
+        <form onsubmit="handleSetup(event)">
+            <div class="form-group">
+                <label for="setupUsername">Username</label>
+                <input type="text" id="setupUsername" required autocomplete="username"
+                       placeholder="Choose a username" minlength="3" maxlength="24">
+            </div>
+            <div class="form-group">
+                <label for="setupPassword">Password</label>
+                <input type="password" id="setupPassword" required autocomplete="new-password"
+                       placeholder="Choose a password" minlength="8">
+            </div>
+            <div class="form-group">
+                <label for="setupConfirm">Confirm Password</label>
+                <input type="password" id="setupConfirm" required autocomplete="new-password"
+                       placeholder="Repeat password" minlength="8">
+            </div>
+            <button class="login-btn" type="submit" id="setupBtn">Create Account</button>
+        </form>
+    </div>
+</div>
+
+<!-- Login Screen — shown by PHP when admins exist but no valid session cookie -->
+<div class="login-container<?= $show_login ? ' active' : '' ?>" id="loginContainer">
     <div class="login-card">
         <h1>Admin Portal</h1>
         <p class="subtitle">webgames.lol Dashboard</p>
@@ -285,7 +332,7 @@ $show_dashboard = $authed_user !== null;
         <form onsubmit="handleLogin(event)">
             <div class="form-group">
                 <label for="username">Username</label>
-                <input type="text" id="username" required autocomplete="username" placeholder="Enter admin username">
+                <input type="text" id="username" required autocomplete="username" placeholder="Enter username">
             </div>
             <div class="form-group">
                 <label for="password">Password</label>
@@ -428,6 +475,51 @@ $show_dashboard = $authed_user !== null;
 
     function deleteCookie(name) {
         document.cookie = name + '=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Strict';
+    }
+
+    // ── First-time setup ───────────────────────────────────────────────────
+    async function handleSetup(event) {
+        event.preventDefault();
+
+        const username  = document.getElementById('setupUsername').value.trim();
+        const password  = document.getElementById('setupPassword').value;
+        const confirm   = document.getElementById('setupConfirm').value;
+        const setupBtn  = document.getElementById('setupBtn');
+        const setupError = document.getElementById('setupError');
+
+        setupError.classList.remove('active');
+
+        if (password !== confirm) {
+            setupError.textContent = 'Passwords do not match.';
+            setupError.classList.add('active');
+            return;
+        }
+
+        setupBtn.disabled = true;
+        setupBtn.textContent = 'Creating account...';
+
+        try {
+            const res  = await fetch('/api/admin-setup.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+            const data = await res.json();
+
+            if (data.status === 'ok' && data.sessionToken) {
+                setCookie('admin_token', data.sessionToken, 7);
+                location.reload();
+            } else {
+                setupError.textContent = data.error || 'Setup failed.';
+                setupError.classList.add('active');
+            }
+        } catch (err) {
+            setupError.textContent = 'Connection error: ' + err.message;
+            setupError.classList.add('active');
+        } finally {
+            setupBtn.disabled = false;
+            setupBtn.textContent = 'Create Account';
+        }
     }
 
     // ── Login ──────────────────────────────────────────────────────────────
