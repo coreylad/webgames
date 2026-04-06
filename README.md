@@ -4,7 +4,7 @@ PHP-first HTML5 gaming website with Stripe tipping and an admin dashboard that s
 
 ## What is included
 
-- Seven built-in open-source HTML5 games:
+- Nine built-in HTML5 games:
   - Neon Snake
   - Skyline Pong
   - Pixel Pairs
@@ -12,11 +12,13 @@ PHP-first HTML5 gaming website with Stripe tipping and an admin dashboard that s
   - Laser Grid
   - Orbit Defender
   - Grid Duel
+   - Turbo Lane
+   - Meteor Drift
 - Stripe Checkout tip flow with required username
 - Stripe tip tiers pulled from your Stripe product catalogue (products/prices)
 - Admin dashboard that displays usernames, tier names, statuses, and totals
 - Installer page for easy first-time setup
-- MIT-licensed source codecd
+- Full production-ready source code
 
 ## Stack
 

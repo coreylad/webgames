@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Meteor Drift | webgames.lol</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body>
+    <main class="game-shell">
+      <header>
+        <h1>Meteor Drift</h1>
+        <p>Space survival sprint. Move with WASD or arrow keys and avoid incoming meteors.</p>
+        <a class="back-link" href="/">Back to webgames.lol</a>
+      </header>
+
+      <section class="panel">
+        <p id="meteorInfo">Score: 0</p>
+        <div class="canvas-wrap">
+          <canvas id="meteorCanvas" width="520" height="620" aria-label="Meteor Drift game"></canvas>
+        </div>
+        <div class="controls">
+          <button id="meteorRestart">Restart</button>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const canvas = document.getElementById("meteorCanvas");
+      const ctx = canvas.getContext("2d");
+      const info = document.getElementById("meteorInfo");
+      const restartBtn = document.getElementById("meteorRestart");
+
+      let ship;
+      let rocks;
+      let keys;
+      let score;
+      let ended;
+      let spawn;
+      let speed;
+
+      function restart() {
+        ship = { x: 250, y: 560, w: 26, h: 26, speed: 5.6 };
+        rocks = [];
+        keys = { left: false, right: false, up: false, down: false };
+        score = 0;
+        ended = false;
+        spawn = 0;
+        speed = 2.4;
+      }
+
+      function hit(a, b) {
+        return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+      }
+
+      function addRock() {
+        const size = 16 + Math.random() * 38;
+        rocks.push({
+          x: Math.random() * (canvas.width - size),
+          y: -size,
+          w: size,
+          h: size,
+          dy: speed + Math.random() * 2.2,
+          dx: (Math.random() - 0.5) * 1.5
+        });
+      }
+
+      function update() {
+        if (ended) {
+          info.textContent = `Score: ${Math.floor(score)} | Mission failed`;
+          return;
+        }
+
+        if (keys.left) ship.x -= ship.speed;
+        if (keys.right) ship.x += ship.speed;
+        if (keys.up) ship.y -= ship.speed;
+        if (keys.down) ship.y += ship.speed;
+
+        ship.x = Math.max(0, Math.min(canvas.width - ship.w, ship.x));
+        ship.y = Math.max(0, Math.min(canvas.height - ship.h, ship.y));
+
+        spawn += 1;
+        if (spawn > Math.max(10, 30 - score * 0.1)) {
+          spawn = 0;
+          addRock();
+        }
+
+        rocks.forEach((rock) => {
+          rock.y += rock.dy;
+          rock.x += rock.dx;
+          if (rock.x < 0 || rock.x + rock.w > canvas.width) {
+            rock.dx *= -1;
+          }
+          if (hit(ship, rock)) {
+            ended = true;
+          }
+        });
+
+        rocks = rocks.filter((rock) => rock.y < canvas.height + 80);
+        score += 0.14;
+        speed = Math.min(8.5, 2.4 + score * 0.012);
+
+        info.textContent = `Score: ${Math.floor(score)}`;
+      }
+
+      function drawStars() {
+        ctx.fillStyle = "#050a12";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        for (let i = 0; i < 90; i += 1) {
+          const x = (i * 57 + Date.now() * 0.02) % canvas.width;
+          const y = (i * 91 + Date.now() * 0.09) % canvas.height;
+          ctx.fillStyle = "rgba(200,230,255,0.65)";
+          ctx.fillRect(x, y, 2, 2);
+        }
+      }
+
+      function drawShip() {
+        ctx.fillStyle = "#00e5ff";
+        ctx.beginPath();
+        ctx.moveTo(ship.x + ship.w / 2, ship.y - 2);
+        ctx.lineTo(ship.x - 2, ship.y + ship.h + 2);
+        ctx.lineTo(ship.x + ship.w + 2, ship.y + ship.h + 2);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      function drawRock(rock) {
+        ctx.fillStyle = "#ff7f39";
+        ctx.beginPath();
+        ctx.ellipse(rock.x + rock.w / 2, rock.y + rock.h / 2, rock.w / 2, rock.h / 2, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      function draw() {
+        drawStars();
+        rocks.forEach(drawRock);
+        drawShip();
+      }
+
+      function frame() {
+        update();
+        draw();
+        requestAnimationFrame(frame);
+      }
+
+      window.addEventListener("keydown", (event) => {
+        const key = event.key.toLowerCase();
+        if (event.key === "ArrowLeft" || key === "a") keys.left = true;
+        if (event.key === "ArrowRight" || key === "d") keys.right = true;
+        if (event.key === "ArrowUp" || key === "w") keys.up = true;
+        if (event.key === "ArrowDown" || key === "s") keys.down = true;
+      });
+
+      window.addEventListener("keyup", (event) => {
+        const key = event.key.toLowerCase();
+        if (event.key === "ArrowLeft" || key === "a") keys.left = false;
+        if (event.key === "ArrowRight" || key === "d") keys.right = false;
+        if (event.key === "ArrowUp" || key === "w") keys.up = false;
+        if (event.key === "ArrowDown" || key === "s") keys.down = false;
+      });
+
+      restartBtn.addEventListener("click", restart);
+      restart();
+      frame();
+    </script>
+  </body>
+</html>

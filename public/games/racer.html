@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Turbo Lane | webgames.lol</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body>
+    <main class="game-shell">
+      <header>
+        <h1>Turbo Lane</h1>
+        <p>Arcade traffic runner. Use Left/Right arrows or A/D to dodge incoming cars.</p>
+        <a class="back-link" href="/">Back to webgames.lol</a>
+      </header>
+
+      <section class="panel">
+        <p id="racerInfo">Score: 0</p>
+        <div class="canvas-wrap">
+          <canvas id="racerCanvas" width="420" height="640" aria-label="Turbo Lane game"></canvas>
+        </div>
+        <div class="controls">
+          <button id="racerRestart">Restart</button>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const canvas = document.getElementById("racerCanvas");
+      const ctx = canvas.getContext("2d");
+      const info = document.getElementById("racerInfo");
+      const restartBtn = document.getElementById("racerRestart");
+
+      const lanes = [85, 170, 255, 340];
+      let laneIndex = 1;
+      let cars = [];
+      let score = 0;
+      let speed = 4;
+      let ended = false;
+      let spawn = 0;
+
+      function restart() {
+        laneIndex = 1;
+        cars = [];
+        score = 0;
+        speed = 4;
+        ended = false;
+        spawn = 0;
+      }
+
+      function playerRect() {
+        return { x: lanes[laneIndex] - 22, y: canvas.height - 95, w: 44, h: 74 };
+      }
+
+      function hit(a, b) {
+        return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+      }
+
+      function addCar() {
+        cars.push({
+          x: lanes[Math.floor(Math.random() * lanes.length)] - 22,
+          y: -90,
+          w: 44,
+          h: 74,
+          color: `hsl(${Math.floor(Math.random() * 360)}, 80%, 55%)`
+        });
+      }
+
+      function update() {
+        if (ended) {
+          info.textContent = `Score: ${Math.floor(score)} | Crash!`;
+          return;
+        }
+
+        spawn += 1;
+        if (spawn > Math.max(16, 45 - score * 0.15)) {
+          spawn = 0;
+          addCar();
+        }
+
+        cars.forEach((car) => {
+          car.y += speed;
+        });
+
+        const p = playerRect();
+        cars.forEach((car) => {
+          if (hit(p, car)) {
+            ended = true;
+          }
+        });
+
+        cars = cars.filter((car) => car.y < canvas.height + 120);
+
+        score += 0.12;
+        speed = Math.min(10, 4 + score * 0.01);
+        info.textContent = `Score: ${Math.floor(score)}`;
+      }
+
+      function drawRoad() {
+        ctx.fillStyle = "#111";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#2f2f2f";
+        ctx.fillRect(50, 0, canvas.width - 100, canvas.height);
+
+        ctx.strokeStyle = "#ffd400";
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(50, 0);
+        ctx.lineTo(50, canvas.height);
+        ctx.moveTo(canvas.width - 50, 0);
+        ctx.lineTo(canvas.width - 50, canvas.height);
+        ctx.stroke();
+
+        ctx.strokeStyle = "rgba(255,255,255,0.45)";
+        ctx.lineWidth = 2;
+        for (let i = 1; i < lanes.length; i += 1) {
+          const x = (lanes[i - 1] + lanes[i]) / 2;
+          for (let y = -40; y < canvas.height + 60; y += 42) {
+            ctx.beginPath();
+            ctx.moveTo(x, y + (Date.now() / 20 % 42));
+            ctx.lineTo(x, y + 26 + (Date.now() / 20 % 42));
+            ctx.stroke();
+          }
+        }
+      }
+
+      function drawCar(car, player = false) {
+        ctx.fillStyle = car.color;
+        ctx.fillRect(car.x, car.y, car.w, car.h);
+        ctx.fillStyle = "#cde6ff";
+        ctx.fillRect(car.x + 6, car.y + 10, car.w - 12, 16);
+        ctx.fillRect(car.x + 6, car.y + 48, car.w - 12, 14);
+        if (player) {
+          ctx.strokeStyle = "#00e5ff";
+          ctx.lineWidth = 2;
+          ctx.strokeRect(car.x - 2, car.y - 2, car.w + 4, car.h + 4);
+        }
+      }
+
+      function draw() {
+        drawRoad();
+        cars.forEach((car) => drawCar(car));
+        const p = playerRect();
+        drawCar({ ...p, color: "#00d0ff" }, true);
+      }
+
+      function frame() {
+        update();
+        draw();
+        requestAnimationFrame(frame);
+      }
+
+      window.addEventListener("keydown", (event) => {
+        if (event.key === "ArrowLeft" || event.key.toLowerCase() === "a") {
+          laneIndex = Math.max(0, laneIndex - 1);
+        }
+        if (event.key === "ArrowRight" || event.key.toLowerCase() === "d") {
+          laneIndex = Math.min(lanes.length - 1, laneIndex + 1);
+        }
+      });
+
+      restartBtn.addEventListener("click", restart);
+      restart();
+      frame();
+    </script>
+  </body>
+</html>

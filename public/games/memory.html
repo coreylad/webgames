@@ -25,8 +25,13 @@
         background: linear-gradient(145deg, #16324f, #244f78);
         color: #fff;
         font-size: 1.8rem;
-        font-family: "Space Mono", monospace;
+        font-family: "Share Tech Mono", monospace;
         cursor: pointer;
+      }
+
+      .memory-card.selected {
+        border-color: var(--cyan);
+        box-shadow: 0 0 0 2px rgba(0, 229, 255, 0.25);
       }
 
       .memory-card.revealed,
@@ -50,6 +55,7 @@
 
       <section class="panel">
         <p id="memoryInfo">Moves: 0 | Matches: 0/8</p>
+        <p class="status">Keyboard: Arrow keys move, Enter/Space flips selected card.</p>
         <div class="memory-grid" id="memoryGrid"></div>
         <div class="controls" style="margin-top: 1rem">
           <button id="memoryRestart">Restart</button>
@@ -69,6 +75,7 @@
       let lockBoard = false;
       let moves = 0;
       let matches = 0;
+      let selectedIndex = 0;
 
       function shuffle(array) {
         for (let i = array.length - 1; i > 0; i -= 1) {
@@ -89,6 +96,10 @@
           const button = document.createElement("button");
           button.className = "memory-card";
 
+          if (index === selectedIndex) {
+            button.classList.add("selected");
+          }
+
           if (card.revealed) {
             button.classList.add("revealed");
           }
@@ -99,9 +110,22 @@
           }
 
           button.textContent = card.revealed || card.matched ? card.value : "?";
+          button.setAttribute("aria-label", `Card ${index + 1}`);
           button.addEventListener("click", () => flipCard(index));
           grid.appendChild(button);
         });
+      }
+
+      function moveSelection(direction) {
+        const row = Math.floor(selectedIndex / 4);
+        const col = selectedIndex % 4;
+
+        if (direction === "up") selectedIndex = ((row + 3) % 4) * 4 + col;
+        if (direction === "down") selectedIndex = ((row + 1) % 4) * 4 + col;
+        if (direction === "left") selectedIndex = row * 4 + ((col + 3) % 4);
+        if (direction === "right") selectedIndex = row * 4 + ((col + 1) % 4);
+
+        render();
       }
 
       function checkForWin() {
@@ -166,9 +190,33 @@
         lockBoard = false;
         moves = 0;
         matches = 0;
+        selectedIndex = 0;
         render();
         updateInfo();
       }
+
+      window.addEventListener("keydown", (event) => {
+        if (event.key === "ArrowUp") {
+          event.preventDefault();
+          moveSelection("up");
+        }
+        if (event.key === "ArrowDown") {
+          event.preventDefault();
+          moveSelection("down");
+        }
+        if (event.key === "ArrowLeft") {
+          event.preventDefault();
+          moveSelection("left");
+        }
+        if (event.key === "ArrowRight") {
+          event.preventDefault();
+          moveSelection("right");
+        }
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          flipCard(selectedIndex);
+        }
+      });
 
       restartButton.addEventListener("click", restart);
       restart();

@@ -23,15 +23,21 @@
         min-height: 90px;
         border: 2px solid var(--border);
         border-radius: 12px;
-        background: #fff;
+        background: rgba(0, 229, 255, 0.05);
+        color: #fff;
         font-size: 2rem;
-        font-family: "Space Mono", monospace;
+        font-family: "Share Tech Mono", monospace;
         cursor: pointer;
+      }
+
+      .ttt-cell.selected {
+        border-color: var(--cyan);
+        box-shadow: 0 0 0 2px rgba(0, 229, 255, 0.25);
       }
 
       .ttt-score {
         margin-top: 1rem;
-        font-family: "Space Mono", monospace;
+        font-family: "Share Tech Mono", monospace;
       }
     </style>
   </head>
@@ -39,7 +45,7 @@
     <main class="game-shell">
       <header>
         <h1>Grid Duel</h1>
-        <p>Grid duel mode. Play X vs O and keep score over rounds.</p>
+        <p>Grid duel mode. Play X vs O and keep score over rounds. Keyboard: 1-9 or arrows + Enter.</p>
         <a class="back-link" href="/">Back to webgames.lol</a>
       </header>
 
@@ -65,6 +71,7 @@
       let turn;
       let ended;
       let score;
+      let selectedCell = 0;
 
       const wins = [
         [0, 1, 2],
@@ -81,6 +88,7 @@
         board = ["", "", "", "", "", "", "", "", ""];
         turn = "X";
         ended = false;
+        selectedCell = 0;
         render();
         info.textContent = "Turn: X";
       }
@@ -140,11 +148,55 @@
         board.forEach((cell, index) => {
           const button = document.createElement("button");
           button.className = "ttt-cell";
+          if (index === selectedCell) {
+            button.classList.add("selected");
+          }
           button.textContent = cell || "";
           button.addEventListener("click", () => clickCell(index));
           grid.appendChild(button);
         });
       }
+
+      function moveSelection(direction) {
+        const row = Math.floor(selectedCell / 3);
+        const col = selectedCell % 3;
+
+        if (direction === "up") selectedCell = ((row + 2) % 3) * 3 + col;
+        if (direction === "down") selectedCell = ((row + 1) % 3) * 3 + col;
+        if (direction === "left") selectedCell = row * 3 + ((col + 2) % 3);
+        if (direction === "right") selectedCell = row * 3 + ((col + 1) % 3);
+
+        render();
+      }
+
+      window.addEventListener("keydown", (event) => {
+        if (event.key >= "1" && event.key <= "9") {
+          event.preventDefault();
+          clickCell(Number(event.key) - 1);
+          return;
+        }
+
+        if (event.key === "ArrowUp") {
+          event.preventDefault();
+          moveSelection("up");
+        }
+        if (event.key === "ArrowDown") {
+          event.preventDefault();
+          moveSelection("down");
+        }
+        if (event.key === "ArrowLeft") {
+          event.preventDefault();
+          moveSelection("left");
+        }
+        if (event.key === "ArrowRight") {
+          event.preventDefault();
+          moveSelection("right");
+        }
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          clickCell(selectedCell);
+        }
+      });
 
       restartButton.addEventListener("click", resetRound);
       resetButton.addEventListener("click", resetScore);
