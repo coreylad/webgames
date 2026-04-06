@@ -69,7 +69,7 @@ server {
     server_name ${SERVER_NAMES};
 
     root ${APP_DIR};
-    index installer.php public/index.html index.php;
+    index index.php;
 
     add_header X-Frame-Options "SAMEORIGIN" always;
     add_header X-Content-Type-Options "nosniff" always;
@@ -80,6 +80,7 @@ server {
     autoindex off;
     server_tokens off;
 
+    location = / { try_files /public/index.html =404; }
     location = /admin.html { return 301 /admin.php; }
 
     location / {
