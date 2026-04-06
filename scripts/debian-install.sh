@@ -74,7 +74,7 @@ server {
     add_header X-Frame-Options "SAMEORIGIN" always;
     add_header X-Content-Type-Options "nosniff" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-    add_header Content-Security-Policy "default-src 'self' https://js.stripe.com https://api.stripe.com; script-src 'self' https://js.stripe.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.stripe.com; frame-src https://js.stripe.com https://hooks.stripe.com; object-src 'none'; base-uri 'self'; frame-ancestors 'self'" always;
+    add_header Content-Security-Policy "default-src 'self' https://js.stripe.com https://api.stripe.com; script-src 'self' https://js.stripe.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data:; connect-src 'self' https://api.stripe.com; frame-src https://js.stripe.com https://hooks.stripe.com; object-src 'none'; base-uri 'self'; frame-ancestors 'self'" always;
 
     client_max_body_size 4m;
     autoindex off;
@@ -82,6 +82,14 @@ server {
 
     location = / { try_files /public/index.html =404; }
     location = /admin.html { return 301 /admin.php; }
+    location = /styles.css { return 301 /public/styles.css; }
+    location = /app.js { return 301 /public/app.js; }
+    location = /success.html { return 301 /public/success.html; }
+    location = /success.js { return 301 /public/success.js; }
+
+    location ^~ /games/ {
+      return 301 /public\$request_uri;
+    }
 
     location / {
       try_files \$uri \$uri/ /public/index.html;
