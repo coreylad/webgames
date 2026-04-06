@@ -51,7 +51,7 @@ $tipRecord = add_tip_record([
 $baseUrl = rtrim(env_value('BASE_URL', detect_base_url()), '/');
 $response = stripe_request('POST', 'checkout/sessions', [
     'mode' => 'payment',
-    'success_url' => $baseUrl . '/success.html?session_id={CHECKOUT_SESSION_ID}',
+    'success_url' => $baseUrl . '/public/success.html?session_id={CHECKOUT_SESSION_ID}',
     'cancel_url' => $baseUrl . '/?tip=cancelled',
     'line_items[0][price]' => $selectedTier['id'],
     'line_items[0][quantity]' => '1',
