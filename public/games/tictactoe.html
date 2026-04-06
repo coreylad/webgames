@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Grid Duel | webgames.lol</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Changa:wght@400;600;700&family=Space+Mono:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../styles.css" />
+    <style>
+      .ttt-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.65rem;
+        width: min(360px, 100%);
+      }
+
+      .ttt-cell {
+        min-height: 90px;
+        border: 2px solid var(--border);
+        border-radius: 12px;
+        background: #fff;
+        font-size: 2rem;
+        font-family: "Space Mono", monospace;
+        cursor: pointer;
+      }
+
+      .ttt-score {
+        margin-top: 1rem;
+        font-family: "Space Mono", monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="game-shell">
+      <header>
+        <h1>Grid Duel</h1>
+        <p>Open-source HTML5 game. Play X vs O and keep score over rounds.</p>
+        <a class="back-link" href="/">Back to webgames.lol</a>
+      </header>
+
+      <section class="panel">
+        <p id="tttInfo">Turn: X</p>
+        <div class="ttt-grid" id="tttGrid"></div>
+        <p class="ttt-score" id="tttScore">X wins: 0 | O wins: 0 | Draws: 0</p>
+        <div class="controls">
+          <button id="tttRestart">New Round</button>
+          <button id="tttReset">Reset Score</button>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const grid = document.getElementById("tttGrid");
+      const info = document.getElementById("tttInfo");
+      const scoreEl = document.getElementById("tttScore");
+      const restartButton = document.getElementById("tttRestart");
+      const resetButton = document.getElementById("tttReset");
+
+      let board;
+      let turn;
+      let ended;
+      let score;
+
+      const wins = [
+        [0, 1, 2],
+        [3, 4, 5],
+        [6, 7, 8],
+        [0, 3, 6],
+        [1, 4, 7],
+        [2, 5, 8],
+        [0, 4, 8],
+        [2, 4, 6]
+      ];
+
+      function resetRound() {
+        board = ["", "", "", "", "", "", "", "", ""];
+        turn = "X";
+        ended = false;
+        render();
+        info.textContent = "Turn: X";
+      }
+
+      function resetScore() {
+        score = { X: 0, O: 0, draws: 0 };
+        updateScore();
+        resetRound();
+      }
+
+      function updateScore() {
+        scoreEl.textContent = `X wins: ${score.X} | O wins: ${score.O} | Draws: ${score.draws}`;
+      }
+
+      function winner() {
+        for (const [a, b, c] of wins) {
+          if (board[a] && board[a] === board[b] && board[b] === board[c]) {
+            return board[a];
+          }
+        }
+        return "";
+      }
+
+      function clickCell(index) {
+        if (ended || board[index]) {
+          return;
+        }
+
+        board[index] = turn;
+        const whoWon = winner();
+
+        if (whoWon) {
+          ended = true;
+          score[whoWon] += 1;
+          info.textContent = `${whoWon} wins this round`;
+          updateScore();
+          render();
+          return;
+        }
+
+        if (board.every((cell) => cell !== "")) {
+          ended = true;
+          score.draws += 1;
+          info.textContent = "Draw round";
+          updateScore();
+          render();
+          return;
+        }
+
+        turn = turn === "X" ? "O" : "X";
+        info.textContent = `Turn: ${turn}`;
+        render();
+      }
+
+      function render() {
+        grid.innerHTML = "";
+        board.forEach((cell, index) => {
+          const button = document.createElement("button");
+          button.className = "ttt-cell";
+          button.textContent = cell || "";
+          button.addEventListener("click", () => clickCell(index));
+          grid.appendChild(button);
+        });
+      }
+
+      restartButton.addEventListener("click", resetRound);
+      resetButton.addEventListener("click", resetScore);
+
+      resetScore();
+    </script>
+  </body>
+</html>

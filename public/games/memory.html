@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pixel Pairs | webgames.lol</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Changa:wght@400;600;700&family=Space+Mono:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../styles.css" />
+    <style>
+      .memory-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(60px, 1fr));
+        gap: 0.55rem;
+      }
+
+      .memory-card {
+        border: 2px solid var(--border);
+        border-radius: 12px;
+        min-height: 78px;
+        background: linear-gradient(145deg, #16324f, #244f78);
+        color: #fff;
+        font-size: 1.8rem;
+        font-family: "Space Mono", monospace;
+        cursor: pointer;
+      }
+
+      .memory-card.revealed,
+      .memory-card.matched {
+        background: #fff8ec;
+        color: #1b2736;
+      }
+
+      .memory-card.matched {
+        border-color: #24a16d;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="game-shell">
+      <header>
+        <h1>Pixel Pairs</h1>
+        <p>Open-source HTML5 game. Match all pairs in as few moves as possible.</p>
+        <a class="back-link" href="/">← Back to webgames.lol</a>
+      </header>
+
+      <section class="panel">
+        <p id="memoryInfo">Moves: 0 | Matches: 0/8</p>
+        <div class="memory-grid" id="memoryGrid"></div>
+        <div class="controls" style="margin-top: 1rem">
+          <button id="memoryRestart">Restart</button>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const info = document.getElementById("memoryInfo");
+      const grid = document.getElementById("memoryGrid");
+      const restartButton = document.getElementById("memoryRestart");
+
+      const symbols = ["🎮", "🕹️", "⭐", "🚀", "💎", "🔥", "👾", "🏆"];
+      let cards = [];
+      let firstIndex = null;
+      let secondIndex = null;
+      let lockBoard = false;
+      let moves = 0;
+      let matches = 0;
+
+      function shuffle(array) {
+        for (let i = array.length - 1; i > 0; i -= 1) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [array[i], array[j]] = [array[j], array[i]];
+        }
+        return array;
+      }
+
+      function updateInfo(text = "") {
+        info.textContent = `Moves: ${moves} | Matches: ${matches}/8${text ? ` | ${text}` : ""}`;
+      }
+
+      function render() {
+        grid.innerHTML = "";
+
+        cards.forEach((card, index) => {
+          const button = document.createElement("button");
+          button.className = "memory-card";
+
+          if (card.revealed) {
+            button.classList.add("revealed");
+          }
+
+          if (card.matched) {
+            button.classList.add("matched");
+            button.disabled = true;
+          }
+
+          button.textContent = card.revealed || card.matched ? card.value : "?";
+          button.addEventListener("click", () => flipCard(index));
+          grid.appendChild(button);
+        });
+      }
+
+      function checkForWin() {
+        if (matches === symbols.length) {
+          updateInfo("You cleared the board!");
+        }
+      }
+
+      function resolveTurn() {
+        const first = cards[firstIndex];
+        const second = cards[secondIndex];
+
+        if (first.value === second.value) {
+          first.matched = true;
+          second.matched = true;
+          matches += 1;
+          firstIndex = null;
+          secondIndex = null;
+          lockBoard = false;
+          render();
+          updateInfo();
+          checkForWin();
+          return;
+        }
+
+        setTimeout(() => {
+          first.revealed = false;
+          second.revealed = false;
+          firstIndex = null;
+          secondIndex = null;
+          lockBoard = false;
+          render();
+          updateInfo();
+        }, 650);
+      }
+
+      function flipCard(index) {
+        if (lockBoard || cards[index].matched || cards[index].revealed) {
+          return;
+        }
+
+        cards[index].revealed = true;
+
+        if (firstIndex === null) {
+          firstIndex = index;
+        } else {
+          secondIndex = index;
+          lockBoard = true;
+          moves += 1;
+          resolveTurn();
+        }
+
+        render();
+        updateInfo();
+      }
+
+      function restart() {
+        const deck = shuffle([...symbols, ...symbols]);
+        cards = deck.map((symbol) => ({ value: symbol, revealed: false, matched: false }));
+        firstIndex = null;
+        secondIndex = null;
+        lockBoard = false;
+        moves = 0;
+        matches = 0;
+        render();
+        updateInfo();
+      }
+
+      restartButton.addEventListener("click", restart);
+      restart();
+    </script>
+  </body>
+</html>

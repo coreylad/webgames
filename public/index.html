@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>webgames.lol | Play free HTML5 games</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Changa:wght@400;600;700&family=Space+Mono:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="bg-shape bg-shape-left"></div>
+    <div class="bg-shape bg-shape-right"></div>
+
+    <header class="site-header container">
+      <a class="logo" href="/">webgames.lol</a>
+      <nav class="top-nav">
+        <a href="#games">Games</a>
+        <a href="#tip">Tip Jar</a>
+        <a href="/admin.html">Admin</a>
+      </nav>
+    </header>
+
+    <main class="container">
+      <section class="hero">
+        <p class="hero-badge">Free and Open-Source HTML5 Fun</p>
+        <h1>Play quick games. Support creators. Keep webgames.lol alive.</h1>
+        <p>
+          Every game here is free to play and open-source under the MIT license. Pick a game,
+          post your high score, and drop a tip if you want to support future updates.
+        </p>
+      </section>
+
+      <section class="panel" id="tip">
+        <div class="panel-header">
+          <h2>Tip webgames.lol</h2>
+          <p>Username is required so your support appears in the admin dashboard.</p>
+        </div>
+
+        <form id="tipForm" class="tip-form">
+          <label for="username">Username</label>
+          <input
+            type="text"
+            id="username"
+            name="username"
+            minlength="3"
+            maxlength="24"
+            pattern="[a-zA-Z0-9_-]{3,24}"
+            placeholder="arcade_hero"
+            required
+          />
+
+          <label for="priceId">Tip tier (from Stripe product catalogue)</label>
+          <select id="priceId" name="priceId" required>
+            <option value="">Loading tiers...</option>
+          </select>
+
+          <button type="submit" id="tipSubmit">Continue to Stripe</button>
+          <p id="tipMessage" class="status" aria-live="polite"></p>
+        </form>
+      </section>
+
+      <section id="games">
+        <div class="panel-header">
+          <h2>Game Library</h2>
+          <p>Built with vanilla HTML5 canvas and JavaScript.</p>
+        </div>
+
+        <div class="game-grid">
+          <article class="game-card">
+            <h3>Neon Snake</h3>
+            <p>Collect fruit, grow long, and survive the walls as speed climbs.</p>
+            <a href="games/snake.html">Play Snake</a>
+          </article>
+
+          <article class="game-card">
+            <h3>Skyline Pong</h3>
+            <p>Classic paddle challenge with AI opponent and rising ball pace.</p>
+            <a href="games/pong.html">Play Pong</a>
+          </article>
+
+          <article class="game-card">
+            <h3>Pixel Pairs</h3>
+            <p>Flip cards, find pairs, and clear the board with the least moves.</p>
+            <a href="games/memory.html">Play Pixel Pairs</a>
+          </article>
+
+          <article class="game-card">
+            <h3>Brick Blitz</h3>
+            <p>Break every brick, keep the ball in play, and push for a perfect clear.</p>
+            <a href="games/breakout.html">Play Brick Blitz</a>
+          </article>
+
+          <article class="game-card">
+            <h3>Laser Grid</h3>
+            <p>Dodge the falling hazard blocks as speed ramps and score climbs.</p>
+            <a href="games/dodger.html">Play Laser Grid</a>
+          </article>
+
+          <article class="game-card">
+            <h3>Orbit Defender</h3>
+            <p>Shoot descending enemies and survive as long as possible.</p>
+            <a href="games/shooter.html">Play Orbit Defender</a>
+          </article>
+
+          <article class="game-card">
+            <h3>Grid Duel</h3>
+            <p>Classic tic-tac-toe with score tracking and instant rematches.</p>
+            <a href="games/tictactoe.html">Play Grid Duel</a>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <footer class="container site-footer">
+      <p>webgames.lol © 2026 | Free and open-source HTML5 games under MIT license</p>
+    </footer>
+
+    <script src="app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Skyline Pong | webgames.lol</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Changa:wght@400;600;700&family=Space+Mono:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body>
+    <main class="game-shell">
+      <header>
+        <h1>Skyline Pong</h1>
+        <p>Open-source HTML5 game. Move paddle with mouse, touch, or W/S keys.</p>
+        <a class="back-link" href="/">← Back to webgames.lol</a>
+      </header>
+
+      <section class="panel">
+        <p id="pongInfo">Player: 0 | CPU: 0</p>
+        <div class="canvas-wrap">
+          <canvas id="pongCanvas" width="720" height="420" aria-label="Pong game"></canvas>
+        </div>
+        <div class="controls">
+          <button id="pongRestart">Restart Match</button>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const canvas = document.getElementById("pongCanvas");
+      const ctx = canvas.getContext("2d");
+      const info = document.getElementById("pongInfo");
+      const restartButton = document.getElementById("pongRestart");
+
+      const paddleHeight = 90;
+      const paddleWidth = 12;
+      let playerY = canvas.height / 2 - paddleHeight / 2;
+      let cpuY = canvas.height / 2 - paddleHeight / 2;
+      let ball;
+      let velocity;
+      let playerScore = 0;
+      let cpuScore = 0;
+      let keys = { w: false, s: false };
+
+      function resetBall(direction = 1) {
+        ball = { x: canvas.width / 2, y: canvas.height / 2, size: 10 };
+        velocity = {
+          x: 4 * direction,
+          y: (Math.random() * 3 - 1.5) || 1.2
+        };
+      }
+
+      function restart() {
+        playerScore = 0;
+        cpuScore = 0;
+        playerY = canvas.height / 2 - paddleHeight / 2;
+        cpuY = canvas.height / 2 - paddleHeight / 2;
+        resetBall(Math.random() > 0.5 ? 1 : -1);
+      }
+
+      function clamp(value, min, max) {
+        return Math.min(max, Math.max(min, value));
+      }
+
+      function updatePaddles() {
+        if (keys.w) playerY -= 6;
+        if (keys.s) playerY += 6;
+
+        playerY = clamp(playerY, 0, canvas.height - paddleHeight);
+
+        const cpuCenter = cpuY + paddleHeight / 2;
+        if (cpuCenter < ball.y - 8) cpuY += 3.7;
+        if (cpuCenter > ball.y + 8) cpuY -= 3.7;
+        cpuY = clamp(cpuY, 0, canvas.height - paddleHeight);
+      }
+
+      function paddleCollision(px, py) {
+        return (
+          ball.x - ball.size < px + paddleWidth &&
+          ball.x + ball.size > px &&
+          ball.y - ball.size < py + paddleHeight &&
+          ball.y + ball.size > py
+        );
+      }
+
+      function updateBall() {
+        ball.x += velocity.x;
+        ball.y += velocity.y;
+
+        if (ball.y - ball.size <= 0 || ball.y + ball.size >= canvas.height) {
+          velocity.y *= -1;
+        }
+
+        if (paddleCollision(16, playerY)) {
+          ball.x = 16 + paddleWidth + ball.size;
+          velocity.x = Math.abs(velocity.x) + 0.25;
+          velocity.y += (ball.y - (playerY + paddleHeight / 2)) * 0.03;
+        }
+
+        if (paddleCollision(canvas.width - 28, cpuY)) {
+          ball.x = canvas.width - 28 - ball.size;
+          velocity.x = -Math.abs(velocity.x) - 0.25;
+          velocity.y += (ball.y - (cpuY + paddleHeight / 2)) * 0.03;
+        }
+
+        if (ball.x < 0) {
+          cpuScore += 1;
+          resetBall(1);
+        }
+
+        if (ball.x > canvas.width) {
+          playerScore += 1;
+          resetBall(-1);
+        }
+      }
+
+      function drawBackground() {
+        const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+        grad.addColorStop(0, "#13293d");
+        grad.addColorStop(1, "#1c4b73");
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.strokeStyle = "rgba(255,255,255,0.2)";
+        ctx.setLineDash([10, 10]);
+        ctx.beginPath();
+        ctx.moveTo(canvas.width / 2, 0);
+        ctx.lineTo(canvas.width / 2, canvas.height);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      function draw() {
+        drawBackground();
+
+        ctx.fillStyle = "#ff6433";
+        ctx.fillRect(16, playerY, paddleWidth, paddleHeight);
+
+        ctx.fillStyle = "#1f8f89";
+        ctx.fillRect(canvas.width - 28, cpuY, paddleWidth, paddleHeight);
+
+        ctx.fillStyle = "#fbbe36";
+        ctx.beginPath();
+        ctx.arc(ball.x, ball.y, ball.size, 0, Math.PI * 2);
+        ctx.fill();
+
+        info.textContent = `Player: ${playerScore} | CPU: ${cpuScore}`;
+      }
+
+      function frame() {
+        updatePaddles();
+        updateBall();
+        draw();
+        requestAnimationFrame(frame);
+      }
+
+      canvas.addEventListener("mousemove", (event) => {
+        const rect = canvas.getBoundingClientRect();
+        const y = ((event.clientY - rect.top) / rect.height) * canvas.height;
+        playerY = clamp(y - paddleHeight / 2, 0, canvas.height - paddleHeight);
+      });
+
+      canvas.addEventListener("touchmove", (event) => {
+        event.preventDefault();
+        const touch = event.touches[0];
+        if (!touch) return;
+        const rect = canvas.getBoundingClientRect();
+        const y = ((touch.clientY - rect.top) / rect.height) * canvas.height;
+        playerY = clamp(y - paddleHeight / 2, 0, canvas.height - paddleHeight);
+      });
+
+      window.addEventListener("keydown", (event) => {
+        if (event.key.toLowerCase() === "w") keys.w = true;
+        if (event.key.toLowerCase() === "s") keys.s = true;
+      });
+
+      window.addEventListener("keyup", (event) => {
+        if (event.key.toLowerCase() === "w") keys.w = false;
+        if (event.key.toLowerCase() === "s") keys.s = false;
+      });
+
+      restartButton.addEventListener("click", restart);
+
+      restart();
+      frame();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Neon Snake | webgames.lol</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Changa:wght@400;600;700&family=Space+Mono:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body>
+    <main class="game-shell">
+      <header>
+        <h1>Neon Snake</h1>
+        <p>Open-source HTML5 game. Use arrow keys or tap controls on mobile.</p>
+        <a class="back-link" href="/">← Back to webgames.lol</a>
+      </header>
+
+      <section class="panel">
+        <p id="snakeInfo">Score: 0 | Best: 0</p>
+        <div class="canvas-wrap">
+          <canvas id="snakeCanvas" width="420" height="420" aria-label="Snake game"></canvas>
+        </div>
+        <div class="controls">
+          <button data-dir="up">Up</button>
+          <button data-dir="left">Left</button>
+          <button data-dir="down">Down</button>
+          <button data-dir="right">Right</button>
+          <button id="snakeRestart">Restart</button>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const canvas = document.getElementById("snakeCanvas");
+      const ctx = canvas.getContext("2d");
+      const info = document.getElementById("snakeInfo");
+      const restartButton = document.getElementById("snakeRestart");
+      const controlButtons = document.querySelectorAll("[data-dir]");
+
+      const tile = 21;
+      const tilesPerRow = canvas.width / tile;
+      let snake;
+      let direction;
+      let queuedDirection;
+      let food;
+      let score;
+      let best;
+      let tick;
+      let speed;
+
+      function randomCell() {
+        return {
+          x: Math.floor(Math.random() * tilesPerRow),
+          y: Math.floor(Math.random() * tilesPerRow)
+        };
+      }
+
+      function placeFood() {
+        food = randomCell();
+        while (snake.some((segment) => segment.x === food.x && segment.y === food.y)) {
+          food = randomCell();
+        }
+      }
+
+      function setDirection(next) {
+        const opposite = {
+          up: "down",
+          down: "up",
+          left: "right",
+          right: "left"
+        };
+
+        if (next !== opposite[direction]) {
+          queuedDirection = next;
+        }
+      }
+
+      function reset() {
+        snake = [
+          { x: 10, y: 10 },
+          { x: 9, y: 10 },
+          { x: 8, y: 10 }
+        ];
+        direction = "right";
+        queuedDirection = "right";
+        score = 0;
+        speed = 130;
+        best = Number(localStorage.getItem("webgames.snake.best") || 0);
+        placeFood();
+        if (tick) {
+          clearInterval(tick);
+        }
+        tick = setInterval(gameLoop, speed);
+        draw();
+        updateInfo();
+      }
+
+      function updateInfo(extra = "") {
+        info.textContent = `Score: ${score} | Best: ${best}${extra ? ` | ${extra}` : ""}`;
+      }
+
+      function gameOver() {
+        clearInterval(tick);
+        if (score > best) {
+          best = score;
+          localStorage.setItem("webgames.snake.best", String(best));
+        }
+        updateInfo("Game over. Press Restart");
+      }
+
+      function gameLoop() {
+        direction = queuedDirection;
+        const head = { ...snake[0] };
+
+        if (direction === "up") head.y -= 1;
+        if (direction === "down") head.y += 1;
+        if (direction === "left") head.x -= 1;
+        if (direction === "right") head.x += 1;
+
+        const hitWall = head.x < 0 || head.y < 0 || head.x >= tilesPerRow || head.y >= tilesPerRow;
+        const hitBody = snake.some((segment) => segment.x === head.x && segment.y === head.y);
+
+        if (hitWall || hitBody) {
+          gameOver();
+          return;
+        }
+
+        snake.unshift(head);
+
+        if (head.x === food.x && head.y === food.y) {
+          score += 1;
+          placeFood();
+          if (score % 4 === 0 && speed > 70) {
+            speed -= 8;
+            clearInterval(tick);
+            tick = setInterval(gameLoop, speed);
+          }
+        } else {
+          snake.pop();
+        }
+
+        updateInfo();
+        draw();
+      }
+
+      function drawCell(x, y, color, radius = 3) {
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.roundRect(x * tile + 1, y * tile + 1, tile - 2, tile - 2, radius);
+        ctx.fill();
+      }
+
+      function drawGrid() {
+        ctx.fillStyle = "#0d1d2e";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.strokeStyle = "rgba(255,255,255,0.05)";
+        for (let x = 0; x <= canvas.width; x += tile) {
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, canvas.height);
+          ctx.stroke();
+        }
+        for (let y = 0; y <= canvas.height; y += tile) {
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(canvas.width, y);
+          ctx.stroke();
+        }
+      }
+
+      function draw() {
+        drawGrid();
+        drawCell(food.x, food.y, "#ff6433", 8);
+
+        snake.forEach((segment, index) => {
+          drawCell(segment.x, segment.y, index === 0 ? "#29d4c7" : "#a8ff5c", 4);
+        });
+      }
+
+      window.addEventListener("keydown", (event) => {
+        const map = {
+          ArrowUp: "up",
+          ArrowDown: "down",
+          ArrowLeft: "left",
+          ArrowRight: "right"
+        };
+
+        if (map[event.key]) {
+          event.preventDefault();
+          setDirection(map[event.key]);
+        }
+      });
+
+      controlButtons.forEach((button) => {
+        button.addEventListener("click", () => setDirection(button.dataset.dir));
+      });
+
+      restartButton.addEventListener("click", reset);
+      reset();
+    </script>
+  </body>
+</html>

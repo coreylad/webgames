@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Orbit Defender | webgames.lol</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Changa:wght@400;600;700&family=Space+Mono:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body>
+    <main class="game-shell">
+      <header>
+        <h1>Orbit Defender</h1>
+        <p>Open-source HTML5 game. Move with arrow keys and fire with space.</p>
+        <a class="back-link" href="/">Back to webgames.lol</a>
+      </header>
+
+      <section class="panel">
+        <p id="shooterInfo">Score: 0 | Lives: 3</p>
+        <div class="canvas-wrap">
+          <canvas id="shooterCanvas" width="500" height="600" aria-label="Shooter game"></canvas>
+        </div>
+        <div class="controls">
+          <button id="shooterRestart">Restart</button>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const canvas = document.getElementById("shooterCanvas");
+      const ctx = canvas.getContext("2d");
+      const info = document.getElementById("shooterInfo");
+      const restartButton = document.getElementById("shooterRestart");
+
+      let ship;
+      let bullets;
+      let enemies;
+      let score;
+      let lives;
+      let keys;
+      let cooldown;
+      let ended;
+
+      function restart() {
+        ship = { x: 230, y: 548, w: 40, h: 28, speed: 5 };
+        bullets = [];
+        enemies = [];
+        score = 0;
+        lives = 3;
+        keys = { left: false, right: false, shoot: false };
+        cooldown = 0;
+        ended = false;
+      }
+
+      function spawnEnemy() {
+        enemies.push({
+          x: 12 + Math.random() * (canvas.width - 36),
+          y: -24,
+          w: 24,
+          h: 24,
+          dy: 1.3 + Math.random() * 1.8
+        });
+      }
+
+      function hit(a, b) {
+        return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+      }
+
+      function update() {
+        if (ended) {
+          info.textContent = `Score: ${score} | Game over`;
+          return;
+        }
+
+        if (keys.left) ship.x -= ship.speed;
+        if (keys.right) ship.x += ship.speed;
+        ship.x = Math.max(0, Math.min(canvas.width - ship.w, ship.x));
+
+        cooldown = Math.max(0, cooldown - 1);
+        if (keys.shoot && cooldown === 0) {
+          bullets.push({ x: ship.x + ship.w / 2 - 2, y: ship.y - 8, w: 4, h: 10, dy: -7 });
+          cooldown = 10;
+        }
+
+        if (Math.random() < 0.035) {
+          spawnEnemy();
+        }
+
+        bullets.forEach((bullet) => {
+          bullet.y += bullet.dy;
+        });
+        bullets = bullets.filter((bullet) => bullet.y > -20);
+
+        enemies.forEach((enemy) => {
+          enemy.y += enemy.dy;
+        });
+
+        for (let i = enemies.length - 1; i >= 0; i -= 1) {
+          const enemy = enemies[i];
+
+          for (let j = bullets.length - 1; j >= 0; j -= 1) {
+            if (hit(enemy, bullets[j])) {
+              enemies.splice(i, 1);
+              bullets.splice(j, 1);
+              score += 15;
+              break;
+            }
+          }
+        }
+
+        enemies = enemies.filter((enemy) => {
+          if (enemy.y > canvas.height + 40) {
+            lives -= 1;
+            return false;
+          }
+
+          if (hit(enemy, ship)) {
+            lives -= 1;
+            return false;
+          }
+
+          return true;
+        });
+
+        if (lives <= 0) {
+          ended = true;
+        }
+
+        info.textContent = `Score: ${score} | Lives: ${lives}`;
+      }
+
+      function draw() {
+        const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        grad.addColorStop(0, "#101b30");
+        grad.addColorStop(1, "#05090f");
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.fillStyle = "#fbbe36";
+        ctx.beginPath();
+        ctx.moveTo(ship.x + ship.w / 2, ship.y);
+        ctx.lineTo(ship.x, ship.y + ship.h);
+        ctx.lineTo(ship.x + ship.w, ship.y + ship.h);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = "#29d4c7";
+        bullets.forEach((bullet) => {
+          ctx.fillRect(bullet.x, bullet.y, bullet.w, bullet.h);
+        });
+
+        ctx.fillStyle = "#ff6433";
+        enemies.forEach((enemy) => {
+          ctx.fillRect(enemy.x, enemy.y, enemy.w, enemy.h);
+        });
+      }
+
+      function frame() {
+        update();
+        draw();
+        requestAnimationFrame(frame);
+      }
+
+      window.addEventListener("keydown", (event) => {
+        if (event.key === "ArrowLeft") keys.left = true;
+        if (event.key === "ArrowRight") keys.right = true;
+        if (event.key === " " || event.code === "Space") {
+          event.preventDefault();
+          keys.shoot = true;
+        }
+      });
+
+      window.addEventListener("keyup", (event) => {
+        if (event.key === "ArrowLeft") keys.left = false;
+        if (event.key === "ArrowRight") keys.right = false;
+        if (event.key === " " || event.code === "Space") {
+          keys.shoot = false;
+        }
+      });
+
+      restartButton.addEventListener("click", restart);
+
+      restart();
+      frame();
+    </script>
+  </body>
+</html>

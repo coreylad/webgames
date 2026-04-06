@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Laser Grid | webgames.lol</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Changa:wght@400;600;700&family=Space+Mono:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body>
+    <main class="game-shell">
+      <header>
+        <h1>Laser Grid</h1>
+        <p>Open-source HTML5 game. Dodge incoming blocks as speed increases.</p>
+        <a class="back-link" href="/">Back to webgames.lol</a>
+      </header>
+
+      <section class="panel">
+        <p id="dodgerInfo">Score: 0</p>
+        <div class="canvas-wrap">
+          <canvas id="dodgerCanvas" width="460" height="560" aria-label="Dodger game"></canvas>
+        </div>
+        <div class="controls">
+          <button id="dodgerRestart">Restart</button>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const canvas = document.getElementById("dodgerCanvas");
+      const ctx = canvas.getContext("2d");
+      const info = document.getElementById("dodgerInfo");
+      const restartButton = document.getElementById("dodgerRestart");
+
+      let player;
+      let hazards;
+      let spawnTimer;
+      let score;
+      let speed;
+      let gameOver;
+      let left = false;
+      let right = false;
+
+      function restart() {
+        player = { x: canvas.width / 2 - 24, y: canvas.height - 60, w: 48, h: 22 };
+        hazards = [];
+        spawnTimer = 0;
+        score = 0;
+        speed = 2.8;
+        gameOver = false;
+      }
+
+      function spawnHazard() {
+        const width = 40 + Math.random() * 64;
+        hazards.push({
+          x: Math.random() * (canvas.width - width),
+          y: -30,
+          w: width,
+          h: 20 + Math.random() * 24,
+          dy: speed + Math.random() * 1.8
+        });
+      }
+
+      function intersects(a, b) {
+        return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+      }
+
+      function update() {
+        if (gameOver) {
+          return;
+        }
+
+        if (left) player.x -= 6;
+        if (right) player.x += 6;
+        player.x = Math.max(0, Math.min(canvas.width - player.w, player.x));
+
+        spawnTimer += 1;
+        if (spawnTimer > Math.max(12, 45 - score * 0.15)) {
+          spawnTimer = 0;
+          spawnHazard();
+        }
+
+        hazards.forEach((hazard) => {
+          hazard.y += hazard.dy;
+          if (intersects(player, hazard)) {
+            gameOver = true;
+          }
+        });
+
+        hazards = hazards.filter((hazard) => hazard.y < canvas.height + 60);
+
+        score += 0.07;
+        speed = Math.min(7.2, 2.8 + score * 0.012);
+
+        info.textContent = gameOver
+          ? `Score: ${Math.floor(score)} | Crash! Press Restart.`
+          : `Score: ${Math.floor(score)}`;
+      }
+
+      function draw() {
+        const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        grad.addColorStop(0, "#122b43");
+        grad.addColorStop(1, "#08131f");
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.fillStyle = "#1f8f89";
+        ctx.fillRect(player.x, player.y, player.w, player.h);
+
+        ctx.fillStyle = "#ff6433";
+        hazards.forEach((hazard) => {
+          ctx.fillRect(hazard.x, hazard.y, hazard.w, hazard.h);
+        });
+      }
+
+      function frame() {
+        update();
+        draw();
+        requestAnimationFrame(frame);
+      }
+
+      window.addEventListener("keydown", (event) => {
+        if (event.key === "ArrowLeft") left = true;
+        if (event.key === "ArrowRight") right = true;
+      });
+
+      window.addEventListener("keyup", (event) => {
+        if (event.key === "ArrowLeft") left = false;
+        if (event.key === "ArrowRight") right = false;
+      });
+
+      canvas.addEventListener("touchmove", (event) => {
+        event.preventDefault();
+        const touch = event.touches[0];
+        if (!touch) return;
+        const rect = canvas.getBoundingClientRect();
+        const x = ((touch.clientX - rect.left) / rect.width) * canvas.width;
+        player.x = Math.max(0, Math.min(canvas.width - player.w, x - player.w / 2));
+      });
+
+      restartButton.addEventListener("click", restart);
+
+      restart();
+      frame();
+    </script>
+  </body>
+</html>
