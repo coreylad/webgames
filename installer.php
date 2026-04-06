@@ -4,6 +4,16 @@ declare(strict_types=1);
 
 $root = __DIR__;
 $envPath = $root . DIRECTORY_SEPARATOR . '.env';
+
+// Lock installer once .env is configured
+if (is_file($envPath)) {
+    $envContents = file_get_contents($envPath);
+    if ($envContents !== false && str_contains($envContents, 'STRIPE_SECRET_KEY=')) {
+        http_response_code(403);
+        echo '<!DOCTYPE html><html><head><title>403 Forbidden</title></head><body><h1>403 Forbidden</h1><p>Installer is disabled after setup. Remove or rename installer.php to re-run it.</p></body></html>';
+        exit;
+    }
+}
 $dataDir = $root . DIRECTORY_SEPARATOR . 'data';
 $tipStorePath = $dataDir . DIRECTORY_SEPARATOR . 'tips.json';
 
@@ -163,7 +173,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <?php if ($success !== ''): ?>
       <div class="success">
         <p><?php echo htmlspecialchars($success, ENT_QUOTES, 'UTF-8'); ?></p>
-        <p>Next: configure Stripe webhook to point at /api/stripe-webhook.php and open /admin.html.</p>
+        <p>Next: configure Stripe webhook to point at /api/stripe-webhook.php and open <a href="/admin.php">/admin.php</a>.</p>
       </div>
       <?php endif; ?>
 

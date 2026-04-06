@@ -80,17 +80,19 @@ server {
     autoindex off;
     server_tokens off;
 
+    location = /admin.html { return 301 /admin.php; }
+
     location / {
-        try_files \$uri \$uri/ /public/index.html;
+      try_files \$uri \$uri/ /public/index.html;
     }
 
     location ~ \.php$ {
-        include snippets/fastcgi-php.conf;
-        fastcgi_pass unix:${PHP_SOCK};
+      include snippets/fastcgi-php.conf;
+      fastcgi_pass unix:${PHP_SOCK};
     }
 
     location ~ /\. {
-        deny all;
+      deny all;
     }
 }
 EOF

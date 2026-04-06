@@ -16,7 +16,7 @@ PHP-first HTML5 gaming website with Stripe tipping and an admin dashboard that s
 - Stripe tip tiers pulled from your Stripe product catalogue (products/prices)
 - Admin dashboard that displays usernames, tier names, statuses, and totals
 - Installer page for easy first-time setup
-- MIT-licensed source code
+- MIT-licensed source codecd
 
 ## Stack
 
@@ -50,7 +50,7 @@ PHP-first HTML5 gaming website with Stripe tipping and an admin dashboard that s
 5. Open site:
 
    - Home: http://127.0.0.1:8080/
-   - Admin: http://127.0.0.1:8080/admin.html
+   - Admin: http://127.0.0.1:8080/admin.php
 
 ## Stripe catalogue tier behavior
 
@@ -106,7 +106,7 @@ After it finishes:
 
 - App: https://your-domain.com/
 - Installer: https://your-domain.com/installer.php
-- Admin: https://your-domain.com/public/admin.html
+   - Admin: https://your-domain.com/admin.php
 
 ## Admin dashboard auth
 

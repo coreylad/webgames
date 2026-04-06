@@ -2,78 +2,8 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>webgames.lol admin dashboard</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Changa:wght@400;600;700&family=Space+Mono:wght@400;700&display=swap"
-      rel="stylesheet"
-    />
-    <link rel="stylesheet" href="styles.css" />
+    <meta http-equiv="refresh" content="0;url=/admin.php" />
+    <title>Redirecting...</title>
   </head>
-  <body>
-    <header class="site-header container">
-      <a class="logo" href="/">webgames.lol</a>
-      <nav class="top-nav">
-        <a href="/">Home</a>
-        <a href="/admin.html">Admin Dashboard</a>
-      </nav>
-    </header>
-
-    <main class="container admin-wrap">
-      <section class="panel">
-        <h1>Admin Dashboard</h1>
-        <p>Enter your admin token to view usernames and Stripe tier tip records.</p>
-
-        <div class="admin-top">
-          <div>
-            <label for="adminToken">Admin token</label>
-            <input id="adminToken" type="password" placeholder="ADMIN_DASHBOARD_TOKEN" />
-          </div>
-          <button id="loadDashboard">Load data</button>
-        </div>
-
-        <p id="adminStatus" class="status" aria-live="polite"></p>
-      </section>
-
-      <section class="panel">
-        <h2>Summary</h2>
-        <div class="summary-grid">
-          <article class="summary-box">
-            <p>Total tip entries</p>
-            <strong id="totalTips">0</strong>
-          </article>
-          <article class="summary-box">
-            <p>Total paid (USD)</p>
-            <strong id="paidUsd">$0.00</strong>
-          </article>
-          <article class="summary-box">
-            <p>Unique usernames</p>
-            <strong id="uniqueUsersCount">0</strong>
-          </article>
-        </div>
-        <p id="usernamesList" class="status"></p>
-      </section>
-
-      <section class="panel table-wrap">
-        <h2>Tips</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Username</th>
-              <th>Tier</th>
-              <th>Amount</th>
-              <th>Status</th>
-              <th>Created</th>
-              <th>Session ID</th>
-            </tr>
-          </thead>
-          <tbody id="tipsTableBody"></tbody>
-        </table>
-      </section>
-    </main>
-
-    <script src="admin.js"></script>
-  </body>
+  <body></body>
 </html>
