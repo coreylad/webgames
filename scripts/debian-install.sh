@@ -33,6 +33,7 @@ rsync -a --delete \
   "${SRC_DIR}/" "${APP_DIR}/"
 
 echo "[3/10] Setting permissions..."
+mkdir -p "${APP_DIR}/data"
 chown -R root:root "${APP_DIR}"
 find "${APP_DIR}" -type d -exec chmod 755 {} \;
 find "${APP_DIR}" -type f -exec chmod 644 {} \;
