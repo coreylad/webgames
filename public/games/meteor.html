@@ -16,12 +16,12 @@
     <main class="game-shell">
       <header>
         <h1>Meteor Drift</h1>
-        <p>Space survival sprint. Move with WASD or arrow keys and avoid incoming meteors.</p>
+        <p>Space survival combat. WASD or Arrows move, Space fires, Shift dashes.</p>
         <a class="back-link" href="/">Back to webgames.lol</a>
       </header>
 
       <section class="panel">
-        <p id="meteorInfo">Score: 0</p>
+        <p id="meteorInfo">Score: 0 | Hull: 100%</p>
         <div class="canvas-wrap">
           <canvas id="meteorCanvas" width="520" height="620" aria-label="Meteor Drift game"></canvas>
         </div>
@@ -50,20 +50,34 @@
 
       let ship;
       let rocks;
+      let bullets;
+      let particles;
       let keys;
       let score;
       let ended;
       let spawn;
       let speed;
+      let hull;
+      let shootCd;
+      let dashCd;
+      let invuln;
+      let wave;
 
       function restart() {
-        ship = { x: 250, y: 560, w: 26, h: 26, speed: 5.6 };
+        ship = { x: 250, y: 560, w: 26, h: 26, speed: 5.8 };
         rocks = [];
-        keys = { left: false, right: false, up: false, down: false };
+        bullets = [];
+        particles = [];
+        keys = { left: false, right: false, up: false, down: false, shoot: false };
         score = 0;
         ended = false;
         spawn = 0;
-        speed = 2.4;
+        speed = 2.3;
+        hull = 100;
+        shootCd = 0;
+        dashCd = 0;
+        invuln = 0;
+        wave = 1;
         leaderboard.resetRound();
       }
 
@@ -71,89 +85,229 @@
         return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
       }
 
+      function burst(x, y, color, amount = 12) {
+        for (let i = 0; i < amount; i += 1) {
+          particles.push({
+            x,
+            y,
+            vx: (Math.random() - 0.5) * 3.5,
+            vy: (Math.random() - 0.5) * 3.5,
+            life: 20 + Math.random() * 24,
+            color
+          });
+        }
+      }
+
       function addRock() {
-        const size = 16 + Math.random() * 38;
+        const size = 16 + Math.random() * 42;
+        const hp = Math.ceil(size / 20);
         rocks.push({
           x: Math.random() * (canvas.width - size),
           y: -size,
           w: size,
           h: size,
-          dy: speed + Math.random() * 2.2,
-          dx: (Math.random() - 0.5) * 1.5
+          hp,
+          dy: speed + Math.random() * 2.4,
+          dx: (Math.random() - 0.5) * (1 + wave * 0.08)
         });
       }
 
-      function update() {
-        if (ended) {
-          info.textContent = `Score: ${Math.floor(score)} | Mission failed`;
-          return;
-        }
-
-        if (keys.left) ship.x -= ship.speed;
-        if (keys.right) ship.x += ship.speed;
-        if (keys.up) ship.y -= ship.speed;
-        if (keys.down) ship.y += ship.speed;
+      function updateShip() {
+        const currentSpeed = keys.down ? ship.speed * 0.7 : ship.speed;
+        if (keys.left) ship.x -= currentSpeed;
+        if (keys.right) ship.x += currentSpeed;
+        if (keys.up) ship.y -= currentSpeed;
+        if (keys.down) ship.y += currentSpeed;
 
         ship.x = Math.max(0, Math.min(canvas.width - ship.w, ship.x));
         ship.y = Math.max(0, Math.min(canvas.height - ship.h, ship.y));
 
+        if (keys.shoot && shootCd === 0) {
+          bullets.push({ x: ship.x + ship.w / 2 - 2, y: ship.y - 8, w: 4, h: 12, dy: -8 });
+          shootCd = 8;
+        }
+
+        shootCd = Math.max(0, shootCd - 1);
+        dashCd = Math.max(0, dashCd - 1);
+        invuln = Math.max(0, invuln - 1);
+      }
+
+      function updateBullets() {
+        bullets.forEach((bullet) => {
+          bullet.y += bullet.dy;
+        });
+        bullets = bullets.filter((bullet) => bullet.y > -24);
+      }
+
+      function updateRocks() {
+        rocks.forEach((rock) => {
+          rock.y += rock.dy;
+          rock.x += rock.dx;
+
+          if (rock.x < 0 || rock.x + rock.w > canvas.width) {
+            rock.dx *= -1;
+          }
+
+          if (!ended && invuln === 0 && hit(ship, rock)) {
+            hull -= rock.hp * 14;
+            invuln = 38;
+            burst(ship.x + ship.w / 2, ship.y + ship.h / 2, "#ff4d6d", 18);
+            rock.y = canvas.height + 200;
+            if (hull <= 0) {
+              hull = 0;
+              ended = true;
+              leaderboard.submit(Math.floor(score));
+            }
+          }
+        });
+
+        for (let i = rocks.length - 1; i >= 0; i -= 1) {
+          const rock = rocks[i];
+          for (let j = bullets.length - 1; j >= 0; j -= 1) {
+            if (hit(rock, bullets[j])) {
+              rock.hp -= 1;
+              bullets.splice(j, 1);
+              burst(rock.x + rock.w / 2, rock.y + rock.h / 2, "#ffd166", 6);
+              if (rock.hp <= 0) {
+                score += 22;
+                burst(rock.x + rock.w / 2, rock.y + rock.h / 2, "#00e5ff", 14);
+                rocks.splice(i, 1);
+              }
+              break;
+            }
+          }
+        }
+
+        rocks = rocks.filter((rock) => rock.y < canvas.height + 90);
+      }
+
+      function updateParticles() {
+        particles.forEach((p) => {
+          p.x += p.vx;
+          p.y += p.vy;
+          p.vx *= 0.98;
+          p.vy *= 0.98;
+          p.life -= 1;
+        });
+        particles = particles.filter((p) => p.life > 0);
+      }
+
+      function update() {
+        if (ended) {
+          info.textContent = `Score: ${Math.floor(score)} | Hull: 0% | Mission failed`;
+          updateParticles();
+          return;
+        }
+
+        updateShip();
+
         spawn += 1;
-        if (spawn > Math.max(10, 30 - score * 0.1)) {
+        const spawnRate = Math.max(8, 32 - wave);
+        if (spawn >= spawnRate) {
           spawn = 0;
           addRock();
         }
 
-        rocks.forEach((rock) => {
-          rock.y += rock.dy;
-          rock.x += rock.dx;
-          if (rock.x < 0 || rock.x + rock.w > canvas.width) {
-            rock.dx *= -1;
-          }
-          if (!ended && hit(ship, rock)) {
-            ended = true;
-            leaderboard.submit(Math.floor(score));
-          }
-        });
+        updateBullets();
+        updateRocks();
+        updateParticles();
 
-        rocks = rocks.filter((rock) => rock.y < canvas.height + 80);
-        score += 0.14;
-        speed = Math.min(8.5, 2.4 + score * 0.012);
+        score += 0.16;
+        speed = Math.min(9.2, 2.3 + score * 0.011);
+        wave = Math.max(1, Math.floor(score / 120) + 1);
 
-        info.textContent = `Score: ${Math.floor(score)}`;
+        info.textContent = `Score: ${Math.floor(score)} | Hull: ${Math.floor(hull)}% | Wave: ${wave}`;
       }
 
       function drawStars() {
-        ctx.fillStyle = "#050a12";
+        const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        grad.addColorStop(0, "#050a12");
+        grad.addColorStop(1, "#02060d");
+        ctx.fillStyle = grad;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-        for (let i = 0; i < 90; i += 1) {
+
+        for (let i = 0; i < 95; i += 1) {
           const x = (i * 57 + Date.now() * 0.02) % canvas.width;
           const y = (i * 91 + Date.now() * 0.09) % canvas.height;
-          ctx.fillStyle = "rgba(200,230,255,0.65)";
+          ctx.fillStyle = "rgba(200,230,255,0.6)";
           ctx.fillRect(x, y, 2, 2);
         }
       }
 
       function drawShip() {
-        ctx.fillStyle = "#00e5ff";
+        ctx.fillStyle = invuln > 0 ? "#ffe600" : "#00e5ff";
         ctx.beginPath();
-        ctx.moveTo(ship.x + ship.w / 2, ship.y - 2);
-        ctx.lineTo(ship.x - 2, ship.y + ship.h + 2);
-        ctx.lineTo(ship.x + ship.w + 2, ship.y + ship.h + 2);
+        ctx.moveTo(ship.x + ship.w / 2, ship.y - 3);
+        ctx.lineTo(ship.x - 2, ship.y + ship.h + 3);
+        ctx.lineTo(ship.x + ship.w + 2, ship.y + ship.h + 3);
         ctx.closePath();
         ctx.fill();
       }
 
-      function drawRock(rock) {
-        ctx.fillStyle = "#ff7f39";
-        ctx.beginPath();
-        ctx.ellipse(rock.x + rock.w / 2, rock.y + rock.h / 2, rock.w / 2, rock.h / 2, 0, 0, Math.PI * 2);
-        ctx.fill();
+      function drawRocks() {
+        rocks.forEach((rock) => {
+          ctx.fillStyle = "#ff7f39";
+          ctx.beginPath();
+          ctx.ellipse(rock.x + rock.w / 2, rock.y + rock.h / 2, rock.w / 2, rock.h / 2, 0, 0, Math.PI * 2);
+          ctx.fill();
+        });
+      }
+
+      function drawBullets() {
+        ctx.fillStyle = "#6dffbf";
+        bullets.forEach((bullet) => {
+          ctx.fillRect(bullet.x, bullet.y, bullet.w, bullet.h);
+        });
+      }
+
+      function drawParticles() {
+        particles.forEach((p) => {
+          ctx.fillStyle = p.color;
+          ctx.globalAlpha = Math.max(0, p.life / 40);
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 2, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        });
+      }
+
+      function drawHud() {
+        ctx.fillStyle = "rgba(0,0,0,0.35)";
+        ctx.fillRect(12, 12, 145, 14);
+        ctx.fillRect(12, 30, 145, 14);
+
+        ctx.fillStyle = "#ff5e6c";
+        ctx.fillRect(12, 12, (hull / 100) * 145, 14);
+
+        const dashCharge = ((60 - dashCd) / 60) * 145;
+        ctx.fillStyle = "#00e5ff";
+        ctx.fillRect(12, 30, Math.max(0, dashCharge), 14);
+
+        ctx.fillStyle = "#d7ebff";
+        ctx.font = "700 11px Share Tech Mono";
+        ctx.textAlign = "left";
+        ctx.fillText("Hull", 161, 23);
+        ctx.fillText("Dash", 161, 41);
       }
 
       function draw() {
         drawStars();
-        rocks.forEach(drawRock);
+        drawRocks();
+        drawBullets();
         drawShip();
+        drawParticles();
+        drawHud();
+
+        if (ended) {
+          ctx.fillStyle = "rgba(0,0,0,0.45)";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = "#cfe8ff";
+          ctx.font = "700 26px Orbitron";
+          ctx.textAlign = "center";
+          ctx.fillText("MISSION FAILED", canvas.width / 2, canvas.height / 2 - 8);
+          ctx.font = "500 15px Rajdhani";
+          ctx.fillText("Press Restart", canvas.width / 2, canvas.height / 2 + 20);
+        }
       }
 
       function frame() {
@@ -162,12 +316,37 @@
         requestAnimationFrame(frame);
       }
 
+      function dash() {
+        if (dashCd > 0 || ended) {
+          return;
+        }
+
+        const dx = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
+        const dy = (keys.down ? 1 : 0) - (keys.up ? 1 : 0);
+
+        const vx = dx === 0 && dy === 0 ? 0 : dx * 55;
+        const vy = dx === 0 && dy === 0 ? -55 : dy * 55;
+
+        ship.x = Math.max(0, Math.min(canvas.width - ship.w, ship.x + vx));
+        ship.y = Math.max(0, Math.min(canvas.height - ship.h, ship.y + vy));
+        invuln = 22;
+        dashCd = 60;
+        burst(ship.x + ship.w / 2, ship.y + ship.h / 2, "#00e5ff", 20);
+      }
+
       window.addEventListener("keydown", (event) => {
         const key = event.key.toLowerCase();
         if (event.key === "ArrowLeft" || key === "a") keys.left = true;
         if (event.key === "ArrowRight" || key === "d") keys.right = true;
         if (event.key === "ArrowUp" || key === "w") keys.up = true;
         if (event.key === "ArrowDown" || key === "s") keys.down = true;
+        if (event.key === " " || event.code === "Space") {
+          keys.shoot = true;
+          event.preventDefault();
+        }
+        if (event.key === "Shift") {
+          dash();
+        }
       });
 
       window.addEventListener("keyup", (event) => {
@@ -176,11 +355,12 @@
         if (event.key === "ArrowRight" || key === "d") keys.right = false;
         if (event.key === "ArrowUp" || key === "w") keys.up = false;
         if (event.key === "ArrowDown" || key === "s") keys.down = false;
+        if (event.key === " " || event.code === "Space") keys.shoot = false;
       });
 
       restartBtn.addEventListener("click", restart);
       leaderboard.refresh();
-      restart();
+      reset();
       frame();
     </script>
   </body>

@@ -16,12 +16,12 @@
     <main class="game-shell">
       <header>
         <h1>Turbo Lane</h1>
-        <p>Arcade traffic runner. Use Left/Right arrows or A/D to dodge incoming cars.</p>
+        <p>High-speed traffic survival. A/D or Arrows steer lanes, Shift triggers nitro.</p>
         <a class="back-link" href="/">Back to webgames.lol</a>
       </header>
 
       <section class="panel">
-        <p id="racerInfo">Score: 0</p>
+        <p id="racerInfo">Score: 0 | Shield: 3 | Nitro: 100%</p>
         <div class="canvas-wrap">
           <canvas id="racerCanvas" width="420" height="640" aria-label="Turbo Lane game"></canvas>
         </div>
@@ -49,76 +49,201 @@
       const leaderboard = createLeaderboardController({ game: "racer", listId: "lbList", statusId: "lbStatus" });
 
       const lanes = [85, 170, 255, 340];
-      let laneIndex = 1;
-      let cars = [];
-      let score = 0;
-      let speed = 4;
-      let ended = false;
-      let spawn = 0;
 
-      function restart() {
-        laneIndex = 1;
+      let player;
+      let cars;
+      let pickups;
+      let score;
+      let speed;
+      let ended;
+      let spawnTimer;
+      let pickupTimer;
+      let stripeOffset;
+      let nitro;
+      let shield;
+      let flash;
+      let keys;
+
+      function reset() {
+        player = {
+          lane: 1,
+          targetLane: 1,
+          x: lanes[1] - 22,
+          y: canvas.height - 95,
+          w: 44,
+          h: 74,
+          invuln: 0
+        };
+
         cars = [];
+        pickups = [];
         score = 0;
-        speed = 4;
+        speed = 4.2;
         ended = false;
-        spawn = 0;
+        spawnTimer = 0;
+        pickupTimer = 0;
+        stripeOffset = 0;
+        nitro = 100;
+        shield = 3;
+        flash = 0;
+        keys = { accel: false, brake: false, nitro: false };
         leaderboard.resetRound();
       }
 
-      function playerRect() {
-        return { x: lanes[laneIndex] - 22, y: canvas.height - 95, w: 44, h: 74 };
+      function spawnCar() {
+        const lane = Math.floor(Math.random() * lanes.length);
+        const typeRoll = Math.random();
+        let w = 44;
+        let h = 74;
+        let color = `hsl(${Math.floor(Math.random() * 360)}, 80%, 56%)`;
+
+        if (typeRoll > 0.75) {
+          w = 52;
+          h = 92;
+          color = "#ff6f59";
+        } else if (typeRoll > 0.5) {
+          w = 38;
+          h = 68;
+          color = "#9b5de5";
+        }
+
+        cars.push({
+          lane,
+          x: lanes[lane] - w / 2,
+          y: -h - 10,
+          w,
+          h,
+          color,
+          speed: speed + 1 + Math.random() * 2.5,
+          passedNear: false
+        });
+      }
+
+      function spawnNitroPickup() {
+        const lane = Math.floor(Math.random() * lanes.length);
+        pickups.push({
+          lane,
+          x: lanes[lane] - 14,
+          y: -28,
+          w: 28,
+          h: 28,
+          speed: speed + 1.5
+        });
       }
 
       function hit(a, b) {
         return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
       }
 
-      function addCar() {
-        cars.push({
-          x: lanes[Math.floor(Math.random() * lanes.length)] - 22,
-          y: -90,
-          w: 44,
-          h: 74,
-          color: `hsl(${Math.floor(Math.random() * 360)}, 80%, 55%)`
+      function playerRect() {
+        return { x: player.x, y: player.y, w: player.w, h: player.h };
+      }
+
+      function applyDifficulty() {
+        let accel = 0.006;
+        if (keys.accel) accel += 0.022;
+        if (keys.brake) accel -= 0.03;
+        if (keys.nitro && nitro > 0) {
+          accel += 0.045;
+          nitro = Math.max(0, nitro - 0.9);
+        } else {
+          nitro = Math.min(100, nitro + 0.25);
+        }
+
+        speed = Math.min(14, Math.max(3.2, speed + accel));
+      }
+
+      function updatePlayer() {
+        if (player.lane !== player.targetLane) {
+          const dir = Math.sign(player.targetLane - player.lane);
+          const laneFloat = player.lane + dir * 0.18;
+          const reached = (dir > 0 && laneFloat >= player.targetLane) || (dir < 0 && laneFloat <= player.targetLane);
+          player.lane = reached ? player.targetLane : laneFloat;
+        }
+        player.x = lanes[0] + (lanes[1] - lanes[0]) * player.lane - player.w / 2;
+        player.invuln = Math.max(0, player.invuln - 1);
+      }
+
+      function updateCars() {
+        const p = playerRect();
+
+        cars.forEach((car) => {
+          car.y += car.speed + speed * 0.15;
+
+          const nearMissDistance = Math.abs(car.x + car.w / 2 - (p.x + p.w / 2));
+          if (!car.passedNear && car.y > p.y + p.h && nearMissDistance < 55) {
+            score += 15;
+            car.passedNear = true;
+          }
+
+          if (!ended && player.invuln === 0 && hit(p, car)) {
+            shield -= 1;
+            flash = 16;
+            player.invuln = 50;
+            car.y = canvas.height + 200;
+            if (shield <= 0) {
+              ended = true;
+              leaderboard.submit(Math.floor(score));
+            }
+          }
         });
+
+        cars = cars.filter((car) => car.y < canvas.height + 150);
+      }
+
+      function updatePickups() {
+        const p = playerRect();
+        pickups.forEach((pickup) => {
+          pickup.y += pickup.speed + speed * 0.1;
+          if (hit(p, pickup)) {
+            nitro = Math.min(100, nitro + 35);
+            score += 20;
+            pickup.y = canvas.height + 120;
+          }
+        });
+        pickups = pickups.filter((pickup) => pickup.y < canvas.height + 100);
       }
 
       function update() {
         if (ended) {
-          info.textContent = `Score: ${Math.floor(score)} | Crash!`;
+          info.textContent = `Score: ${Math.floor(score)} | Shield: 0 | Crash`;
           return;
         }
 
-        spawn += 1;
-        if (spawn > Math.max(16, 45 - score * 0.15)) {
-          spawn = 0;
-          addCar();
+        applyDifficulty();
+        updatePlayer();
+
+        spawnTimer += 1;
+        const spawnThreshold = Math.max(12, 46 - speed * 2.1);
+        if (spawnTimer >= spawnThreshold) {
+          spawnTimer = 0;
+          spawnCar();
         }
 
-        cars.forEach((car) => {
-          car.y += speed;
-        });
+        pickupTimer += 1;
+        if (pickupTimer > 340) {
+          pickupTimer = 0;
+          spawnNitroPickup();
+        }
 
-        const p = playerRect();
-        cars.forEach((car) => {
-          if (!ended && hit(p, car)) {
-            ended = true;
-            leaderboard.submit(Math.floor(score));
-          }
-        });
+        updateCars();
+        updatePickups();
 
-        cars = cars.filter((car) => car.y < canvas.height + 120);
+        stripeOffset = (stripeOffset + speed * 1.6) % 44;
+        flash = Math.max(0, flash - 1);
+        score += 0.23 * speed;
 
-        score += 0.12;
-        speed = Math.min(10, 4 + score * 0.01);
-        info.textContent = `Score: ${Math.floor(score)}`;
+        info.textContent = `Score: ${Math.floor(score)} | Shield: ${shield} | Nitro: ${Math.floor(nitro)}%`;
       }
 
       function drawRoad() {
-        ctx.fillStyle = "#111";
+        ctx.fillStyle = "#091018";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = "#2f2f2f";
+
+        const roadGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        roadGrad.addColorStop(0, "#1d2732");
+        roadGrad.addColorStop(1, "#2b3948");
+        ctx.fillStyle = roadGrad;
         ctx.fillRect(50, 0, canvas.width - 100, canvas.height);
 
         ctx.strokeStyle = "#ffd400";
@@ -132,35 +257,85 @@
 
         ctx.strokeStyle = "rgba(255,255,255,0.45)";
         ctx.lineWidth = 2;
-        for (let i = 1; i < lanes.length; i += 1) {
-          const x = (lanes[i - 1] + lanes[i]) / 2;
-          for (let y = -40; y < canvas.height + 60; y += 42) {
+        const splits = [127, 212, 297];
+        splits.forEach((x) => {
+          for (let y = -40; y < canvas.height + 60; y += 44) {
             ctx.beginPath();
-            ctx.moveTo(x, y + (Date.now() / 20 % 42));
-            ctx.lineTo(x, y + 26 + (Date.now() / 20 % 42));
+            ctx.moveTo(x, y + stripeOffset);
+            ctx.lineTo(x, y + 28 + stripeOffset);
             ctx.stroke();
           }
-        }
+        });
       }
 
-      function drawCar(car, player = false) {
+      function drawCar(car, isPlayer = false) {
         ctx.fillStyle = car.color;
         ctx.fillRect(car.x, car.y, car.w, car.h);
-        ctx.fillStyle = "#cde6ff";
+
+        ctx.fillStyle = "#d6ecff";
         ctx.fillRect(car.x + 6, car.y + 10, car.w - 12, 16);
-        ctx.fillRect(car.x + 6, car.y + 48, car.w - 12, 14);
-        if (player) {
-          ctx.strokeStyle = "#00e5ff";
+        ctx.fillRect(car.x + 6, car.y + car.h - 26, car.w - 12, 14);
+
+        if (isPlayer) {
+          ctx.strokeStyle = player.invuln > 0 ? "#ffe600" : "#00e5ff";
           ctx.lineWidth = 2;
           ctx.strokeRect(car.x - 2, car.y - 2, car.w + 4, car.h + 4);
         }
       }
 
+      function drawPickups() {
+        pickups.forEach((pickup) => {
+          ctx.fillStyle = "#00e5ff";
+          ctx.beginPath();
+          ctx.roundRect(pickup.x, pickup.y, pickup.w, pickup.h, 8);
+          ctx.fill();
+          ctx.fillStyle = "#00131b";
+          ctx.font = "700 12px Orbitron";
+          ctx.textAlign = "center";
+          ctx.fillText("N", pickup.x + pickup.w / 2, pickup.y + 19);
+        });
+      }
+
+      function drawHudBars() {
+        ctx.fillStyle = "rgba(0,0,0,0.35)";
+        ctx.fillRect(12, 12, 136, 14);
+        ctx.fillRect(12, 30, 136, 14);
+
+        ctx.fillStyle = "#00e5ff";
+        ctx.fillRect(12, 12, (nitro / 100) * 136, 14);
+
+        ctx.fillStyle = "#ff5e6c";
+        ctx.fillRect(12, 30, (shield / 3) * 136, 14);
+
+        ctx.fillStyle = "#d7ebff";
+        ctx.font = "700 11px Share Tech Mono";
+        ctx.textAlign = "left";
+        ctx.fillText("Nitro", 154, 23);
+        ctx.fillText("Shield", 154, 41);
+      }
+
       function draw() {
         drawRoad();
         cars.forEach((car) => drawCar(car));
-        const p = playerRect();
-        drawCar({ ...p, color: "#00d0ff" }, true);
+        drawPickups();
+        drawCar(playerRect(), true);
+        drawHudBars();
+
+        if (flash > 0) {
+          ctx.fillStyle = `rgba(255, 30, 80, ${flash / 28})`;
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        if (ended) {
+          ctx.fillStyle = "rgba(0,0,0,0.45)";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = "#cfe8ff";
+          ctx.font = "700 26px Orbitron";
+          ctx.textAlign = "center";
+          ctx.fillText("CRASHED", canvas.width / 2, canvas.height / 2 - 8);
+          ctx.font = "500 15px Rajdhani";
+          ctx.fillText("Press Restart", canvas.width / 2, canvas.height / 2 + 20);
+        }
       }
 
       function frame() {
@@ -170,17 +345,35 @@
       }
 
       window.addEventListener("keydown", (event) => {
-        if (event.key === "ArrowLeft" || event.key.toLowerCase() === "a") {
-          laneIndex = Math.max(0, laneIndex - 1);
+        const key = event.key.toLowerCase();
+        if (event.key === "ArrowLeft" || key === "a") {
+          player.targetLane = Math.max(0, Math.floor(player.targetLane) - 1);
         }
-        if (event.key === "ArrowRight" || event.key.toLowerCase() === "d") {
-          laneIndex = Math.min(lanes.length - 1, laneIndex + 1);
+        if (event.key === "ArrowRight" || key === "d") {
+          player.targetLane = Math.min(lanes.length - 1, Math.floor(player.targetLane) + 1);
+        }
+        if (event.key === "ArrowUp" || key === "w") {
+          keys.accel = true;
+        }
+        if (event.key === "ArrowDown" || key === "s") {
+          keys.brake = true;
+        }
+        if (event.key === "Shift" || key === " ") {
+          keys.nitro = true;
+          event.preventDefault();
         }
       });
 
-      restartBtn.addEventListener("click", restart);
+      window.addEventListener("keyup", (event) => {
+        const key = event.key.toLowerCase();
+        if (event.key === "ArrowUp" || key === "w") keys.accel = false;
+        if (event.key === "ArrowDown" || key === "s") keys.brake = false;
+        if (event.key === "Shift" || key === " ") keys.nitro = false;
+      });
+
+      restartBtn.addEventListener("click", reset);
       leaderboard.refresh();
-      restart();
+      reset();
       frame();
     </script>
   </body>
