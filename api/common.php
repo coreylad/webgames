@@ -189,6 +189,100 @@ function get_header_value(string $name): string
     return (string)($_SERVER[$serverKey] ?? '');
 }
 
+function ensure_admin_store(): string
+{
+    $dir = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'data';
+    if (!is_dir($dir)) {
+        mkdir($dir, 0775, true);
+    }
+
+    $file = $dir . DIRECTORY_SEPARATOR . 'admins.json';
+    if (!is_file($file)) {
+        file_put_contents($file, json_encode(['admins' => []], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    }
+
+    return $file;
+}
+
+function read_admin_store(): array
+{
+    $file = ensure_admin_store();
+    $raw = file_get_contents($file);
+    if ($raw === false || $raw === '') {
+        return ['admins' => []];
+    }
+
+    $decoded = json_decode($raw, true);
+    if (!is_array($decoded) || !isset($decoded['admins']) || !is_array($decoded['admins'])) {
+        return ['admins' => []];
+    }
+
+    return $decoded;
+}
+
+function write_admin_store(array $store): void
+{
+    $file = ensure_admin_store();
+    file_put_contents($file, json_encode($store, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+}
+
+function normalize_admin_username(string $value): string
+{
+    return strtolower(trim($value));
+}
+
+function is_valid_admin_username(string $value): bool
+{
+    return preg_match('/^[a-z0-9_-]{3,24}$/', normalize_admin_username($value)) === 1;
+}
+
+function ensure_bootstrap_admin(): void
+{
+    $legacyToken = trim(env_value('ADMIN_DASHBOARD_TOKEN', ''));
+    if ($legacyToken === '') {
+        return;
+    }
+
+    $store = read_admin_store();
+    foreach ($store['admins'] as $admin) {
+        if (($admin['username'] ?? '') === 'owner') {
+            return;
+        }
+    }
+
+    $store['admins'][] = [
+        'id' => generate_id(),
+        'username' => 'owner',
+        'tokenHash' => password_hash($legacyToken, PASSWORD_DEFAULT),
+        'createdAt' => now_iso()
+    ];
+    write_admin_store($store);
+}
+
+function verify_admin_token(string $token): bool
+{
+    $token = trim($token);
+    if ($token === '') {
+        return false;
+    }
+
+    $legacy = trim(env_value('ADMIN_DASHBOARD_TOKEN', ''));
+    if ($legacy !== '' && hash_equals($legacy, $token)) {
+        return true;
+    }
+
+    ensure_bootstrap_admin();
+    $store = read_admin_store();
+    foreach ($store['admins'] as $admin) {
+        $hash = (string)($admin['tokenHash'] ?? '');
+        if ($hash !== '' && password_verify($token, $hash)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 function require_admin_token(): void
 {
     $token = trim(get_header_value('x-admin-token'));
@@ -196,9 +290,7 @@ function require_admin_token(): void
         $token = trim($_GET['token']);
     }
 
-    $expected = env_value('ADMIN_DASHBOARD_TOKEN', 'dev-admin-token');
-
-    if ($token === '' || $expected === '' || !hash_equals($expected, $token)) {
+    if (!verify_admin_token($token)) {
         json_response(['error' => 'Unauthorized'], 401);
     }
 }
