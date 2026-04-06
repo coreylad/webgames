@@ -37,6 +37,11 @@ mkdir -p "${APP_DIR}/data"
 chown -R root:root "${APP_DIR}"
 find "${APP_DIR}" -type d -exec chmod 755 {} \;
 find "${APP_DIR}" -type f -exec chmod 644 {} \;
+# Allow www-data to write .env (created by installer.php)
+touch "${APP_DIR}/.env"
+chown www-data:www-data "${APP_DIR}/.env"
+chmod 660 "${APP_DIR}/.env"
+# Allow www-data to write data/
 chown www-data:www-data "${APP_DIR}/data"
 chmod 775 "${APP_DIR}/data"
 touch "${APP_DIR}/data/tips.json"
