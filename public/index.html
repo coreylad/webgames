@@ -27,47 +27,17 @@
 
     <main class="container">
       <section class="hero">
-        <p class="hero-badge">Next-gen HTML5 arcade</p>
-        <h1>Play quick games. Support creators. Keep webgames.lol alive.</h1>
+        <p class="hero-badge">Competitive HTML5 Gaming Platform</p>
+        <h1>Enter the arena. Master every mode. Own the leaderboard.</h1>
         <p>
-          Dominate fast, high-intensity browser games, chase your best score, and fuel future drops
-          through the tip jar.
+          Dominate fast, high-intensity browser games and chase your best score across every mode.
         </p>
-      </section>
-
-      <section class="panel" id="tip">
-        <div class="panel-header">
-          <h2>Tip webgames.lol</h2>
-          <p>Username is required so your support appears in the admin dashboard.</p>
-        </div>
-
-        <form id="tipForm" class="tip-form">
-          <label for="username">Username</label>
-          <input
-            type="text"
-            id="username"
-            name="username"
-            minlength="3"
-            maxlength="24"
-            pattern="[a-zA-Z0-9_-]{3,24}"
-            placeholder="arcade_hero"
-            required
-          />
-
-          <label for="priceId">Tip tier (from Stripe product catalogue)</label>
-          <select id="priceId" name="priceId" required>
-            <option value="">Loading tiers...</option>
-          </select>
-
-          <button type="submit" id="tipSubmit">Continue to Stripe</button>
-          <p id="tipMessage" class="status" aria-live="polite"></p>
-        </form>
       </section>
 
       <section id="games">
         <div class="panel-header">
           <h2>Game Library</h2>
-          <p>Built with vanilla HTML5 canvas and JavaScript.</p>
+          <p>Jump in instantly. No installs. No waiting.</p>
         </div>
 
         <div class="game-grid">
@@ -113,6 +83,35 @@
             <a href="/public/games/tictactoe.html">Play Grid Duel</a>
           </article>
         </div>
+      </section>
+
+      <section class="panel tip-panel-compact" id="tip">
+        <div class="panel-header">
+          <h2>Support webgames.lol</h2>
+          <p>Optional support if you want to help fund new game modes and features.</p>
+        </div>
+
+        <form id="tipForm" class="tip-form">
+          <label for="username">Username</label>
+          <input
+            type="text"
+            id="username"
+            name="username"
+            minlength="3"
+            maxlength="24"
+            pattern="[a-zA-Z0-9_-]{3,24}"
+            placeholder="arcade_hero"
+            required
+          />
+
+          <label for="priceId">Tip tier (from Stripe product catalogue)</label>
+          <select id="priceId" name="priceId" required>
+            <option value="">Loading tiers...</option>
+          </select>
+
+          <button type="submit" id="tipSubmit">Continue to Stripe</button>
+          <p id="tipMessage" class="status" aria-live="polite"></p>
+        </form>
       </section>
     </main>
 

@@ -209,6 +209,31 @@ select option { background: var(--bg2); }
 
 .tip-form { display: grid; gap: 0.8rem; max-width: 420px; }
 
+.tip-panel-compact {
+  max-width: 640px;
+  margin: 1.25rem auto 0;
+  padding: 1.2rem;
+  border-color: rgba(0, 229, 255, 0.1);
+  box-shadow: none;
+}
+
+.tip-panel-compact .panel-header h2 {
+  font-size: 1rem;
+  color: #9cc7e8;
+}
+
+.tip-panel-compact .panel-header p {
+  font-size: 0.9rem;
+}
+
+.tip-panel-compact .tip-form {
+  max-width: 100%;
+}
+
+.tip-panel-compact #tipSubmit {
+  width: 100%;
+}
+
 /* ── BUTTONS ────────────────────────────────────────────────────────────── */
 button, .btn {
   display: inline-flex;
