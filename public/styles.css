@@ -333,11 +333,28 @@ button[disabled] { opacity: 0.45; transform: none; cursor: wait; }
   color: #fff;
 }
 .game-card p {
-  margin: 0 0 1rem;
+  margin: 0 0 0.75rem;
   color: var(--ink-soft);
   font-size: 0.9rem;
   line-height: 1.5;
   min-height: 56px;
+}
+.game-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+}
+.tag {
+  font-family: "Share Tech Mono", monospace;
+  font-size: 0.65rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--card-accent, var(--cyan));
+  border: 1px solid var(--card-accent, var(--cyan));
+  border-radius: 4px;
+  padding: 0.15rem 0.45rem;
+  opacity: 0.75;
 }
 .game-card a {
   display: inline-flex;
