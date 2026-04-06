@@ -58,14 +58,25 @@
           <button id="tttReset">Reset Score</button>
         </div>
       </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Leaderboard</h2>
+          <p>Top Grid Duel win totals (X side).</p>
+        </div>
+        <p id="lbStatus" class="status">Loading leaderboard...</p>
+        <ol id="lbList" class="leaderboard-list"></ol>
+      </section>
     </main>
 
+    <script src="leaderboard.js"></script>
     <script>
       const grid = document.getElementById("tttGrid");
       const info = document.getElementById("tttInfo");
       const scoreEl = document.getElementById("tttScore");
       const restartButton = document.getElementById("tttRestart");
       const resetButton = document.getElementById("tttReset");
+      const leaderboard = createLeaderboardController({ game: "tictactoe", listId: "lbList", statusId: "lbStatus" });
 
       let board;
       let turn;
@@ -89,6 +100,7 @@
         turn = "X";
         ended = false;
         selectedCell = 0;
+        leaderboard.resetRound();
         render();
         info.textContent = "Turn: X";
       }
@@ -124,6 +136,9 @@
           ended = true;
           score[whoWon] += 1;
           info.textContent = `${whoWon} wins this round`;
+          if (whoWon === "X") {
+            leaderboard.submit(score.X);
+          }
           updateScore();
           render();
           return;
@@ -201,6 +216,7 @@
       restartButton.addEventListener("click", resetRound);
       resetButton.addEventListener("click", resetScore);
 
+      leaderboard.refresh();
       resetScore();
     </script>
   </body>

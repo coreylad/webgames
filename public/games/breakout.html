@@ -29,13 +29,24 @@
           <button id="breakoutRestart">Restart</button>
         </div>
       </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Leaderboard</h2>
+          <p>Top brick blitz scores.</p>
+        </div>
+        <p id="lbStatus" class="status">Loading leaderboard...</p>
+        <ol id="lbList" class="leaderboard-list"></ol>
+      </section>
     </main>
 
+    <script src="leaderboard.js"></script>
     <script>
       const canvas = document.getElementById("breakoutCanvas");
       const ctx = canvas.getContext("2d");
       const info = document.getElementById("breakoutInfo");
       const restartButton = document.getElementById("breakoutRestart");
+      const leaderboard = createLeaderboardController({ game: "breakout", listId: "lbList", statusId: "lbStatus" });
 
       const paddle = { x: 320, y: 395, w: 120, h: 14, speed: 8 };
       const ball = { x: 380, y: 280, r: 8, dx: 4, dy: -4 };
@@ -77,6 +88,7 @@
         ball.y = 280;
         ball.dx = 4;
         ball.dy = -4;
+        leaderboard.resetRound();
         resetBricks();
       }
 
@@ -150,6 +162,7 @@
           lives -= 1;
           if (lives <= 0) {
             playing = false;
+            leaderboard.submit(score);
             return;
           }
 
@@ -162,6 +175,7 @@
 
         if (bricks.every((brick) => brick.hp <= 0)) {
           playing = false;
+          leaderboard.submit(score);
           info.textContent = `Score: ${score} | You cleared the wall!`;
         }
       }
@@ -225,6 +239,7 @@
 
       restartButton.addEventListener("click", restart);
 
+      leaderboard.refresh();
       restart();
       frame();
     </script>

@@ -61,12 +61,23 @@
           <button id="memoryRestart">Restart</button>
         </div>
       </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Leaderboard</h2>
+          <p>Best memory runs by efficiency.</p>
+        </div>
+        <p id="lbStatus" class="status">Loading leaderboard...</p>
+        <ol id="lbList" class="leaderboard-list"></ol>
+      </section>
     </main>
 
+    <script src="leaderboard.js"></script>
     <script>
       const info = document.getElementById("memoryInfo");
       const grid = document.getElementById("memoryGrid");
       const restartButton = document.getElementById("memoryRestart");
+      const leaderboard = createLeaderboardController({ game: "memory", listId: "lbList", statusId: "lbStatus" });
 
       const symbols = ["🎮", "🕹️", "⭐", "🚀", "💎", "🔥", "👾", "🏆"];
       let cards = [];
@@ -130,6 +141,8 @@
 
       function checkForWin() {
         if (matches === symbols.length) {
+          const efficiencyScore = Math.max(100, 2500 - moves * 120);
+          leaderboard.submit(efficiencyScore);
           updateInfo("You cleared the board!");
         }
       }
@@ -191,6 +204,7 @@
         moves = 0;
         matches = 0;
         selectedIndex = 0;
+        leaderboard.resetRound();
         render();
         updateInfo();
       }
@@ -219,6 +233,7 @@
       });
 
       restartButton.addEventListener("click", restart);
+      leaderboard.refresh();
       restart();
     </script>
   </body>

@@ -29,13 +29,24 @@
           <button id="shooterRestart">Restart</button>
         </div>
       </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Leaderboard</h2>
+          <p>Top defender scores.</p>
+        </div>
+        <p id="lbStatus" class="status">Loading leaderboard...</p>
+        <ol id="lbList" class="leaderboard-list"></ol>
+      </section>
     </main>
 
+    <script src="leaderboard.js"></script>
     <script>
       const canvas = document.getElementById("shooterCanvas");
       const ctx = canvas.getContext("2d");
       const info = document.getElementById("shooterInfo");
       const restartButton = document.getElementById("shooterRestart");
+      const leaderboard = createLeaderboardController({ game: "shooter", listId: "lbList", statusId: "lbStatus" });
 
       let ship;
       let bullets;
@@ -55,6 +66,7 @@
         keys = { left: false, right: false, shoot: false };
         cooldown = 0;
         ended = false;
+        leaderboard.resetRound();
       }
 
       function spawnEnemy() {
@@ -129,6 +141,7 @@
 
         if (lives <= 0) {
           ended = true;
+          leaderboard.submit(score);
         }
 
         info.textContent = `Score: ${score} | Lives: ${lives}`;
@@ -185,6 +198,7 @@
 
       restartButton.addEventListener("click", restart);
 
+      leaderboard.refresh();
       restart();
       frame();
     </script>

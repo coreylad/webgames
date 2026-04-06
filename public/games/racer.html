@@ -29,13 +29,24 @@
           <button id="racerRestart">Restart</button>
         </div>
       </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Leaderboard</h2>
+          <p>Top traffic run scores.</p>
+        </div>
+        <p id="lbStatus" class="status">Loading leaderboard...</p>
+        <ol id="lbList" class="leaderboard-list"></ol>
+      </section>
     </main>
 
+    <script src="leaderboard.js"></script>
     <script>
       const canvas = document.getElementById("racerCanvas");
       const ctx = canvas.getContext("2d");
       const info = document.getElementById("racerInfo");
       const restartBtn = document.getElementById("racerRestart");
+      const leaderboard = createLeaderboardController({ game: "racer", listId: "lbList", statusId: "lbStatus" });
 
       const lanes = [85, 170, 255, 340];
       let laneIndex = 1;
@@ -52,6 +63,7 @@
         speed = 4;
         ended = false;
         spawn = 0;
+        leaderboard.resetRound();
       }
 
       function playerRect() {
@@ -90,8 +102,9 @@
 
         const p = playerRect();
         cars.forEach((car) => {
-          if (hit(p, car)) {
+          if (!ended && hit(p, car)) {
             ended = true;
+            leaderboard.submit(Math.floor(score));
           }
         });
 
@@ -166,6 +179,7 @@
       });
 
       restartBtn.addEventListener("click", restart);
+      leaderboard.refresh();
       restart();
       frame();
     </script>

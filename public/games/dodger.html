@@ -29,13 +29,24 @@
           <button id="dodgerRestart">Restart</button>
         </div>
       </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Leaderboard</h2>
+          <p>Highest dodge survival scores.</p>
+        </div>
+        <p id="lbStatus" class="status">Loading leaderboard...</p>
+        <ol id="lbList" class="leaderboard-list"></ol>
+      </section>
     </main>
 
+    <script src="leaderboard.js"></script>
     <script>
       const canvas = document.getElementById("dodgerCanvas");
       const ctx = canvas.getContext("2d");
       const info = document.getElementById("dodgerInfo");
       const restartButton = document.getElementById("dodgerRestart");
+      const leaderboard = createLeaderboardController({ game: "dodger", listId: "lbList", statusId: "lbStatus" });
 
       let player;
       let hazards;
@@ -53,6 +64,7 @@
         score = 0;
         speed = 2.8;
         gameOver = false;
+        leaderboard.resetRound();
       }
 
       function spawnHazard() {
@@ -87,8 +99,9 @@
 
         hazards.forEach((hazard) => {
           hazard.y += hazard.dy;
-          if (intersects(player, hazard)) {
+          if (!gameOver && intersects(player, hazard)) {
             gameOver = true;
+            leaderboard.submit(Math.floor(score));
           }
         });
 
@@ -145,6 +158,7 @@
 
       restartButton.addEventListener("click", restart);
 
+      leaderboard.refresh();
       restart();
       frame();
     </script>

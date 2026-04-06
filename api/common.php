@@ -141,6 +141,106 @@ function now_iso(): string
     return gmdate('c');
 }
 
+function leaderboard_game_slugs(): array
+{
+    return [
+        'snake',
+        'pong',
+        'memory',
+        'breakout',
+        'dodger',
+        'shooter',
+        'tictactoe',
+        'racer',
+        'meteor'
+    ];
+}
+
+function is_valid_game_slug(string $game): bool
+{
+    return in_array($game, leaderboard_game_slugs(), true);
+}
+
+function ensure_leaderboard_store(): string
+{
+    $dir = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'data';
+    if (!is_dir($dir)) {
+        mkdir($dir, 0775, true);
+    }
+
+    $file = $dir . DIRECTORY_SEPARATOR . 'leaderboards.json';
+    if (!is_file($file)) {
+        file_put_contents($file, json_encode(['games' => []], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    }
+
+    return $file;
+}
+
+function read_leaderboard_store(): array
+{
+    $file = ensure_leaderboard_store();
+    $raw = file_get_contents($file);
+    if ($raw === false || $raw === '') {
+        return ['games' => []];
+    }
+
+    $decoded = json_decode($raw, true);
+    if (!is_array($decoded) || !isset($decoded['games']) || !is_array($decoded['games'])) {
+        return ['games' => []];
+    }
+
+    return $decoded;
+}
+
+function write_leaderboard_store(array $store): void
+{
+    $file = ensure_leaderboard_store();
+    file_put_contents($file, json_encode($store, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+}
+
+function ensure_leaderboard_rate_store(): string
+{
+    $dir = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'data';
+    if (!is_dir($dir)) {
+        mkdir($dir, 0775, true);
+    }
+
+    $file = $dir . DIRECTORY_SEPARATOR . 'leaderboard-rate-limit.json';
+    if (!is_file($file)) {
+        file_put_contents($file, json_encode(['attempts' => []], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    }
+
+    return $file;
+}
+
+function read_leaderboard_rate_store(): array
+{
+    $file = ensure_leaderboard_rate_store();
+    $raw = file_get_contents($file);
+    if ($raw === false || $raw === '') {
+        return ['attempts' => []];
+    }
+
+    $decoded = json_decode($raw, true);
+    if (!is_array($decoded) || !isset($decoded['attempts']) || !is_array($decoded['attempts'])) {
+        return ['attempts' => []];
+    }
+
+    return $decoded;
+}
+
+function write_leaderboard_rate_store(array $store): void
+{
+    $file = ensure_leaderboard_rate_store();
+    file_put_contents($file, json_encode($store, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+}
+
+function client_ip_address(): string
+{
+    $ip = trim((string)($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
+    return $ip !== '' ? $ip : 'unknown';
+}
+
 function add_tip_record(array $tip): array
 {
     $store = read_tip_store();

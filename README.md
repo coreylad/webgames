@@ -14,6 +14,7 @@ PHP-first HTML5 gaming website with Stripe tipping and an admin dashboard that s
   - Grid Duel
    - Turbo Lane
    - Meteor Drift
+- Persistent per-game leaderboards with username support
 - Stripe Checkout tip flow with required username
 - Stripe tip tiers pulled from your Stripe product catalogue (products/prices)
 - Admin dashboard that displays usernames, tier names, statuses, and totals

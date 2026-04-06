@@ -2,3 +2,5 @@ node_modules/
 .env
 data/tips.json
 data/admins.json
+data/leaderboards.json
+data/leaderboard-rate-limit.json

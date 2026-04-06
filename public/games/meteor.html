@@ -29,13 +29,24 @@
           <button id="meteorRestart">Restart</button>
         </div>
       </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Leaderboard</h2>
+          <p>Top meteor drift survival scores.</p>
+        </div>
+        <p id="lbStatus" class="status">Loading leaderboard...</p>
+        <ol id="lbList" class="leaderboard-list"></ol>
+      </section>
     </main>
 
+    <script src="leaderboard.js"></script>
     <script>
       const canvas = document.getElementById("meteorCanvas");
       const ctx = canvas.getContext("2d");
       const info = document.getElementById("meteorInfo");
       const restartBtn = document.getElementById("meteorRestart");
+      const leaderboard = createLeaderboardController({ game: "meteor", listId: "lbList", statusId: "lbStatus" });
 
       let ship;
       let rocks;
@@ -53,6 +64,7 @@
         ended = false;
         spawn = 0;
         speed = 2.4;
+        leaderboard.resetRound();
       }
 
       function hit(a, b) {
@@ -97,8 +109,9 @@
           if (rock.x < 0 || rock.x + rock.w > canvas.width) {
             rock.dx *= -1;
           }
-          if (hit(ship, rock)) {
+          if (!ended && hit(ship, rock)) {
             ended = true;
+            leaderboard.submit(Math.floor(score));
           }
         });
 
@@ -166,6 +179,7 @@
       });
 
       restartBtn.addEventListener("click", restart);
+      leaderboard.refresh();
       restart();
       frame();
     </script>

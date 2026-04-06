@@ -29,13 +29,24 @@
           <button id="pongRestart">Restart Match</button>
         </div>
       </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Leaderboard</h2>
+          <p>Highest player match scores.</p>
+        </div>
+        <p id="lbStatus" class="status">Loading leaderboard...</p>
+        <ol id="lbList" class="leaderboard-list"></ol>
+      </section>
     </main>
 
+    <script src="leaderboard.js"></script>
     <script>
       const canvas = document.getElementById("pongCanvas");
       const ctx = canvas.getContext("2d");
       const info = document.getElementById("pongInfo");
       const restartButton = document.getElementById("pongRestart");
+      const leaderboard = createLeaderboardController({ game: "pong", listId: "lbList", statusId: "lbStatus" });
 
       const paddleHeight = 90;
       const paddleWidth = 12;
@@ -46,6 +57,7 @@
       let playerScore = 0;
       let cpuScore = 0;
       let keys = { w: false, s: false };
+      let ended = false;
 
       function resetBall(direction = 1) {
         ball = { x: canvas.width / 2, y: canvas.height / 2, size: 10 };
@@ -58,9 +70,11 @@
       function restart() {
         playerScore = 0;
         cpuScore = 0;
+        ended = false;
         playerY = canvas.height / 2 - paddleHeight / 2;
         cpuY = canvas.height / 2 - paddleHeight / 2;
         resetBall(Math.random() > 0.5 ? 1 : -1);
+        leaderboard.resetRound();
       }
 
       function clamp(value, min, max) {
@@ -89,6 +103,10 @@
       }
 
       function updateBall() {
+        if (ended) {
+          return;
+        }
+
         ball.x += velocity.x;
         ball.y += velocity.y;
 
@@ -116,6 +134,16 @@
         if (ball.x > canvas.width) {
           playerScore += 1;
           resetBall(-1);
+        }
+
+        if (playerScore >= 7 || cpuScore >= 7) {
+          ended = true;
+          if (playerScore > cpuScore) {
+            info.textContent = `Player: ${playerScore} | CPU: ${cpuScore} | Victory!`;
+          } else {
+            info.textContent = `Player: ${playerScore} | CPU: ${cpuScore} | Defeat`;
+          }
+          leaderboard.submit(playerScore);
         }
       }
 
@@ -149,7 +177,9 @@
         ctx.arc(ball.x, ball.y, ball.size, 0, Math.PI * 2);
         ctx.fill();
 
-        info.textContent = `Player: ${playerScore} | CPU: ${cpuScore}`;
+        if (!ended) {
+          info.textContent = `Player: ${playerScore} | CPU: ${cpuScore}`;
+        }
       }
 
       function frame() {
@@ -186,6 +216,7 @@
 
       restartButton.addEventListener("click", restart);
 
+      leaderboard.refresh();
       restart();
       frame();
     </script>

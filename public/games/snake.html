@@ -33,14 +33,25 @@
           <button id="snakeRestart">Restart</button>
         </div>
       </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Leaderboard</h2>
+          <p>Top snake survivors.</p>
+        </div>
+        <p id="lbStatus" class="status">Loading leaderboard...</p>
+        <ol id="lbList" class="leaderboard-list"></ol>
+      </section>
     </main>
 
+    <script src="leaderboard.js"></script>
     <script>
       const canvas = document.getElementById("snakeCanvas");
       const ctx = canvas.getContext("2d");
       const info = document.getElementById("snakeInfo");
       const restartButton = document.getElementById("snakeRestart");
       const controlButtons = document.querySelectorAll("[data-dir]");
+      const leaderboard = createLeaderboardController({ game: "snake", listId: "lbList", statusId: "lbStatus" });
 
       const tile = 21;
       const tilesPerRow = canvas.width / tile;
@@ -96,6 +107,7 @@
           clearInterval(tick);
         }
         tick = setInterval(gameLoop, speed);
+        leaderboard.resetRound();
         draw();
         updateInfo();
       }
@@ -110,6 +122,7 @@
           best = score;
           localStorage.setItem("webgames.snake.best", String(best));
         }
+        leaderboard.submit(score);
         updateInfo("Game over. Press Restart");
       }
 
@@ -201,6 +214,7 @@
       });
 
       restartButton.addEventListener("click", reset);
+      leaderboard.refresh();
       reset();
     </script>
   </body>
