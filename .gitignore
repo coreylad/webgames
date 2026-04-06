@@ -4,3 +4,8 @@ data/tips.json
 data/admins.json
 data/leaderboards.json
 data/leaderboard-rate-limit.json
+data/analytics.json
+data/achievements.json
+data/seasons.json
+data/webhook-events.json
+data/suspicious-scores.json

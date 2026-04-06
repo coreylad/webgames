@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Admin Dashboard - webgames.lol</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0e27;
+            color: #e0e6ed;
+            line-height: 1.6;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 2rem;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        
+        .header h1 { font-size: 2rem; margin-bottom: 0.5rem; }
+        .header .subtitle { opacity: 0.9; font-size: 0.9rem; }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .metric-card {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 1.5rem;
+            backdrop-filter: blur(10px);
+        }
+        
+        .metric-card h3 {
+            opacity: 0.7;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 1rem;
+        }
+        
+        .metric-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 0.5rem;
+        }
+        
+        .metric-subtext {
+            font-size: 0.85rem;
+            opacity: 0.6;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 0.4rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-top: 0.5rem;
+        }
+        
+        .status-healthy { background: rgba(52, 211, 153, 0.2); color: #34d399; }
+        .status-degraded { background: rgba(251, 146, 60, 0.2); color: #fb923c; }
+        .status-critical { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+        
+        .section {
+            margin-bottom: 3rem;
+        }
+        
+        .section h2 {
+            font-size: 1.5rem;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid rgba(102, 126, 234, 0.5);
+        }
+        
+        .table-responsive {
+            overflow-x: auto;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        th {
+            background: rgba(102, 126, 234, 0.1);
+            padding: 1rem;
+            text-align: left;
+            font-weight: 600;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        td {
+            padding: 1rem;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        
+        tr:hover { background: rgba(102, 126, 234, 0.05); }
+        
+        .score-high { color: #34d399; font-weight: 600; }
+        .score-medium { color: #fbbf24; }
+        .score-low { color: #ef4444; }
+        
+        .achievement {
+            display: inline-block;
+            background: rgba(102, 126, 234, 0.2);
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            margin: 0.25rem;
+        }
+        
+        .achievement-epic { background: rgba(168, 85, 247, 0.2); color: #d8b4fe; }
+        .achievement-rare { background: rgba(59, 130, 246, 0.2); color: #93c5fd; }
+        
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-sm {
+            padding: 0.4rem 0.8rem;
+            font-size: 0.8rem;
+        }
+        
+        .btn-approve { background: linear-gradient(135deg, #34d399 0%, #10b981 100%); }
+        .btn-reject { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }
+        
+        .loading { opacity: 0.5; pointer-events: none; }
+        .loading::after {
+            content: ' ...';
+            animation: dots 1.5s steps(4, end) infinite;
+        }
+        
+        @keyframes dots {
+            0%, 20% { content: '.'; }
+            40% { content: '..'; }
+            60%, 100% { content: '...'; }
+        }
+        
+        .tabs {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .tab-btn {
+            background: transparent;
+            border: none;
+            color: #e0e6ed;
+            padding: 1rem;
+            cursor: pointer;
+            font-weight: 600;
+            border-bottom: 2px solid transparent;
+            transition: all 0.3s;
+        }
+        
+        .tab-btn.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+        
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        .chart-container {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 1.5rem;
+            min-height: 300px;
+        }
+        
+        @media (max-width: 768px) {
+            .grid { grid-template-columns: 1fr; }
+            .header h1 { font-size: 1.5rem; }
+            .tabs { flex-wrap: wrap; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🎮 Advanced Admin Dashboard</h1>
+        <p class="subtitle">webgames.lol - Analytics, Moderation & Insights</p>
+    </div>
+
+    <div class="container">
+        <!-- Key Metrics -->
+        <div class="grid" id="metricsGrid">
+            <div class="metric-card">
+                <h3>💰 Monthly Revenue</h3>
+                <div class="metric-value" id="revenueValue">$0.00</div>
+                <div class="metric-subtext" id="revenueTxn">0 transactions</div>
+            </div>
+            
+            <div class="metric-card">
+                <h3>👥 Active Players</h3>
+                <div class="metric-value" id="playersValue">0</div>
+                <div class="metric-subtext" id="playSessions">0 sessions</div>
+            </div>
+            
+            <div class="metric-card">
+                <h3>🏆 Leaderboard Entries</h3>
+                <div class="metric-value" id="leaderboardValue">0</div>
+                <div class="metric-subtext" id="gameCount">0 games</div>
+            </div>
+            
+            <div class="metric-card">
+                <h3>🪝 Webhook Health</h3>
+                <div class="metric-value" id="webhookStatus">—</div>
+                <div id="webhookDetails"></div>
+                <div class="metric-subtext" id="webhookHealth">Checking...</div>
+            </div>
+        </div>
+
+        <!-- Tabs Navigation -->
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('overview')">Overview</button>
+            <button class="tab-btn" onclick="switchTab('moderation')">Moderation</button>
+            <button class="tab-btn" onclick="switchTab('achievements')">Achievements</button>
+            <button class="tab-btn" onclick="switchTab('webhooks')">Webhooks</button>
+        </div>
+
+        <!-- Overview Tab -->
+        <div class="tab-content active" id="overview">
+            <div class="section">
+                <h2>Revenue Breakdown</h2>
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Type</th>
+                                <th>Amount</th>
+                                <th>Transaction Count</th>
+                            </tr>
+                        </thead>
+                        <tbody id="revenueTbody">
+                            <tr><td colspan="3" class="loading">Loading data</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>Recent Transactions</h2>
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Player</th>
+                                <th>Amount</th>
+                                <th>Type</th>
+                            </tr>
+                        </thead>
+                        <tbody id="transactionsTbody">
+                            <tr><td colspan="4" class="loading">Loading data</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Moderation Tab -->
+        <div class="tab-content" id="moderation">
+            <div class="section">
+                <h2>⚠️ Suspicious Scores</h2>
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Player</th>
+                                <th>Game</th>
+                                <th>Score</th>
+                                <th>Anomaly Score</th>
+                                <th>IP</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="suspiciousTbody">
+                            <tr><td colspan="6" class="loading">Loading suspicious scores</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Achievements Tab -->
+        <div class="tab-content" id="achievements">
+            <div class="section">
+                <h2>Top Achievement Earners</h2>
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Rank</th>
+                                <th>Player</th>
+                                <th>Achievements</th>
+                                <th>Points</th>
+                            </tr>
+                        </thead>
+                        <tbody id="achievementLbTbody">
+                            <tr><td colspan="4" class="loading">Loading achievement data</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Webhooks Tab -->
+        <div class="tab-content" id="webhooks">
+            <div class="section">
+                <h2>Webhook Events</h2>
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Type</th>
+                                <th>Status</th>
+                                <th>Processing Time</th>
+                                <th>Details</th>
+                            </tr>
+                        </thead>
+                        <tbody id="webhookEventsTbody">
+                            <tr><td colspan="5" class="loading">Loading webhook events</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const ADMIN_TOKEN = new URLSearchParams(location.search).get('token') || 
+                           localStorage.getItem('admin_token') || '';
+
+        if (!ADMIN_TOKEN) {
+            const token = prompt('Enter admin token:');
+            if (!token) {
+                location.href = '/';
+            } else {
+                localStorage.setItem('admin_token', token);
+                location.reload();
+            }
+        }
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById(tabName).classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        async function fetch_admin_api(action, params = {}) {
+            const url = new URL(`/api/admin-analytics.php`, location.origin);
+            url.searchParams.set('action', action);
+            url.searchParams.set('token', ADMIN_TOKEN);
+            Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+
+            const response = await fetch(url);
+            return response.json();
+        }
+
+        async function loadDashboard() {
+            try {
+                const data = await fetch_admin_api('dashboard');
+                if (data.metrics) {
+                    document.getElementById('revenueValue').textContent = data.metrics.monetization ? 
+                        '$' + (data.metrics.monetization.totalRevenueCents / 100).toFixed(2) : '$0.00';
+                    document.getElementById('revenueTxn').textContent = 
+                        data.metrics.monetization.totalTips + ' transactions';
+                    
+                    document.getElementById('playersValue').textContent = 
+                        data.metrics.players.uniquePlayers;
+                    document.getElementById('playSessions').textContent = 
+                        data.metrics.players.totalSessions + ' sessions';
+                    
+                    document.getElementById('leaderboardValue').textContent = 
+                        data.metrics.leaderboards.totalEntries;
+                    document.getElementById('gameCount').textContent = 
+                        data.metrics.leaderboards.gameCount + ' games';
+                }
+
+                const webhookHealth = data.metrics.webhookHealth;
+                const statusClass = `status-${webhookHealth.status}`;
+                document.getElementById('webhookStatus').textContent = webhookHealth.status.toUpperCase();
+                document.getElementById('webhookStatus').className = `metric-value ${statusClass}`;
+                document.getElementById('webhookDetails').innerHTML = `<span class="status-badge ${statusClass}">${webhookHealth.successRate}% success</span>`;
+                document.getElementById('webhookHealth').textContent = 
+                    `${webhookHealth.totalProcessed} processed, ${webhookHealth.pendingRetries} retries`;
+            } catch (err) {
+                console.error('Dashboard load error:', err);
+            }
+        }
+
+        async function loadSuspiciousScores() {
+            try {
+                const data = await fetch_admin_api('suspicious-scores');
+                const tbody = document.getElementById('suspiciousTbody');
+                tbody.innerHTML = '';
+
+                if (!data.suspiciousScores || data.suspiciousScores.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6">No suspicious scores flagged</td></tr>';
+                    return;
+                }
+
+                data.suspiciousScores.forEach(score => {
+                    const row = tbody.insertRow();
+                    row.innerHTML = `
+                        <td>${score.username}</td>
+                        <td>${score.game}</td>
+                        <td><span class="score-high">${score.score.toLocaleString()}</span></td>
+                        <td>${(score.anomalyScore * 100).toFixed(1)}%</td>
+                        <td><code style="font-size: 0.75rem;">${score.ip}</code></td>
+                        <td>
+                            <button class="btn btn-sm btn-approve" onclick="moderateScore('${score.id}', 'approve')">✓</button>
+                            <button class="btn btn-sm btn-reject" onclick="moderateScore('${score.id}', 'reject')">✗</button>
+                        </td>
+                    `;
+                });
+            } catch (err) {
+                console.error('Error loading suspicious scores:', err);
+            }
+        }
+
+        async function moderateScore(scoreId, action) {
+            try {
+                const response = await fetch_admin_api('moderate-score', {}, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'X-Admin-Token': ADMIN_TOKEN
+                    },
+                    body: JSON.stringify({ scoreId, action })
+                });
+                
+                if (response.status === 'ok') {
+                    alert(`Score ${action}ed`);
+                    loadSuspiciousScores();
+                }
+            } catch (err) {
+                console.error('Moderation error:', err);
+            }
+        }
+
+        async function loadAchievementLeaderboard() {
+            try {
+                const data = await fetch_admin_api('achievement-leaderboard');
+                const tbody = document.getElementById('achievementLbTbody');
+                tbody.innerHTML = '';
+
+                data.leaderboard.forEach((entry, idx) => {
+                    const row = tbody.insertRow();
+                    row.innerHTML = `
+                        <td>#${idx + 1}</td>
+                        <td>${entry.username}</td>
+                        <td>${entry.achievementCount}</td>
+                        <td class="score-high">${entry.totalPoints}</td>
+                    `;
+                });
+            } catch (err) {
+                console.error('Achievement leaderboard error:', err);
+            }
+        }
+
+        async function loadWebhookEvents() {
+            try {
+                const data = await fetch_admin_api('webhook-health');
+                const tbody = document.getElementById('webhookEventsTbody');
+                tbody.innerHTML = '';
+
+                data.recentEvents.forEach(event => {
+                    const row = tbody.insertRow();
+                    const time = new Date(event.receivedAt).toLocaleString();
+                    const status = event.processed ? 
+                        (event.error ? '<span class="status-badge status-critical">Failed</span>' : '<span class="status-badge status-healthy">✓</span>') :
+                        '<span class="status-badge status-degraded">Pending</span>';
+                    
+                    row.innerHTML = `
+                        <td>${time}</td>
+                        <td>${event.eventType}</td>
+                        <td>${status}</td>
+                        <td>${event.retries} retries</td>
+                        <td><code style="font-size: 0.7rem;">${event.eventId.substring(0, 12)}</code></td>
+                    `;
+                });
+            } catch (err) {
+                console.error('Webhook events error:', err);
+            }
+        }
+
+        // Load all data on startup
+        loadDashboard();
+        loadSuspiciousScores();
+        loadAchievementLeaderboard();
+        loadWebhookEvents();
+
+        // Auto-refresh every 30 seconds
+        setInterval(() => {
+            loadDashboard();
+            loadSuspiciousScores();
+            loadWebhookEvents();
+        }, 30000);
+    </script>
+</body>
+</html>
