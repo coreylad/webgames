@@ -1,32 +1,69 @@
 # webgames.lol
 
-PHP-first HTML5 gaming website with Stripe tipping and an admin dashboard that stores usernames.
+PHP-first HTML5 gaming platform with Stripe tipping, advanced leaderboards, achievements system, and comprehensive analytics.
 
 ## What is included
 
-- Nine built-in HTML5 games:
-  - Neon Snake
-  - Skyline Pong
-  - Pixel Pairs
-  - Brick Blitz
-  - Laser Grid
-  - Orbit Defender
-  - Grid Duel
-   - Turbo Lane
-   - Meteor Drift
-- Persistent per-game leaderboards with username support
-- Stripe Checkout tip flow with required username
-- Stripe tip tiers pulled from your Stripe product catalogue (products/prices)
-- Admin dashboard that displays usernames, tier names, statuses, and totals
-- Installer page for easy first-time setup
-- Full production-ready source code
+### 🎮 Games (9 titles)
+- Neon Snake (with pause, combos, wrapping)
+- Skyline Pong (classic arcade)
+- Pixel Pairs (memory matching)
+- Brick Blitz (breakout)
+- Laser Grid (dodger)  
+- Orbit Defender (shooter)
+- Grid Duel (tic-tac-toe)
+- Turbo Lane (traffic racer with shields/nitro)
+- Meteor Drift (space combat with dash/shooting)
+
+### 🏆 Advanced Leaderboards
+- Per-game leaderboards with real-time rankings
+- Daily/Weekly/All-time leaderboard splits
+- Seasonal leaderboards with automatic resets
+- Anti-cheat detection with anomaly scoring
+- Suspicious score flagging for admin review
+- Player ranking & percentile calculations
+- Player score history tracking
+
+### 🎖️ Achievement System
+- 15+ achievements across games
+- Rarity tiers (common, uncommon, rare, epic, legendary)
+- Point-based achievement scoring
+- Achievement leaderboard
+- Auto-unlock on game events
+- Cross-game progression tracking
+
+### 📊 Analytics & Admin Dashboard  
+- Revenue analytics by period (day/week/month)
+- Player session tracking
+- Game-specific play metrics
+- Webhook event logging with retry tracking
+- Comprehensive admin dashboard at `/admin-advanced.html`
+- Suspicious score moderation interface
+- Multi-tab admin interface (Overview, Moderation, Achievements, Webhooks)
+
+### 💳 Monetization
+- Stripe Checkout integration
+- Per-transaction revenue tracking
+- Refund/chargeback handling
+- Revenue breakdown by type and currency
+- Supporter achievements for tippers
+
+### 🔒 Security & Quality
+- Webhook replay attack prevention
+- Webhook event logging and retries
+- Admin token authentication
+- Rate-limiting on score submissions
+- Username validation (3-24 alphanumeric ± underscore/hyphen)
+- Score bounds validation (0-1,000,000,000)
+- Content Security Policy headers
 
 ## Stack
 
 - PHP 8+
 - Stripe API over HTTPS (no SDK required)
 - Vanilla HTML/CSS/JavaScript
-- JSON data store at data/tips.json
+- JSON data stores (tips, leaderboards, analytics, achievements, webhooks)
+- Nginx with CSP headers
 
 ## Quick start (PHP)
 
@@ -54,13 +91,39 @@ PHP-first HTML5 gaming website with Stripe tipping and an admin dashboard that s
 
    - Home: http://127.0.0.1:8080/
    - Admin: http://127.0.0.1:8080/admin.php
+   - Advanced Admin Dashboard: http://127.0.0.1:8080/admin-advanced.html?token=YOUR_TOKEN
 
-## Stripe catalogue tier behavior
+## API Endpoints
 
-The tip selector uses API endpoint /api/tip-tiers.php.
+### Leaderboards
+- `GET /api/leaderboard.php?game=<slug>&limit=10` - Get top scores
+- `POST /api/leaderboard.php` - Submit score
+- `GET /api/leaderboard-advanced-endpoint.php?action=daily&game=<slug>` - Daily leaderboard
+- `GET /api/leaderboard-advanced-endpoint.php?action=weekly&game=<slug>` - Weekly leaderboard
+- `GET /api/leaderboard-advanced-endpoint.php?action=player-ranking&game=<slug>&username=<user>` - Player rank
 
-- If STRIPE_TIER_PRODUCT_IDS is set, active one-time prices from those products are shown.
-- If STRIPE_TIER_PRICE_IDS is set, those prices are also included.
+### Achievements
+- `GET /api/achievements-endpoint.php?action=player&username=<user>` - Player achievements
+- `GET /api/achievements-endpoint.php?action=leaderboard` - Top achievement earners
+- `POST /api/achievements-endpoint.php?action=earn` - Award achievement
+
+### Analytics (Admin Only)
+- `GET /api/admin-analytics.php?action=dashboard` - Main metrics
+- `GET /api/admin-analytics.php?action=suspicious-scores` - Flagged scores for review  
+- `GET /api/admin-analytics.php?action=webhook-health` - Webhook status
+- `POST /api/admin-analytics.php?action=moderate-score` - Approve/reject score
+
+## Data Files
+
+The system uses JSON data files (auto-created in `data/` folder):
+- `tips.json` - Stripe tip transactions
+- `leaderboards.json` - Game scores and rankings
+- `achievements.json` - Earned achievements
+- `analytics.json` - Player sessions and events
+- `webhook-events.json` - Stripe webhook log
+- `suspicious-scores.json` - Flagged scores for moderation
+- `seasons.json` - Seasonal leaderboard data
+- `admins.json` - Admin accounts
 - If neither is set, the app falls back to active one-time prices from your account.
 
 ## Stripe webhook setup
