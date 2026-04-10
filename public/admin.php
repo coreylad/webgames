@@ -253,6 +253,24 @@ $show_login     = !$needs_setup && !$show_dashboard;
         .btn-approve { background: linear-gradient(135deg, #34d399 0%, #10b981 100%); }
         .btn-reject  { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }
 
+        .settings-panel {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        .settings-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 1.25rem;
+            margin-bottom: 1.25rem;
+        }
+        .settings-note { font-size: 0.78rem; color: #8892a4; margin-top: 0.35rem; }
+        .settings-status { margin-top: 0.75rem; font-size: 0.9rem; min-height: 1.2em; }
+        .settings-status.success { color: #34d399; }
+        .settings-status.error   { color: #ef4444; }
+
         .tabs {
             display: flex;
             gap: 1rem;
@@ -444,10 +462,41 @@ $show_login     = !$needs_setup && !$show_dashboard;
         <!-- Webhooks -->
         <div class="tab-content" id="webhooks">
             <div class="section">
+                <h2>Webhook Proxy Settings</h2>
+                <div class="settings-panel">
+                    <form id="webhookProxyForm">
+                        <div class="form-group" style="margin-bottom:1rem;">
+                            <label for="proxyEnabled" style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;">
+                                <input type="checkbox" id="proxyEnabled" style="width:auto;" />
+                                Enable forwarding to another webhook endpoint
+                            </label>
+                        </div>
+                        <div class="settings-grid">
+                            <div class="form-group">
+                                <label for="proxyForwardUrl">Forward URL</label>
+                                <input type="url" id="proxyForwardUrl" placeholder="https://other-site.example/api/stripe-webhook.php" />
+                                <div class="settings-note">Incoming Stripe webhook payloads are forwarded here when enabled.</div>
+                            </div>
+                            <div class="form-group">
+                                <label for="proxyAuthHeader">Auth Header Name</label>
+                                <input type="text" id="proxyAuthHeader" placeholder="x-webgames-proxy-token" />
+                                <div class="settings-note">Optional custom header to authenticate this proxy on the target site.</div>
+                            </div>
+                            <div class="form-group">
+                                <label for="proxyAuthToken">Auth Token</label>
+                                <input type="text" id="proxyAuthToken" placeholder="shared-secret" />
+                                <div class="settings-note">Sent only to the forward URL as the configured auth header.</div>
+                            </div>
+                        </div>
+                        <button class="btn" type="submit" id="saveWebhookProxyBtn">Save Webhook Proxy Settings</button>
+                        <div class="settings-status" id="webhookProxyStatus"></div>
+                    </form>
+                </div>
+
                 <h2>Webhook Events</h2>
                 <div class="table-responsive">
                     <table>
-                        <thead><tr><th>Time</th><th>Type</th><th>Status</th><th>Retries</th><th>Event ID</th></tr></thead>
+                        <thead><tr><th>Time</th><th>Type</th><th>Status</th><th>Retries</th><th>Event ID / Proxy</th></tr></thead>
                         <tbody id="webhookEventsTbody"><tr><td colspan="5" class="loading">Loading webhook events</td></tr></tbody>
                     </table>
                 </div>
@@ -722,14 +771,69 @@ $show_login     = !$needs_setup && !$show_dashboard;
                     ? (ev.error ? '<span class="status-badge status-critical">Failed</span>'
                                 : '<span class="status-badge status-healthy">OK</span>')
                     : '<span class="status-badge status-degraded">Pending</span>';
+                const fwd = ev.forward || {};
+                const fwdText = fwd.attempted
+                    ? (fwd.success ? 'Proxy ✓' : 'Proxy failed')
+                    : (fwd.enabled ? 'Proxy skipped' : 'Proxy off');
                 tr.innerHTML = `
                     <td>${time}</td>
                     <td>${ev.eventType}</td>
                     <td>${status}</td>
                     <td>${ev.retries}</td>
-                    <td><code style="font-size:.7rem">${ev.eventId.substring(0,12)}</code></td>`;
+                    <td><code style="font-size:.7rem">${ev.eventId.substring(0,12)}</code><br><span style="opacity:0.65;font-size:.75rem;">${fwdText}</span></td>`;
             });
         } catch (err) { console.error('Webhook events error:', err); }
+    }
+
+    async function loadWebhookProxyConfig() {
+        const statusEl = document.getElementById('webhookProxyStatus');
+        try {
+            const data   = await fetch_admin_api('webhook-proxy-config');
+            const config = data.config || {};
+            document.getElementById('proxyEnabled').checked       = !!config.enabled;
+            document.getElementById('proxyForwardUrl').value      = config.forwardUrl || '';
+            document.getElementById('proxyAuthHeader').value      = config.forwardAuthHeader || 'x-webgames-proxy-token';
+            document.getElementById('proxyAuthToken').value       = config.forwardAuthToken || '';
+            statusEl.className   = 'settings-status';
+            statusEl.textContent = config.enabled ? 'Proxy forwarding is currently enabled.' : 'Proxy forwarding is currently disabled.';
+        } catch (err) {
+            statusEl.className   = 'settings-status error';
+            statusEl.textContent = 'Unable to load webhook proxy settings.';
+        }
+    }
+
+    async function saveWebhookProxyConfig(event) {
+        event.preventDefault();
+        const statusEl = document.getElementById('webhookProxyStatus');
+        const saveBtn  = document.getElementById('saveWebhookProxyBtn');
+        statusEl.className   = 'settings-status';
+        statusEl.textContent = 'Saving…';
+        saveBtn.disabled = true;
+        try {
+            const res  = await fetch(
+                `/api/admin-analytics.php?action=update-webhook-proxy-config&token=${encodeURIComponent(sessionToken)}`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        enabled:          document.getElementById('proxyEnabled').checked,
+                        forwardUrl:       document.getElementById('proxyForwardUrl').value.trim(),
+                        forwardAuthHeader:document.getElementById('proxyAuthHeader').value.trim(),
+                        forwardAuthToken: document.getElementById('proxyAuthToken').value.trim()
+                    })
+                }
+            );
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || data.status !== 'ok') throw new Error(data.error || 'Save failed');
+            statusEl.className   = 'settings-status success';
+            statusEl.textContent = 'Webhook proxy settings saved.';
+            await loadWebhookProxyConfig();
+        } catch (err) {
+            statusEl.className   = 'settings-status error';
+            statusEl.textContent = err.message;
+        } finally {
+            saveBtn.disabled = false;
+        }
     }
 
     // ── Boot ───────────────────────────────────────────────────────────────
@@ -739,6 +843,8 @@ $show_login     = !$needs_setup && !$show_dashboard;
     loadSuspiciousScores();
     loadAchievementLeaderboard();
     loadWebhookEvents();
+    loadWebhookProxyConfig();
+    document.getElementById('webhookProxyForm').addEventListener('submit', saveWebhookProxyConfig);
     setInterval(() => { loadDashboard(); loadSuspiciousScores(); loadWebhookEvents(); }, 30000);
     <?php endif; ?>
 </script>
