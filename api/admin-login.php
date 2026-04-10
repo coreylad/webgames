@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/common.php';
+require_once __DIR__ . '/analytics.php';
 
 // Session functions now live in common.php.
 
