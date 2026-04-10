@@ -70,7 +70,16 @@ function log_webhook_event(array $event, string $source = 'stripe'): array
         'receivedAt' => now_iso(),
         'processed' => false,
         'error' => null,
-        'retries' => 0
+        'retries' => 0,
+        'forward' => [
+            'enabled' => false,
+            'attempted' => false,
+            'success' => null,
+            'status' => null,
+            'target' => null,
+            'error' => null,
+            'completedAt' => null
+        ]
     ];
 
     $store['events'][] = $logged;
@@ -81,6 +90,37 @@ function log_webhook_event(array $event, string $source = 'stripe'): array
     write_webhook_store($store);
     
     return $logged;
+}
+
+function mark_webhook_forward_result(
+    string $webhookId,
+    bool $enabled,
+    bool $attempted,
+    bool $success,
+    ?int $statusCode,
+    ?string $target,
+    ?string $error = null
+): void {
+    $store = read_webhook_store();
+
+    foreach ($store['events'] as &$event) {
+        if ($event['id'] !== $webhookId) {
+            continue;
+        }
+
+        $event['forward'] = [
+            'enabled' => $enabled,
+            'attempted' => $attempted,
+            'success' => $attempted ? $success : null,
+            'status' => $statusCode,
+            'target' => $target,
+            'error' => $error,
+            'completedAt' => now_iso()
+        ];
+        break;
+    }
+
+    write_webhook_store($store);
 }
 
 function mark_webhook_processed(string $webhookId, bool $success, ?string $error = null): void

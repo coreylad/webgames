@@ -15,6 +15,79 @@ $action = (string)($_GET['action'] ?? '');
 $output = [];
 
 switch ($action) {
+    case 'webhook-proxy-config':
+        $forwardUrl = trim(env_value('WEBHOOK_FORWARD_URL', ''));
+        $forwardAuthHeader = trim(env_value('WEBHOOK_FORWARD_AUTH_HEADER', 'x-webgames-proxy-token'));
+        $forwardAuthToken = env_value('WEBHOOK_FORWARD_AUTH_TOKEN', '');
+
+        $output = [
+            'status' => 'ok',
+            'config' => [
+                'enabled' => $forwardUrl !== '',
+                'forwardUrl' => $forwardUrl,
+                'forwardAuthHeader' => $forwardAuthHeader !== '' ? $forwardAuthHeader : 'x-webgames-proxy-token',
+                'forwardAuthToken' => $forwardAuthToken
+            ]
+        ];
+        break;
+
+    case 'update-webhook-proxy-config':
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            json_response(['error' => 'Method not allowed'], 405);
+        }
+
+        $body = read_json_input();
+        $enabled = (bool)($body['enabled'] ?? false);
+        $forwardUrl = trim((string)($body['forwardUrl'] ?? ''));
+        $forwardAuthHeader = trim((string)($body['forwardAuthHeader'] ?? 'x-webgames-proxy-token'));
+        $forwardAuthToken = trim((string)($body['forwardAuthToken'] ?? ''));
+
+        if (!$enabled) {
+            $forwardUrl = '';
+        }
+
+        if ($forwardUrl !== '') {
+            $isValidUrl = filter_var($forwardUrl, FILTER_VALIDATE_URL) !== false;
+            $urlScheme = strtolower((string)parse_url($forwardUrl, PHP_URL_SCHEME));
+            if (!$isValidUrl || !in_array($urlScheme, ['http', 'https'], true)) {
+                json_response(['error' => 'Forward URL must be a valid http or https URL'], 400);
+            }
+        }
+
+        if ($forwardAuthHeader !== '' && preg_match('/^[A-Za-z0-9-]{1,64}$/', $forwardAuthHeader) !== 1) {
+            json_response(['error' => 'Forward auth header must use only letters, numbers, and dashes'], 400);
+        }
+
+        if ($forwardAuthHeader === '') {
+            $forwardAuthHeader = 'x-webgames-proxy-token';
+        }
+
+        if (strlen($forwardAuthToken) > 512) {
+            json_response(['error' => 'Forward auth token is too long'], 400);
+        }
+
+        $saved = write_env_values([
+            'WEBHOOK_FORWARD_URL' => $forwardUrl,
+            'WEBHOOK_FORWARD_AUTH_HEADER' => $forwardAuthHeader,
+            'WEBHOOK_FORWARD_AUTH_TOKEN' => $forwardAuthToken
+        ]);
+
+        if (!$saved) {
+            json_response(['error' => 'Unable to update .env settings'], 500);
+        }
+
+        $output = [
+            'status' => 'ok',
+            'message' => 'Webhook proxy settings updated',
+            'config' => [
+                'enabled' => $forwardUrl !== '',
+                'forwardUrl' => $forwardUrl,
+                'forwardAuthHeader' => $forwardAuthHeader,
+                'forwardAuthToken' => $forwardAuthToken
+            ]
+        ];
+        break;
+
     case 'dashboard':
         // Main dashboard with key metrics
         require_once __DIR__ . '/webhook-advanced.php';

@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="refresh" content="0;url=/admin" />
     <title>Advanced Admin Dashboard - webgames.lol</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -13,14 +14,155 @@
             line-height: 1.6;
         }
         
+        .login-container {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 100%);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .login-container.active {
+            display: flex;
+        }
+        
+        .login-card {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            padding: 3rem;
+            backdrop-filter: blur(10px);
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+        }
+        
+        .login-card h1 {
+            font-size: 1.8rem;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .login-card .subtitle {
+            opacity: 0.6;
+            margin-bottom: 2rem;
+            font-size: 0.9rem;
+        }
+        
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        
+        .form-group label {
+            display: block;
+            opacity: 0.7;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 0.5rem;
+        }
+        
+        .form-group input {
+            width: 100%;
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 8px;
+            padding: 0.75rem 1rem;
+            color: #e0e6ed;
+            font-size: 1rem;
+            transition: all 0.3s;
+        }
+        
+        .form-group input:focus {
+            outline: none;
+            background: rgba(255,255,255,0.12);
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .login-btn {
+            width: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 0.85rem;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.3s;
+        }
+        
+        .login-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .login-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .login-error {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: #fca5a5;
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            font-size: 0.9rem;
+            display: none;
+        }
+        
+        .login-error.active {
+            display: block;
+        }
+        
         .header {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             padding: 2rem;
             box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
         
-        .header h1 { font-size: 2rem; margin-bottom: 0.5rem; }
-        .header .subtitle { opacity: 0.9; font-size: 0.9rem; }
+        .header-left h1 { font-size: 2rem; margin-bottom: 0.5rem; }
+        .header-left .subtitle { opacity: 0.9; font-size: 0.9rem; }
+        
+        .header-right {
+            text-align: right;
+        }
+        
+        .admin-info {
+            margin-bottom: 0.5rem;
+            opacity: 0.9;
+        }
+        
+        .admin-info strong { color: #fff; }
+        
+        .logout-btn {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border: 1px solid rgba(255,255,255,0.3);
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.3s;
+        }
+        
+        .logout-btn:hover {
+            background: rgba(255,255,255,0.3);
+        }
         
         .container {
             max-width: 1400px;
@@ -157,6 +299,36 @@
         
         .btn-approve { background: linear-gradient(135deg, #34d399 0%, #10b981 100%); }
         .btn-reject { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }
+
+        .settings-panel {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 1.25rem;
+            backdrop-filter: blur(10px);
+            margin-bottom: 1.5rem;
+        }
+
+        .settings-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1rem;
+        }
+
+        .settings-note {
+            opacity: 0.7;
+            font-size: 0.85rem;
+            margin-top: 0.35rem;
+        }
+
+        .settings-status {
+            margin-top: 0.9rem;
+            font-size: 0.9rem;
+            min-height: 1.2rem;
+        }
+
+        .settings-status.error { color: #fca5a5; }
+        .settings-status.success { color: #86efac; }
         
         .loading { opacity: 0.5; pointer-events: none; }
         .loading::after {
@@ -206,176 +378,330 @@
         
         @media (max-width: 768px) {
             .grid { grid-template-columns: 1fr; }
-            .header h1 { font-size: 1.5rem; }
+            .header { flex-direction: column; gap: 1rem; text-align: center; }
+            .header-left h1 { font-size: 1.5rem; }
             .tabs { flex-wrap: wrap; }
+            .login-card { padding: 2rem; }
         }
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>🎮 Advanced Admin Dashboard</h1>
-        <p class="subtitle">webgames.lol - Analytics, Moderation & Insights</p>
+    <!-- Login Screen -->
+    <div class="login-container active" id="loginContainer">
+        <div class="login-card">
+            <h1>🎮 Admin Portal</h1>
+            <p class="subtitle">webgames.lol Dashboard</p>
+            
+            <div class="login-error" id="loginError"></div>
+            
+            <form onsubmit="handleLogin(event)">
+                <div class="form-group">
+                    <label for="username">Username</label>
+                    <input type="text" id="username" required autocomplete="username" placeholder="Enter admin username">
+                </div>
+                
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" required autocomplete="current-password" placeholder="Enter password">
+                </div>
+                
+                <button class="login-btn" type="submit" id="loginBtn">Sign In</button>
+            </form>
+            
+            <p style="text-align: center; opacity: 0.5; margin-top: 1.5rem; font-size: 0.85rem;">
+                Contact administrator for access
+            </p>
+        </div>
     </div>
 
-    <div class="container">
-        <!-- Key Metrics -->
-        <div class="grid" id="metricsGrid">
-            <div class="metric-card">
-                <h3>💰 Monthly Revenue</h3>
-                <div class="metric-value" id="revenueValue">$0.00</div>
-                <div class="metric-subtext" id="revenueTxn">0 transactions</div>
+    <!-- Main Dashboard -->
+    <div id="dashboardContainer" style="display: none;">
+        <div class="header">
+            <div class="header-left">
+                <h1>🎮 Advanced Admin Dashboard</h1>
+                <p class="subtitle">webgames.lol - Analytics, Moderation & Insights</p>
             </div>
-            
-            <div class="metric-card">
-                <h3>👥 Active Players</h3>
-                <div class="metric-value" id="playersValue">0</div>
-                <div class="metric-subtext" id="playSessions">0 sessions</div>
-            </div>
-            
-            <div class="metric-card">
-                <h3>🏆 Leaderboard Entries</h3>
-                <div class="metric-value" id="leaderboardValue">0</div>
-                <div class="metric-subtext" id="gameCount">0 games</div>
-            </div>
-            
-            <div class="metric-card">
-                <h3>🪝 Webhook Health</h3>
-                <div class="metric-value" id="webhookStatus">—</div>
-                <div id="webhookDetails"></div>
-                <div class="metric-subtext" id="webhookHealth">Checking...</div>
+            <div class="header-right">
+                <div class="admin-info">
+                    Logged in as <strong id="adminUsername"></strong>
+                </div>
+                <button class="logout-btn" onclick="handleLogout()">Logout</button>
             </div>
         </div>
 
-        <!-- Tabs Navigation -->
-        <div class="tabs">
-            <button class="tab-btn active" onclick="switchTab('overview')">Overview</button>
-            <button class="tab-btn" onclick="switchTab('moderation')">Moderation</button>
-            <button class="tab-btn" onclick="switchTab('achievements')">Achievements</button>
-            <button class="tab-btn" onclick="switchTab('webhooks')">Webhooks</button>
-        </div>
-
-        <!-- Overview Tab -->
-        <div class="tab-content active" id="overview">
-            <div class="section">
-                <h2>Revenue Breakdown</h2>
-                <div class="table-responsive">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Type</th>
-                                <th>Amount</th>
-                                <th>Transaction Count</th>
-                            </tr>
-                        </thead>
-                        <tbody id="revenueTbody">
-                            <tr><td colspan="3" class="loading">Loading data</td></tr>
-                        </tbody>
-                    </table>
+        <div class="container">
+            <!-- Key Metrics -->
+            <div class="grid" id="metricsGrid">
+                <div class="metric-card">
+                    <h3>💰 Monthly Revenue</h3>
+                    <div class="metric-value" id="revenueValue">$0.00</div>
+                    <div class="metric-subtext" id="revenueTxn">0 transactions</div>
+                </div>
+                
+                <div class="metric-card">
+                    <h3>👥 Active Players</h3>
+                    <div class="metric-value" id="playersValue">0</div>
+                    <div class="metric-subtext" id="playSessions">0 sessions</div>
+                </div>
+                
+                <div class="metric-card">
+                    <h3>🏆 Leaderboard Entries</h3>
+                    <div class="metric-value" id="leaderboardValue">0</div>
+                    <div class="metric-subtext" id="gameCount">0 games</div>
+                </div>
+                
+                <div class="metric-card">
+                    <h3>🪝 Webhook Health</h3>
+                    <div class="metric-value" id="webhookStatus">—</div>
+                    <div id="webhookDetails"></div>
+                    <div class="metric-subtext" id="webhookHealth">Checking...</div>
                 </div>
             </div>
 
-            <div class="section">
-                <h2>Recent Transactions</h2>
-                <div class="table-responsive">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Date</th>
-                                <th>Player</th>
-                                <th>Amount</th>
-                                <th>Type</th>
-                            </tr>
-                        </thead>
-                        <tbody id="transactionsTbody">
-                            <tr><td colspan="4" class="loading">Loading data</td></tr>
-                        </tbody>
-                    </table>
+            <!-- Tabs Navigation -->
+            <div class="tabs">
+                <button class="tab-btn active" onclick="switchTab('overview')">Overview</button>
+                <button class="tab-btn" onclick="switchTab('moderation')">Moderation</button>
+                <button class="tab-btn" onclick="switchTab('achievements')">Achievements</button>
+                <button class="tab-btn" onclick="switchTab('webhooks')">Webhooks</button>
+            </div>
+
+            <!-- Overview Tab -->
+            <div class="tab-content active" id="overview">
+                <div class="section">
+                    <h2>Revenue Breakdown</h2>
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Type</th>
+                                    <th>Amount</th>
+                                    <th>Transaction Count</th>
+                                </tr>
+                            </thead>
+                            <tbody id="revenueTbody">
+                                <tr><td colspan="3" class="loading">Loading data</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h2>Recent Transactions</h2>
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Player</th>
+                                    <th>Amount</th>
+                                    <th>Type</th>
+                                </tr>
+                            </thead>
+                            <tbody id="transactionsTbody">
+                                <tr><td colspan="4" class="loading">Loading data</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Moderation Tab -->
-        <div class="tab-content" id="moderation">
-            <div class="section">
-                <h2>⚠️ Suspicious Scores</h2>
-                <div class="table-responsive">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Player</th>
-                                <th>Game</th>
-                                <th>Score</th>
-                                <th>Anomaly Score</th>
-                                <th>IP</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="suspiciousTbody">
-                            <tr><td colspan="6" class="loading">Loading suspicious scores</td></tr>
-                        </tbody>
-                    </table>
+            <!-- Moderation Tab -->
+            <div class="tab-content" id="moderation">
+                <div class="section">
+                    <h2>⚠️ Suspicious Scores</h2>
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Player</th>
+                                    <th>Game</th>
+                                    <th>Score</th>
+                                    <th>Anomaly Score</th>
+                                    <th>IP</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="suspiciousTbody">
+                                <tr><td colspan="6" class="loading">Loading suspicious scores</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Achievements Tab -->
-        <div class="tab-content" id="achievements">
-            <div class="section">
-                <h2>Top Achievement Earners</h2>
-                <div class="table-responsive">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Rank</th>
-                                <th>Player</th>
-                                <th>Achievements</th>
-                                <th>Points</th>
-                            </tr>
-                        </thead>
-                        <tbody id="achievementLbTbody">
-                            <tr><td colspan="4" class="loading">Loading achievement data</td></tr>
-                        </tbody>
-                    </table>
+            <!-- Achievements Tab -->
+            <div class="tab-content" id="achievements">
+                <div class="section">
+                    <h2>Top Achievement Earners</h2>
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Rank</th>
+                                    <th>Player</th>
+                                    <th>Achievements</th>
+                                    <th>Points</th>
+                                </tr>
+                            </thead>
+                            <tbody id="achievementLbTbody">
+                                <tr><td colspan="4" class="loading">Loading achievement data</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Webhooks Tab -->
-        <div class="tab-content" id="webhooks">
-            <div class="section">
-                <h2>Webhook Events</h2>
-                <div class="table-responsive">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Time</th>
-                                <th>Type</th>
-                                <th>Status</th>
-                                <th>Processing Time</th>
-                                <th>Details</th>
-                            </tr>
-                        </thead>
-                        <tbody id="webhookEventsTbody">
-                            <tr><td colspan="5" class="loading">Loading webhook events</td></tr>
-                        </tbody>
-                    </table>
+            <!-- Webhooks Tab -->
+            <div class="tab-content" id="webhooks">
+                <div class="section">
+                    <h2>Webhook Proxy Settings</h2>
+                    <div class="settings-panel">
+                        <form id="webhookProxyForm">
+                            <div class="form-group" style="margin-bottom: 1rem;">
+                                <label for="proxyEnabled" style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;">
+                                    <input type="checkbox" id="proxyEnabled" style="width:auto;" />
+                                    Enable forwarding to another webhook endpoint
+                                </label>
+                            </div>
+
+                            <div class="settings-grid">
+                                <div class="form-group">
+                                    <label for="proxyForwardUrl">Forward URL</label>
+                                    <input type="url" id="proxyForwardUrl" placeholder="https://other-site.example/api/stripe-webhook.php" />
+                                    <div class="settings-note">Incoming Stripe webhook payloads are forwarded here when enabled.</div>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="proxyAuthHeader">Auth Header Name</label>
+                                    <input type="text" id="proxyAuthHeader" placeholder="x-webgames-proxy-token" />
+                                    <div class="settings-note">Optional custom header used to authenticate this proxy on target site.</div>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="proxyAuthToken">Auth Token</label>
+                                    <input type="text" id="proxyAuthToken" placeholder="shared-secret" />
+                                    <div class="settings-note">Sent only to forward URL as the configured auth header.</div>
+                                </div>
+                            </div>
+
+                            <button class="btn" type="submit" id="saveWebhookProxyBtn">Save Webhook Proxy Settings</button>
+                            <div class="settings-status" id="webhookProxyStatus"></div>
+                        </form>
+                    </div>
+
+                    <h2>Webhook Events</h2>
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Type</th>
+                                    <th>Status</th>
+                                    <th>Processing Time</th>
+                                    <th>Details</th>
+                                </tr>
+                            </thead>
+                            <tbody id="webhookEventsTbody">
+                                <tr><td colspan="5" class="loading">Loading webhook events</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
     <script>
-        const ADMIN_TOKEN = new URLSearchParams(location.search).get('token') || 
-                           localStorage.getItem('admin_token') || '';
+        let sessionToken = localStorage.getItem('admin_session_token');
+        let sessionUsername = localStorage.getItem('admin_username');
 
-        if (!ADMIN_TOKEN) {
-            const token = prompt('Enter admin token:');
-            if (!token) {
-                location.href = '/';
-            } else {
-                localStorage.setItem('admin_token', token);
-                location.reload();
+        async function handleLogin(event) {
+            event.preventDefault();
+            
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const loginBtn = document.getElementById('loginBtn');
+            const loginError = document.getElementById('loginError');
+
+            loginBtn.disabled = true;
+            loginBtn.textContent = 'Signing in...';
+            loginError.classList.remove('active');
+
+            try {
+                const response = await fetch('/api/admin-login.php?action=login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+
+                if (data.status === 'ok' && data.sessionToken) {
+                    // Login successful
+                    sessionToken = data.sessionToken;
+                    sessionUsername = data.admin.username;
+                    
+                    localStorage.setItem('admin_session_token', sessionToken);
+                    localStorage.setItem('admin_username', sessionUsername);
+                    
+                    showDashboard();
+                } else {
+                    loginError.textContent = data.error || 'Login failed';
+                    loginError.classList.add('active');
+                }
+            } catch (err) {
+                loginError.textContent = 'Connection error: ' + err.message;
+                loginError.classList.add('active');
+            } finally {
+                loginBtn.disabled = false;
+                loginBtn.textContent = 'Sign In';
             }
+        }
+
+        function showDashboard() {
+            document.getElementById('loginContainer').classList.remove('active');
+            document.getElementById('dashboardContainer').style.display = 'block';
+            document.getElementById('adminUsername').textContent = sessionUsername;
+            
+            loadDashboard();
+            loadSuspiciousScores();
+            loadAchievementLeaderboard();
+            loadWebhookEvents();
+            loadWebhookProxyConfig();
+
+            // Auto-refresh every 30 seconds
+            setInterval(() => {
+                loadDashboard();
+                loadSuspiciousScores();
+                loadWebhookEvents();
+            }, 30000);
+        }
+
+        async function handleLogout() {
+            if (!confirm('Are you sure you want to logout?')) {
+                return;
+            }
+
+            try {
+                await fetch('/api/admin-login.php?action=logout', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token: sessionToken })
+                });
+            } catch (err) {
+                console.error('Logout error:', err);
+            }
+
+            sessionToken = null;
+            sessionUsername = null;
+            localStorage.removeItem('admin_session_token');
+            localStorage.removeItem('admin_username');
+
+            document.getElementById('dashboardContainer').style.display = 'none';
+            document.getElementById('loginContainer').classList.add('active');
+            document.getElementById('username').value = '';
+            document.getElementById('password').value = '';
         }
 
         function switchTab(tabName) {
@@ -388,11 +714,77 @@
         async function fetch_admin_api(action, params = {}) {
             const url = new URL(`/api/admin-analytics.php`, location.origin);
             url.searchParams.set('action', action);
-            url.searchParams.set('token', ADMIN_TOKEN);
+            url.searchParams.set('token', sessionToken);
             Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
 
             const response = await fetch(url);
+            if (response.status === 401) {
+                // Session expired
+                handleLogout();
+                return {};
+            }
             return response.json();
+        }
+
+        async function saveWebhookProxyConfig(event) {
+            event.preventDefault();
+
+            const statusEl = document.getElementById('webhookProxyStatus');
+            const saveBtn = document.getElementById('saveWebhookProxyBtn');
+            const enabled = document.getElementById('proxyEnabled').checked;
+            const forwardUrl = document.getElementById('proxyForwardUrl').value.trim();
+            const forwardAuthHeader = document.getElementById('proxyAuthHeader').value.trim();
+            const forwardAuthToken = document.getElementById('proxyAuthToken').value.trim();
+
+            statusEl.className = 'settings-status';
+            statusEl.textContent = 'Saving settings...';
+            saveBtn.disabled = true;
+
+            try {
+                const response = await fetch(`/api/admin-analytics.php?action=update-webhook-proxy-config&token=${encodeURIComponent(sessionToken)}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        enabled,
+                        forwardUrl,
+                        forwardAuthHeader,
+                        forwardAuthToken
+                    })
+                });
+
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok || data.status !== 'ok') {
+                    throw new Error(data.error || 'Failed to save webhook proxy settings');
+                }
+
+                statusEl.className = 'settings-status success';
+                statusEl.textContent = 'Webhook proxy settings saved.';
+                await loadWebhookProxyConfig();
+            } catch (err) {
+                statusEl.className = 'settings-status error';
+                statusEl.textContent = err.message;
+            } finally {
+                saveBtn.disabled = false;
+            }
+        }
+
+        async function loadWebhookProxyConfig() {
+            const statusEl = document.getElementById('webhookProxyStatus');
+            try {
+                const data = await fetch_admin_api('webhook-proxy-config');
+                const config = data.config || {};
+                document.getElementById('proxyEnabled').checked = !!config.enabled;
+                document.getElementById('proxyForwardUrl').value = config.forwardUrl || '';
+                document.getElementById('proxyAuthHeader').value = config.forwardAuthHeader || 'x-webgames-proxy-token';
+                document.getElementById('proxyAuthToken').value = config.forwardAuthToken || '';
+
+                statusEl.className = 'settings-status';
+                statusEl.textContent = config.enabled ? 'Proxy forwarding is enabled.' : 'Proxy forwarding is disabled.';
+            } catch (err) {
+                statusEl.className = 'settings-status error';
+                statusEl.textContent = 'Unable to load webhook proxy settings.';
+                console.error('Webhook proxy settings error:', err);
+            }
         }
 
         async function loadDashboard() {
@@ -459,16 +851,17 @@
 
         async function moderateScore(scoreId, action) {
             try {
-                const response = await fetch_admin_api('moderate-score', {}, {
+                const response = await fetch('/api/admin-analytics.php?action=moderate-score', {
                     method: 'POST',
                     headers: { 
                         'Content-Type': 'application/json',
-                        'X-Admin-Token': ADMIN_TOKEN
+                        'X-Admin-Token': sessionToken
                     },
-                    body: JSON.stringify({ scoreId, action })
+                    body: JSON.stringify({ scoreId, action, token: sessionToken })
                 });
                 
-                if (response.status === 'ok') {
+                const data = await response.json();
+                if (data.status === 'ok') {
                     alert(`Score ${action}ed`);
                     loadSuspiciousScores();
                 }
@@ -509,13 +902,17 @@
                     const status = event.processed ? 
                         (event.error ? '<span class="status-badge status-critical">Failed</span>' : '<span class="status-badge status-healthy">✓</span>') :
                         '<span class="status-badge status-degraded">Pending</span>';
+                    const forward = event.forward || {};
+                    const forwardText = forward.attempted
+                        ? (forward.success ? 'Proxy ✓' : 'Proxy failed')
+                        : (forward.enabled ? 'Proxy skipped' : 'Proxy off');
                     
                     row.innerHTML = `
                         <td>${time}</td>
                         <td>${event.eventType}</td>
                         <td>${status}</td>
                         <td>${event.retries} retries</td>
-                        <td><code style="font-size: 0.7rem;">${event.eventId.substring(0, 12)}</code></td>
+                        <td><code style="font-size: 0.7rem;">${event.eventId.substring(0, 12)}</code><br><span style="opacity:0.7;">${forwardText}</span></td>
                     `;
                 });
             } catch (err) {
@@ -523,18 +920,28 @@
             }
         }
 
-        // Load all data on startup
-        loadDashboard();
-        loadSuspiciousScores();
-        loadAchievementLeaderboard();
-        loadWebhookEvents();
+        document.getElementById('webhookProxyForm').addEventListener('submit', saveWebhookProxyConfig);
 
-        // Auto-refresh every 30 seconds
-        setInterval(() => {
-            loadDashboard();
-            loadSuspiciousScores();
-            loadWebhookEvents();
-        }, 30000);
+        // Check if already logged in on page load
+        window.addEventListener('load', async () => {
+            if (sessionToken) {
+                try {
+                    const response = await fetch('/api/admin-login.php?action=validate', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ token: sessionToken })
+                    });
+
+                    if (response.status === 200) {
+                        showDashboard();
+                    } else {
+                        handleLogout();
+                    }
+                } catch (err) {
+                    console.error('Session validation error:', err);
+                }
+            }
+        });
     </script>
 </body>
 </html>

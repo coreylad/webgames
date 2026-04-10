@@ -37,7 +37,7 @@ PHP-first HTML5 gaming platform with Stripe tipping, advanced leaderboards, achi
 - Player session tracking
 - Game-specific play metrics
 - Webhook event logging with retry tracking
-- Comprehensive admin dashboard at `/admin-advanced.html`
+- Comprehensive admin dashboard at `/admin`
 - Suspicious score moderation interface
 - Multi-tab admin interface (Overview, Moderation, Achievements, Webhooks)
 
@@ -84,14 +84,14 @@ PHP-first HTML5 gaming platform with Stripe tipping, advanced leaderboards, achi
    - STRIPE_SECRET_KEY
    - ADMIN_DASHBOARD_TOKEN
    - BASE_URL
+   - Optional: WEBHOOK_FORWARD_URL and WEBHOOK_FORWARD_AUTH_TOKEN
    - STRIPE_TIER_PRODUCT_IDS (recommended)
    - Optional STRIPE_TIER_PRICE_IDS
 
 5. Open site:
 
    - Home: http://127.0.0.1:8080/
-   - Admin: http://127.0.0.1:8080/admin.php
-   - Advanced Admin Dashboard: http://127.0.0.1:8080/admin-advanced.html?token=YOUR_TOKEN
+   - Admin: http://127.0.0.1:8080/admin
 
 ## API Endpoints
 
@@ -138,6 +138,26 @@ stripe listen --forward-to 127.0.0.1:8080/api/stripe-webhook.php
 
 Copy the webhook signing secret into .env as STRIPE_WEBHOOK_SECRET.
 
+### Optional: forward webhooks to another site (proxy mode)
+
+If you want this site to proxy Stripe webhooks to another endpoint, set these `.env` values:
+
+```
+WEBHOOK_FORWARD_URL=https://other-site.example/api/stripe-webhook.php
+WEBHOOK_FORWARD_AUTH_HEADER=x-webgames-proxy-token
+WEBHOOK_FORWARD_AUTH_TOKEN=shared-secret
+```
+
+Behavior:
+
+- Incoming Stripe webhook payloads are still processed locally.
+- The same raw JSON payload is POSTed to `WEBHOOK_FORWARD_URL`.
+- `Stripe-Signature` header is forwarded when present.
+- Proxy headers are added: `X-Webgames-Proxy-Hop`, `X-Webgames-Proxy-Source`, `X-Webgames-Proxy-Event`, `X-Webgames-Proxy-Type`.
+- Proxy loop protection: requests with `X-Webgames-Proxy-Hop` already set are not forwarded again.
+
+If your target endpoint needs auth, validate `WEBHOOK_FORWARD_AUTH_HEADER`/`WEBHOOK_FORWARD_AUTH_TOKEN` on that site.
+
 ## Linux-first deployment notes
 
 1. Install PHP 8+, curl extension, and nginx on your Linux server.
@@ -172,7 +192,7 @@ After it finishes:
 
 - App: https://your-domain.com/
 - Installer: https://your-domain.com/installer.php
-   - Admin: https://your-domain.com/admin.php
+   - Admin: https://your-domain.com/admin
 
 ## Admin dashboard auth
 

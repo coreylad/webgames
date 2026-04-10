@@ -23,6 +23,9 @@ function load_env_values(): array
     $values = [
         'STRIPE_SECRET_KEY' => '',
         'STRIPE_WEBHOOK_SECRET' => '',
+        'WEBHOOK_FORWARD_URL' => '',
+        'WEBHOOK_FORWARD_AUTH_HEADER' => 'x-webgames-proxy-token',
+        'WEBHOOK_FORWARD_AUTH_TOKEN' => '',
         'ADMIN_DASHBOARD_TOKEN' => 'dev-admin-token',
         'BASE_URL' => detect_base_url(),
         'STRIPE_TIER_PRODUCT_IDS' => '',
@@ -73,6 +76,67 @@ function env_value(string $key, string $fallback = ''): string
     $values = load_env_values();
     $value = $values[$key] ?? $fallback;
     return is_string($value) ? $value : $fallback;
+}
+
+function write_env_values(array $updates): bool
+{
+    if (empty($updates)) {
+        return true;
+    }
+
+    $envPath = dirname(__DIR__) . DIRECTORY_SEPARATOR . '.env';
+    $lines = [];
+
+    if (is_file($envPath)) {
+        $loaded = file($envPath, FILE_IGNORE_NEW_LINES);
+        if ($loaded === false) {
+            return false;
+        }
+        $lines = $loaded;
+    }
+
+    $applied = [];
+    foreach ($updates as $key => $value) {
+        $applied[(string)$key] = false;
+    }
+
+    foreach ($lines as $index => $line) {
+        $trimmed = trim($line);
+        if ($trimmed === '' || str_starts_with($trimmed, '#')) {
+            continue;
+        }
+
+        $parts = explode('=', $line, 2);
+        if (count($parts) !== 2) {
+            continue;
+        }
+
+        $key = trim($parts[0]);
+        if (!array_key_exists($key, $updates)) {
+            continue;
+        }
+
+        $safeValue = str_replace(["\r", "\n"], '', trim((string)$updates[$key]));
+        $lines[$index] = $key . '=' . $safeValue;
+        $applied[$key] = true;
+    }
+
+    foreach ($updates as $key => $value) {
+        $key = (string)$key;
+        if (($applied[$key] ?? false) === true) {
+            continue;
+        }
+
+        $safeValue = str_replace(["\r", "\n"], '', trim((string)$value));
+        $lines[] = $key . '=' . $safeValue;
+    }
+
+    $content = implode(PHP_EOL, $lines);
+    if ($content !== '') {
+        $content .= PHP_EOL;
+    }
+
+    return file_put_contents($envPath, $content) !== false;
 }
 
 function json_response(array $payload, int $statusCode = 200): void

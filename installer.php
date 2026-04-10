@@ -28,6 +28,9 @@ function post_value(string $key): string
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $stripeSecret = post_value('stripe_secret_key');
     $stripeWebhook = post_value('stripe_webhook_secret');
+    $webhookForwardUrl = post_value('webhook_forward_url');
+    $webhookForwardAuthHeader = post_value('webhook_forward_auth_header');
+    $webhookForwardAuthToken = post_value('webhook_forward_auth_token');
     $adminToken = post_value('admin_token');
     $baseUrl = post_value('base_url');
     $tierProducts = post_value('tier_products');
@@ -57,6 +60,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $envContent = "# webgames.lol runtime config\n" .
                 "STRIPE_SECRET_KEY={$stripeSecret}\n" .
                 "STRIPE_WEBHOOK_SECRET={$stripeWebhook}\n" .
+              "WEBHOOK_FORWARD_URL={$webhookForwardUrl}\n" .
+              "WEBHOOK_FORWARD_AUTH_HEADER={$webhookForwardAuthHeader}\n" .
+              "WEBHOOK_FORWARD_AUTH_TOKEN={$webhookForwardAuthToken}\n" .
                 "ADMIN_DASHBOARD_TOKEN={$adminToken}\n" .
                 "BASE_URL={$baseUrl}\n" .
                 "STRIPE_TIER_PRODUCT_IDS={$tierProducts}\n" .
@@ -173,7 +179,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <?php if ($success !== ''): ?>
       <div class="success">
         <p><?php echo htmlspecialchars($success, ENT_QUOTES, 'UTF-8'); ?></p>
-        <p>Next: configure Stripe webhook to point at /api/stripe-webhook.php and open <a href="/admin.php">/admin.php</a>.</p>
+        <p>Next: configure Stripe webhook to point at /api/stripe-webhook.php and open <a href="/admin">/admin</a>.</p>
       </div>
       <?php endif; ?>
 
@@ -184,6 +190,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <label for="stripe_webhook_secret">Stripe webhook secret</label>
         <input id="stripe_webhook_secret" name="stripe_webhook_secret" placeholder="whsec_..." />
         <p class="note">Optional during first install. Add after you configure webhook forwarding.</p>
+
+        <label for="webhook_forward_url">Webhook forward URL (optional proxy target)</label>
+        <input id="webhook_forward_url" name="webhook_forward_url" placeholder="https://second-site.example/api/stripe-webhook.php" />
+        <p class="note">If set, incoming Stripe webhook payloads are forwarded to this URL and still processed locally.</p>
+
+        <label for="webhook_forward_auth_header">Forward auth header name (optional)</label>
+        <input id="webhook_forward_auth_header" name="webhook_forward_auth_header" placeholder="x-webgames-proxy-token" />
+
+        <label for="webhook_forward_auth_token">Forward auth token (optional)</label>
+        <input id="webhook_forward_auth_token" name="webhook_forward_auth_token" placeholder="shared-secret-value" />
+        <p class="note">Sent only to the forward URL. Useful to authenticate this proxy on the target site.</p>
 
         <label for="admin_token">Admin dashboard token</label>
         <input id="admin_token" name="admin_token" placeholder="long-random-secret" required />
