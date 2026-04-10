@@ -270,6 +270,40 @@ $show_login     = !$needs_setup && !$show_dashboard;
         .settings-status { margin-top: 0.75rem; font-size: 0.9rem; min-height: 1.2em; }
         .settings-status.success { color: #34d399; }
         .settings-status.error   { color: #ef4444; }
+        .callout {
+            background: rgba(102,126,234,0.12);
+            border-left: 3px solid #667eea;
+            border-radius: 6px;
+            padding: .9rem 1rem;
+            margin-bottom: 1rem;
+            font-size: .88rem;
+            line-height: 1.65;
+        }
+        .callout code { background: rgba(255,255,255,0.1); padding: .1em .4em; border-radius: 3px; font-size: .85em; }
+        .callout ul   { padding-left: 1.2rem; margin-top: .4rem; }
+        .wiz-pane { display: none; }
+        .wiz-pane.active { display: block; }
+        .wizard-progress { display: flex; align-items: center; margin-bottom: 1.5rem; }
+        .wiz-dot {
+            width: 28px; height: 28px; border-radius: 50%;
+            background: rgba(255,255,255,.12); border: 2px solid rgba(255,255,255,.2);
+            display: flex; align-items: center; justify-content: center;
+            font-size: .78rem; font-weight: 700; flex-shrink: 0; color: #e0e6ed;
+            transition: all .3s;
+        }
+        .wiz-dot.done    { background: #34d399; border-color: #34d399; color: #111; }
+        .wiz-dot.current { background: #667eea; border-color: #667eea; }
+        .wiz-line { flex: 1; height: 2px; background: rgba(255,255,255,.15); margin: 0 6px; }
+        .wizard-nav  { display: flex; gap: .75rem; margin-top: 1.25rem; flex-wrap: wrap; align-items: center; }
+        .wizard-review dl { display: grid; grid-template-columns: 140px 1fr; gap: .4rem 1rem; font-size: .9rem; }
+        .wizard-review dt { opacity: .65; font-weight: 600; }
+        .wizard-review dd { font-family: monospace; word-break: break-all; }
+        .wizard-summary .sum-row {
+            display: flex; gap: 1rem; align-items: baseline;
+            padding: .35rem 0; border-bottom: 1px solid rgba(255,255,255,.07); font-size: .9rem;
+        }
+        .wizard-summary .sum-label { opacity: .65; width: 130px; flex-shrink: 0; }
+        .wizard-summary .sum-value { font-family: monospace; word-break: break-all; }
 
         .tabs {
             display: flex;
@@ -462,35 +496,95 @@ $show_login     = !$needs_setup && !$show_dashboard;
         <!-- Webhooks -->
         <div class="tab-content" id="webhooks">
             <div class="section">
-                <h2>Webhook Proxy Settings</h2>
+                <h2>Webhook Proxy</h2>
                 <div class="settings-panel">
-                    <form id="webhookProxyForm">
-                        <div class="form-group" style="margin-bottom:1rem;">
-                            <label for="proxyEnabled" style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;">
-                                <input type="checkbox" id="proxyEnabled" style="width:auto;" />
-                                Enable forwarding to another webhook endpoint
-                            </label>
+
+                    <!-- Step progress bar -->
+                    <div class="wizard-progress" id="wizProgress" style="display:none;">
+                        <div class="wiz-dot" id="wizDot1">1</div>
+                        <div class="wiz-line"></div>
+                        <div class="wiz-dot" id="wizDot2">2</div>
+                        <div class="wiz-line"></div>
+                        <div class="wiz-dot" id="wizDot3">3</div>
+                    </div>
+
+                    <!-- Pane 0: Configured summary -->
+                    <div class="wiz-pane" id="wizPane0">
+                        <div class="wizard-summary" id="wizSummary"></div>
+                        <div class="wizard-nav">
+                            <button class="btn" onclick="wizGoto(2)">Edit Settings</button>
+                            <button class="btn btn-reject" onclick="wizardDisable()">Disable Proxy</button>
+                        </div>
+                    </div>
+
+                    <!-- Pane 1: Intro -->
+                    <div class="wiz-pane" id="wizPane1">
+                        <h3 style="margin-bottom:.75rem;">What is Webhook Proxy Forwarding?</h3>
+                        <div class="callout">
+                            <strong>Stripe sends webhooks to one URL.</strong> Proxy forwarding makes this server relay every incoming Stripe event to a second server immediately after verifying the signature.
+                            <ul>
+                                <li>Stripe &rarr; <em>this server</em> (signature verified here)</li>
+                                <li><em>This server</em> &rarr; your target URL (forwarded instantly)</li>
+                                <li>A loop guard prevents infinite forwarding chains</li>
+                            </ul>
+                        </div>
+                        <p style="opacity:.7;font-size:.85rem;margin-bottom:1rem;">Use this to mirror events to a staging environment, a second site, or any service that needs to react to Stripe payments.</p>
+                        <div class="wizard-nav">
+                            <button class="btn" onclick="wizGoto(2)">Set Up Proxy &rarr;</button>
+                        </div>
+                    </div>
+
+                    <!-- Pane 2: Target URL -->
+                    <div class="wiz-pane" id="wizPane2">
+                        <h3 style="margin-bottom:.25rem;">Step 1 of 3 &mdash; Target URL</h3>
+                        <p style="opacity:.75;font-size:.9rem;margin-bottom:1rem;">Enter the webhook endpoint on the <em>other</em> server that should receive the forwarded payloads.</p>
+                        <div class="form-group">
+                            <label for="wizUrl">Forward URL</label>
+                            <input type="url" id="wizUrl" placeholder="https://other-site.example/api/stripe-webhook.php" />
+                            <div class="settings-note">Must start with https://. This is the same path you would register with Stripe on the target server.</div>
+                        </div>
+                        <div class="wizard-nav">
+                            <button class="btn" style="background:rgba(255,255,255,.12);" onclick="wizGoto(1)">&larr; Back</button>
+                            <button class="btn" onclick="wizStep2Next()">Next &rarr;</button>
+                        </div>
+                    </div>
+
+                    <!-- Pane 3: Authentication -->
+                    <div class="wiz-pane" id="wizPane3">
+                        <h3 style="margin-bottom:.25rem;">Step 2 of 3 &mdash; Authentication</h3>
+                        <p style="opacity:.75;font-size:.9rem;margin-bottom:.75rem;">Set a shared secret so the target server can verify that forwarded requests come from this proxy.</p>
+                        <div class="callout" style="font-size:.85rem;">
+                            On the <strong>target site</strong>, go to <em>Admin &rarr; Webhooks</em> and paste the same token in <em>Auth Token</em> &mdash; or add <code>WEBHOOK_FORWARD_AUTH_TOKEN=your-secret</code> to its <code>.env</code>.
                         </div>
                         <div class="settings-grid">
                             <div class="form-group">
-                                <label for="proxyForwardUrl">Forward URL</label>
-                                <input type="url" id="proxyForwardUrl" placeholder="https://other-site.example/api/stripe-webhook.php" />
-                                <div class="settings-note">Incoming Stripe webhook payloads are forwarded here when enabled.</div>
+                                <label for="wizAuthHeader">Auth Header Name</label>
+                                <input type="text" id="wizAuthHeader" placeholder="x-webgames-proxy-token" />
+                                <div class="settings-note">HTTP header sent to the target with every forwarded request. Keep the default unless you need a custom name.</div>
                             </div>
                             <div class="form-group">
-                                <label for="proxyAuthHeader">Auth Header Name</label>
-                                <input type="text" id="proxyAuthHeader" placeholder="x-webgames-proxy-token" />
-                                <div class="settings-note">Optional custom header to authenticate this proxy on the target site.</div>
-                            </div>
-                            <div class="form-group">
-                                <label for="proxyAuthToken">Auth Token</label>
-                                <input type="text" id="proxyAuthToken" placeholder="shared-secret" />
-                                <div class="settings-note">Sent only to the forward URL as the configured auth header.</div>
+                                <label for="wizAuthToken">Shared Secret</label>
+                                <input type="text" id="wizAuthToken" placeholder="leave blank to skip auth" />
+                                <div class="settings-note">Leave blank to disable authentication. Use a long random string for production.</div>
                             </div>
                         </div>
-                        <button class="btn" type="submit" id="saveWebhookProxyBtn">Save Webhook Proxy Settings</button>
-                        <div class="settings-status" id="webhookProxyStatus"></div>
-                    </form>
+                        <div class="wizard-nav">
+                            <button class="btn" style="background:rgba(255,255,255,.12);" onclick="wizGoto(2)">&larr; Back</button>
+                            <button class="btn" onclick="wizStep3Next()">Review &rarr;</button>
+                        </div>
+                    </div>
+
+                    <!-- Pane 4: Review & Save -->
+                    <div class="wiz-pane" id="wizPane4">
+                        <h3 style="margin-bottom:1rem;">Step 3 of 3 &mdash; Review &amp; Save</h3>
+                        <div class="wizard-review" id="wizReview"></div>
+                        <div class="wizard-nav" style="margin-top:1.25rem;">
+                            <button class="btn" style="background:rgba(255,255,255,.12);" onclick="wizGoto(3)">&larr; Back</button>
+                            <button class="btn" id="saveWebhookProxyBtn" onclick="wizardSave()">Save &amp; Enable Proxy</button>
+                        </div>
+                    </div>
+
+                    <div class="settings-status" id="webhookProxyStatus"></div>
                 </div>
 
                 <h2>Webhook Events</h2>
@@ -785,48 +879,61 @@ $show_login     = !$needs_setup && !$show_dashboard;
         } catch (err) { console.error('Webhook events error:', err); }
     }
 
-    async function loadWebhookProxyConfig() {
-        const statusEl = document.getElementById('webhookProxyStatus');
-        try {
-            const data   = await fetch_admin_api('webhook-proxy-config');
-            const config = data.config || {};
-            document.getElementById('proxyEnabled').checked       = !!config.enabled;
-            document.getElementById('proxyForwardUrl').value      = config.forwardUrl || '';
-            document.getElementById('proxyAuthHeader').value      = config.forwardAuthHeader || 'x-webgames-proxy-token';
-            document.getElementById('proxyAuthToken').value       = config.forwardAuthToken || '';
-            statusEl.className   = 'settings-status';
-            statusEl.textContent = config.enabled ? 'Proxy forwarding is currently enabled.' : 'Proxy forwarding is currently disabled.';
-        } catch (err) {
-            statusEl.className   = 'settings-status error';
-            statusEl.textContent = 'Unable to load webhook proxy settings.';
+    // ── Proxy Wizard ──────────────────────────────────────────────────────
+    function wizGoto(pane) {
+        document.querySelectorAll('.wiz-pane').forEach(p => p.classList.remove('active'));
+        const target = document.getElementById('wizPane' + pane);
+        if (target) target.classList.add('active');
+        const prog = document.getElementById('wizProgress');
+        if (pane <= 1) {
+            prog.style.display = 'none';
+        } else {
+            prog.style.display = 'flex';
+            [1, 2, 3].forEach(n => {
+                const dot = document.getElementById('wizDot' + n);
+                dot.className = 'wiz-dot' + (n < pane - 1 ? ' done' : n === pane - 1 ? ' current' : '');
+            });
         }
     }
 
-    async function saveWebhookProxyConfig(event) {
-        event.preventDefault();
+    function wizStep2Next() {
+        const url = (document.getElementById('wizUrl').value || '').trim();
+        if (!url) { alert('Please enter a Forward URL.'); return; }
+        if (!/^https?:\/\/.+/.test(url)) { alert('URL must start with http:// or https://'); return; }
+        wizGoto(3);
+    }
+
+    function wizStep3Next() {
+        const url    = document.getElementById('wizUrl').value.trim();
+        const header = document.getElementById('wizAuthHeader').value.trim() || 'x-webgames-proxy-token';
+        const token  = document.getElementById('wizAuthToken').value.trim();
+        document.getElementById('wizReview').innerHTML = `<dl>
+            <dt>Forward URL</dt><dd>${url}</dd>
+            <dt>Auth Header</dt><dd>${header}</dd>
+            <dt>Shared Secret</dt><dd>${token ? '········ (set)' : '<em style="opacity:.6">none &mdash; auth disabled</em>'}</dd>
+        </dl>`;
+        wizGoto(4);
+    }
+
+    async function wizardSave() {
         const statusEl = document.getElementById('webhookProxyStatus');
         const saveBtn  = document.getElementById('saveWebhookProxyBtn');
         statusEl.className   = 'settings-status';
         statusEl.textContent = 'Saving…';
         saveBtn.disabled = true;
+        const url    = document.getElementById('wizUrl').value.trim();
+        const header = document.getElementById('wizAuthHeader').value.trim() || 'x-webgames-proxy-token';
+        const token  = document.getElementById('wizAuthToken').value.trim();
         try {
             const res  = await fetch(
                 `/api/admin-analytics.php?action=update-webhook-proxy-config&token=${encodeURIComponent(sessionToken)}`,
-                {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        enabled:          document.getElementById('proxyEnabled').checked,
-                        forwardUrl:       document.getElementById('proxyForwardUrl').value.trim(),
-                        forwardAuthHeader:document.getElementById('proxyAuthHeader').value.trim(),
-                        forwardAuthToken: document.getElementById('proxyAuthToken').value.trim()
-                    })
-                }
+                { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ enabled: true, forwardUrl: url, forwardAuthHeader: header, forwardAuthToken: token }) }
             );
             const data = await res.json().catch(() => ({}));
             if (!res.ok || data.status !== 'ok') throw new Error(data.error || 'Save failed');
             statusEl.className   = 'settings-status success';
-            statusEl.textContent = 'Webhook proxy settings saved.';
+            statusEl.textContent = 'Proxy enabled and settings saved.';
             await loadWebhookProxyConfig();
         } catch (err) {
             statusEl.className   = 'settings-status error';
@@ -834,6 +941,46 @@ $show_login     = !$needs_setup && !$show_dashboard;
         } finally {
             saveBtn.disabled = false;
         }
+    }
+
+    async function wizardDisable() {
+        if (!confirm('Disable webhook proxy forwarding?')) return;
+        const statusEl = document.getElementById('webhookProxyStatus');
+        statusEl.className   = 'settings-status';
+        statusEl.textContent = 'Disabling…';
+        try {
+            const res  = await fetch(
+                `/api/admin-analytics.php?action=update-webhook-proxy-config&token=${encodeURIComponent(sessionToken)}`,
+                { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ enabled: false, forwardUrl: '', forwardAuthHeader: 'x-webgames-proxy-token', forwardAuthToken: '' }) }
+            );
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || data.status !== 'ok') throw new Error(data.error || 'Failed to disable');
+            await loadWebhookProxyConfig();
+        } catch (err) {
+            statusEl.className   = 'settings-status error';
+            statusEl.textContent = err.message;
+        }
+    }
+
+    async function loadWebhookProxyConfig() {
+        try {
+            const data   = await fetch_admin_api('webhook-proxy-config');
+            const config = data.config || {};
+            document.getElementById('wizUrl').value        = config.forwardUrl || '';
+            document.getElementById('wizAuthHeader').value = config.forwardAuthHeader || 'x-webgames-proxy-token';
+            document.getElementById('wizAuthToken').value  = config.forwardAuthToken || '';
+            if (config.enabled && config.forwardUrl) {
+                document.getElementById('wizSummary').innerHTML = `
+                    <div class="sum-row"><span class="sum-label">Status</span><span class="sum-value" style="color:#34d399;font-weight:700;">Enabled</span></div>
+                    <div class="sum-row"><span class="sum-label">Forward URL</span><span class="sum-value">${config.forwardUrl}</span></div>
+                    <div class="sum-row"><span class="sum-label">Auth Header</span><span class="sum-value">${config.forwardAuthHeader || 'x-webgames-proxy-token'}</span></div>
+                    <div class="sum-row"><span class="sum-label">Auth Token</span><span class="sum-value">${config.forwardAuthToken ? '········ (set)' : '<em style="opacity:.6">not set</em>'}</span></div>`;
+                wizGoto(0);
+            } else {
+                wizGoto(1);
+            }
+        } catch (err) { console.error('Webhook proxy config error:', err); }
     }
 
     // ── Boot ───────────────────────────────────────────────────────────────
@@ -844,7 +991,6 @@ $show_login     = !$needs_setup && !$show_dashboard;
     loadAchievementLeaderboard();
     loadWebhookEvents();
     loadWebhookProxyConfig();
-    document.getElementById('webhookProxyForm').addEventListener('submit', saveWebhookProxyConfig);
     setInterval(() => { loadDashboard(); loadSuspiciousScores(); loadWebhookEvents(); }, 30000);
     <?php endif; ?>
 </script>
