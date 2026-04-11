@@ -222,7 +222,11 @@ function leaderboard_game_slugs(): array
         'pulserush',
         'hexavoid',
         'railrider',
-        'chainreactor'
+        'chainreactor',
+        'vaultjump',
+        'targetstorm',
+        'orbitaldash',
+        'signalfall'
     ];
 }
 
@@ -949,6 +953,30 @@ function runtime_config_defaults(): array
                 'coreCount' => 34,
                 'baseBlastGrowth' => 2.8,
                 'baseBlastLife' => 45
+            ],
+            'vaultjump' => [
+                'gravity' => 0.52,
+                'jumpVelocity' => -9.6,
+                'baseSpeed' => 4.6,
+                'spawnInterval' => 88
+            ],
+            'targetstorm' => [
+                'startingLives' => 5,
+                'spawnInterval' => 55,
+                'targetLifetime' => 130,
+                'baseTargetSpeed' => 1.1
+            ],
+            'orbitaldash' => [
+                'orbitalSpeed' => 0.038,
+                'dashSpeed' => 6.4,
+                'dashCooldown' => 34,
+                'mineSpawnInterval' => 150
+            ],
+            'signalfall' => [
+                'startingLives' => 4,
+                'fallSpeed' => 3.2,
+                'spawnInterval' => 42,
+                'laneCount' => 5
             ]
         ]
     ];

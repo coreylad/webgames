@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Orbital Dash | webgames.lol</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body>
+    <main class="game-shell">
+      <header>
+        <h1>Orbital Dash</h1>
+        <p>A/D to orbit, Space to dash outward and collect energy nodes.</p>
+        <a class="back-link" href="/">← Back to webgames.lol</a>
+      </header>
+
+      <section class="panel">
+        <p id="odInfo">Score: 0 | Lives: 3 | Cooldown: Ready</p>
+        <div class="canvas-wrap">
+          <canvas id="odCanvas" width="720" height="420" aria-label="Orbital Dash game"></canvas>
+        </div>
+        <div class="controls">
+          <button id="odRestart">Restart</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Leaderboard</h2>
+          <p>Best reactor loop runs.</p>
+        </div>
+        <p id="lbStatus" class="status">Loading leaderboard...</p>
+        <ol id="lbList" class="leaderboard-list"></ol>
+      </section>
+    </main>
+
+    <script src="leaderboard.js"></script>
+    <script>
+      const canvas = document.getElementById("odCanvas");
+      const ctx = canvas.getContext("2d");
+      const info = document.getElementById("odInfo");
+      const restartButton = document.getElementById("odRestart");
+      const leaderboard = createLeaderboardController({ game: "orbitaldash", listId: "lbList", statusId: "lbStatus" });
+
+      const cfg = { orbitalSpeed: 0.038, dashSpeed: 6.4, dashCooldown: 34, mineSpawnInterval: 150 };
+
+      let angle;
+      let radius;
+      let dash;
+      let cooldown;
+      let score;
+      let lives;
+      let frame;
+      let mines;
+      let nodes;
+      let keys;
+      let over;
+
+      function reset() {
+        angle = 0;
+        radius = 118;
+        dash = false;
+        cooldown = 0;
+        score = 0;
+        lives = 3;
+        frame = 0;
+        mines = [];
+        nodes = [];
+        keys = { left: false, right: false };
+        over = false;
+        leaderboard.resetRound();
+        updateInfo();
+      }
+
+      function center() {
+        return { x: canvas.width / 2, y: canvas.height / 2 };
+      }
+
+      function playerPos() {
+        const c = center();
+        return {
+          x: c.x + Math.cos(angle) * radius,
+          y: c.y + Math.sin(angle) * radius
+        };
+      }
+
+      function updateInfo(extra = "") {
+        info.textContent = `Score: ${score} | Lives: ${lives} | Cooldown: ${cooldown > 0 ? cooldown : "Ready"}${extra ? ` | ${extra}` : ""}`;
+      }
+
+      function spawnMine() {
+        mines.push({
+          angle: Math.random() * Math.PI * 2,
+          r: 170 + Math.random() * 55,
+          life: 700,
+          drift: (Math.random() - 0.5) * 0.018
+        });
+      }
+
+      function spawnNode() {
+        nodes.push({
+          angle: Math.random() * Math.PI * 2,
+          r: 185 + Math.random() * 35,
+          life: 420
+        });
+      }
+
+      function triggerDash() {
+        if (over || cooldown > 0 || dash) return;
+        dash = true;
+        cooldown = Math.floor(cfg.dashCooldown);
+      }
+
+      function update() {
+        if (over) return;
+
+        frame += 1;
+        if (keys.left) angle -= cfg.orbitalSpeed;
+        if (keys.right) angle += cfg.orbitalSpeed;
+
+        if (frame % Math.max(40, Math.floor(cfg.mineSpawnInterval - score / 60)) === 0 && mines.length < 14) spawnMine();
+        if (frame % 96 === 0 && nodes.length < 7) spawnNode();
+
+        if (dash) {
+          radius += cfg.dashSpeed;
+          if (radius > 240) dash = false;
+        } else {
+          radius += (118 - radius) * 0.16;
+        }
+
+        if (cooldown > 0) cooldown -= 1;
+
+        mines.forEach((m) => {
+          m.angle += m.drift;
+          m.life -= 1;
+        });
+
+        nodes.forEach((n) => {
+          n.angle += 0.006;
+          n.life -= 1;
+        });
+
+        mines = mines.filter((m) => m.life > 0);
+        nodes = nodes.filter((n) => n.life > 0);
+
+        const p = playerPos();
+        const c = center();
+
+        nodes = nodes.filter((n) => {
+          const nx = c.x + Math.cos(n.angle) * n.r;
+          const ny = c.y + Math.sin(n.angle) * n.r;
+          if ((p.x - nx) ** 2 + (p.y - ny) ** 2 < 16 ** 2) {
+            score += 16 + Math.floor(Math.max(0, radius - 118) * 0.25);
+            return false;
+          }
+          return true;
+        });
+
+        for (const m of mines) {
+          const mx = c.x + Math.cos(m.angle) * m.r;
+          const my = c.y + Math.sin(m.angle) * m.r;
+          if ((p.x - mx) ** 2 + (p.y - my) ** 2 < 18 ** 2) {
+            lives -= 1;
+            radius = 118;
+            dash = false;
+            if (lives <= 0) {
+              over = true;
+              leaderboard.submit(score);
+              updateInfo("Reactor failure");
+              return;
+            }
+            break;
+          }
+        }
+
+        score += 1;
+        updateInfo();
+      }
+
+      function draw() {
+        ctx.fillStyle = "#070f21";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        const c = center();
+        ctx.strokeStyle = "rgba(0,229,255,0.2)";
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, 118, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.fillStyle = "#ff2060";
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, 30, 0, Math.PI * 2);
+        ctx.fill();
+
+        mines.forEach((m) => {
+          const mx = c.x + Math.cos(m.angle) * m.r;
+          const my = c.y + Math.sin(m.angle) * m.r;
+          ctx.fillStyle = "#ff6464";
+          ctx.beginPath();
+          ctx.arc(mx, my, 7, 0, Math.PI * 2);
+          ctx.fill();
+        });
+
+        nodes.forEach((n) => {
+          const nx = c.x + Math.cos(n.angle) * n.r;
+          const ny = c.y + Math.sin(n.angle) * n.r;
+          ctx.fillStyle = "#00ff88";
+          ctx.beginPath();
+          ctx.arc(nx, ny, 6, 0, Math.PI * 2);
+          ctx.fill();
+        });
+
+        const p = playerPos();
+        ctx.fillStyle = "#00e5ff";
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 9, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (over) {
+          ctx.fillStyle = "rgba(0,0,0,0.42)";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = "#fff";
+          ctx.textAlign = "center";
+          ctx.font = "700 24px Orbitron";
+          ctx.fillText("Core Offline", canvas.width / 2, canvas.height / 2 - 8);
+          ctx.font = "500 14px Rajdhani";
+          ctx.fillText("Press Restart to relaunch orbit", canvas.width / 2, canvas.height / 2 + 18);
+        }
+      }
+
+      function loop() {
+        update();
+        draw();
+        requestAnimationFrame(loop);
+      }
+
+      window.addEventListener("keydown", (event) => {
+        const k = event.key.toLowerCase();
+        if (k === "a" || k === "arrowleft") keys.left = true;
+        if (k === "d" || k === "arrowright") keys.right = true;
+        if (k === " " || k === "arrowup" || k === "w") triggerDash();
+      });
+
+      window.addEventListener("keyup", (event) => {
+        const k = event.key.toLowerCase();
+        if (k === "a" || k === "arrowleft") keys.left = false;
+        if (k === "d" || k === "arrowright") keys.right = false;
+      });
+
+      canvas.addEventListener("mousedown", triggerDash);
+      restartButton.addEventListener("click", reset);
+
+      async function loadConfig() {
+        try {
+          const response = await fetch("/api/runtime-config.php");
+          const data = await response.json();
+          Object.assign(cfg, data.games?.orbitaldash || {});
+        } catch {}
+      }
+
+      (async () => {
+        leaderboard.refresh();
+        await loadConfig();
+        reset();
+        loop();
+      })();
+    </script>
+  </body>
+</html>

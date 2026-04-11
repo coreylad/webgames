@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vault Jump | webgames.lol</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body>
+    <main class="game-shell">
+      <header>
+        <h1>Vault Jump</h1>
+        <p>Press Space, W, or Arrow Up to jump barriers as speed ramps up.</p>
+        <a class="back-link" href="/">← Back to webgames.lol</a>
+      </header>
+
+      <section class="panel">
+        <p id="vjInfo">Score: 0 | Combo: x1 | Best: 0</p>
+        <div class="canvas-wrap">
+          <canvas id="vjCanvas" width="720" height="420" aria-label="Vault Jump game"></canvas>
+        </div>
+        <div class="controls">
+          <button id="vjRestart">Restart</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Leaderboard</h2>
+          <p>Longest precision runs.</p>
+        </div>
+        <p id="lbStatus" class="status">Loading leaderboard...</p>
+        <ol id="lbList" class="leaderboard-list"></ol>
+      </section>
+    </main>
+
+    <script src="leaderboard.js"></script>
+    <script>
+      const canvas = document.getElementById("vjCanvas");
+      const ctx = canvas.getContext("2d");
+      const info = document.getElementById("vjInfo");
+      const restartButton = document.getElementById("vjRestart");
+      const leaderboard = createLeaderboardController({ game: "vaultjump", listId: "lbList", statusId: "lbStatus" });
+
+      const cfg = { gravity: 0.52, jumpVelocity: -9.6, baseSpeed: 4.6, spawnInterval: 88 };
+
+      let player;
+      let obstacles;
+      let score;
+      let combo;
+      let frame;
+      let best;
+      let over;
+
+      function reset() {
+        player = { x: 130, y: 320, w: 34, h: 42, vy: 0, grounded: true };
+        obstacles = [];
+        score = 0;
+        combo = 1;
+        frame = 0;
+        over = false;
+        best = Number(localStorage.getItem("webgames.vaultjump.best") || 0);
+        leaderboard.resetRound();
+        updateInfo();
+      }
+
+      function jump() {
+        if (over || !player.grounded) return;
+        player.vy = cfg.jumpVelocity;
+        player.grounded = false;
+      }
+
+      function updateInfo(extra = "") {
+        info.textContent = `Score: ${score} | Combo: x${combo} | Best: ${best}${extra ? ` | ${extra}` : ""}`;
+      }
+
+      function rectHit(a, b) {
+        return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+      }
+
+      function update() {
+        if (over) return;
+
+        frame += 1;
+        const speed = cfg.baseSpeed + Math.min(5.8, frame / 380);
+
+        if (frame % Math.max(42, Math.floor(cfg.spawnInterval - frame / 200)) === 0) {
+          const h = 24 + Math.random() * 44;
+          obstacles.push({ x: canvas.width + 20, y: 362 - h, w: 18 + Math.random() * 24, h, passed: false });
+        }
+
+        player.vy += cfg.gravity;
+        player.y += player.vy;
+
+        if (player.y >= 320) {
+          player.y = 320;
+          player.vy = 0;
+          player.grounded = true;
+        }
+
+        obstacles.forEach((ob) => {
+          ob.x -= speed;
+          if (!ob.passed && ob.x + ob.w < player.x) {
+            ob.passed = true;
+            score += 8 * combo;
+            combo = Math.min(12, combo + 1);
+          }
+
+          const near = Math.abs((player.x + player.w) - ob.x);
+          if (near < 10 && !player.grounded) {
+            score += 2;
+          }
+
+          if (rectHit(player, ob)) {
+            over = true;
+          }
+        });
+
+        obstacles = obstacles.filter((ob) => ob.x > -40);
+        score += 1;
+
+        if (over) {
+          if (score > best) {
+            best = score;
+            localStorage.setItem("webgames.vaultjump.best", String(best));
+          }
+          leaderboard.submit(score);
+          updateInfo("Crashed");
+        } else {
+          updateInfo();
+        }
+      }
+
+      function draw() {
+        const bg = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        bg.addColorStop(0, "#0f1b39");
+        bg.addColorStop(1, "#121212");
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.fillStyle = "#2a3a6e";
+        ctx.fillRect(0, 362, canvas.width, 58);
+
+        ctx.fillStyle = "#00e5ff";
+        ctx.fillRect(player.x, player.y, player.w, player.h);
+
+        obstacles.forEach((ob) => {
+          ctx.fillStyle = "#ff5f57";
+          ctx.fillRect(ob.x, ob.y, ob.w, ob.h);
+        });
+
+        if (over) {
+          ctx.fillStyle = "rgba(0,0,0,0.42)";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = "#fff";
+          ctx.textAlign = "center";
+          ctx.font = "700 26px Orbitron";
+          ctx.fillText("Run Over", canvas.width / 2, canvas.height / 2 - 8);
+          ctx.font = "500 14px Rajdhani";
+          ctx.fillText("Press Restart to jump again", canvas.width / 2, canvas.height / 2 + 18);
+        }
+      }
+
+      function loop() {
+        update();
+        draw();
+        requestAnimationFrame(loop);
+      }
+
+      window.addEventListener("keydown", (event) => {
+        const k = event.key.toLowerCase();
+        if (k === " " || k === "arrowup" || k === "w") {
+          event.preventDefault();
+          jump();
+        }
+      });
+
+      canvas.addEventListener("mousedown", jump);
+      canvas.addEventListener("touchstart", (event) => {
+        event.preventDefault();
+        jump();
+      });
+
+      restartButton.addEventListener("click", reset);
+
+      async function loadConfig() {
+        try {
+          const response = await fetch("/api/runtime-config.php");
+          const data = await response.json();
+          Object.assign(cfg, data.games?.vaultjump || {});
+        } catch {}
+      }
+
+      (async () => {
+        leaderboard.refresh();
+        await loadConfig();
+        reset();
+        loop();
+      })();
+    </script>
+  </body>
+</html>

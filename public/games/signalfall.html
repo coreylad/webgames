@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Signal Fall | webgames.lol</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body>
+    <main class="game-shell">
+      <header>
+        <h1>Signal Fall</h1>
+        <p>Move lanes with A/D or arrows. Catch green packets and avoid red corruption.</p>
+        <a class="back-link" href="/">← Back to webgames.lol</a>
+      </header>
+
+      <section class="panel">
+        <p id="sfInfo">Score: 0 | Streak: 0 | Lives: 4</p>
+        <div class="canvas-wrap">
+          <canvas id="sfCanvas" width="720" height="420" aria-label="Signal Fall game"></canvas>
+        </div>
+        <div class="controls">
+          <button id="sfRestart">Restart</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Leaderboard</h2>
+          <p>Best signal control runs.</p>
+        </div>
+        <p id="lbStatus" class="status">Loading leaderboard...</p>
+        <ol id="lbList" class="leaderboard-list"></ol>
+      </section>
+    </main>
+
+    <script src="leaderboard.js"></script>
+    <script>
+      const canvas = document.getElementById("sfCanvas");
+      const ctx = canvas.getContext("2d");
+      const info = document.getElementById("sfInfo");
+      const restartButton = document.getElementById("sfRestart");
+      const leaderboard = createLeaderboardController({ game: "signalfall", listId: "lbList", statusId: "lbStatus" });
+
+      const cfg = { startingLives: 4, fallSpeed: 3.2, spawnInterval: 42, laneCount: 5 };
+
+      let lanes;
+      let player;
+      let packets;
+      let lives;
+      let score;
+      let streak;
+      let frame;
+      let over;
+
+      function recalcLanes() {
+        const count = Math.max(3, Math.min(8, Math.floor(cfg.laneCount)));
+        lanes = [];
+        for (let i = 0; i < count; i += 1) {
+          lanes.push((canvas.width / (count + 1)) * (i + 1));
+        }
+      }
+
+      function reset() {
+        recalcLanes();
+        player = { lane: Math.floor(lanes.length / 2), y: 360, w: 50, h: 20 };
+        packets = [];
+        lives = Math.max(1, Math.floor(cfg.startingLives));
+        score = 0;
+        streak = 0;
+        frame = 0;
+        over = false;
+        leaderboard.resetRound();
+        updateInfo();
+      }
+
+      function updateInfo(extra = "") {
+        info.textContent = `Score: ${score} | Streak: ${streak} | Lives: ${lives}${extra ? ` | ${extra}` : ""}`;
+      }
+
+      function spawnPacket() {
+        packets.push({
+          lane: Math.floor(Math.random() * lanes.length),
+          y: -16,
+          type: Math.random() < 0.72 ? "good" : "bad",
+          speed: cfg.fallSpeed + Math.min(5.2, score / 750)
+        });
+      }
+
+      function hurt() {
+        lives -= 1;
+        streak = 0;
+        if (lives <= 0) {
+          over = true;
+          leaderboard.submit(score);
+          updateInfo("Signal lost");
+        }
+      }
+
+      function update() {
+        if (over) return;
+
+        frame += 1;
+        const interval = Math.max(12, Math.floor(cfg.spawnInterval - score / 260));
+        if (frame % interval === 0) spawnPacket();
+
+        packets.forEach((p) => {
+          p.y += p.speed;
+        });
+
+        const px = lanes[player.lane];
+        packets = packets.filter((p) => {
+          const x = lanes[p.lane];
+          const atCatchLine = p.y >= player.y - 8 && p.y <= player.y + player.h;
+
+          if (atCatchLine && Math.abs(px - x) < player.w / 2) {
+            if (p.type === "good") {
+              streak += 1;
+              score += 10 + Math.min(50, streak * 2);
+            } else {
+              hurt();
+            }
+            return false;
+          }
+
+          if (p.y > canvas.height + 10) {
+            if (p.type === "good") hurt();
+            return false;
+          }
+
+          return true;
+        });
+
+        score += 1;
+        updateInfo();
+      }
+
+      function draw() {
+        const bg = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        bg.addColorStop(0, "#11192f");
+        bg.addColorStop(1, "#0d1020");
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        lanes.forEach((x) => {
+          ctx.strokeStyle = "rgba(255,255,255,0.14)";
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, canvas.height);
+          ctx.stroke();
+        });
+
+        packets.forEach((p) => {
+          ctx.fillStyle = p.type === "good" ? "#00ff88" : "#ff4060";
+          ctx.fillRect(lanes[p.lane] - 12, p.y, 24, 16);
+        });
+
+        const x = lanes[player.lane];
+        ctx.fillStyle = "#00e5ff";
+        ctx.fillRect(x - player.w / 2, player.y, player.w, player.h);
+
+        if (over) {
+          ctx.fillStyle = "rgba(0,0,0,0.44)";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = "#fff";
+          ctx.textAlign = "center";
+          ctx.font = "700 24px Orbitron";
+          ctx.fillText("System Offline", canvas.width / 2, canvas.height / 2 - 8);
+          ctx.font = "500 14px Rajdhani";
+          ctx.fillText("Press Restart to reroute signals", canvas.width / 2, canvas.height / 2 + 18);
+        }
+      }
+
+      function move(delta) {
+        if (over) return;
+        player.lane = Math.max(0, Math.min(lanes.length - 1, player.lane + delta));
+      }
+
+      function loop() {
+        update();
+        draw();
+        requestAnimationFrame(loop);
+      }
+
+      window.addEventListener("keydown", (event) => {
+        const k = event.key.toLowerCase();
+        if (k === "a" || k === "arrowleft") move(-1);
+        if (k === "d" || k === "arrowright") move(1);
+      });
+
+      restartButton.addEventListener("click", reset);
+
+      async function loadConfig() {
+        try {
+          const response = await fetch("/api/runtime-config.php");
+          const data = await response.json();
+          Object.assign(cfg, data.games?.signalfall || {});
+        } catch {}
+      }
+
+      (async () => {
+        leaderboard.refresh();
+        await loadConfig();
+        reset();
+        loop();
+      })();
+    </script>
+  </body>
+</html>

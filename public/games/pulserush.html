@@ -63,6 +63,7 @@
       let combo;
       let life;
       let frame;
+      let difficulty;
       let running;
       let over;
 
@@ -73,6 +74,7 @@
         combo = 0;
         life = Math.max(1, Math.floor(cfg.startingLives));
         frame = 0;
+        difficulty = 1;
         running = false;
         over = false;
         leaderboard.resetRound();
@@ -87,7 +89,8 @@
         const lane = Math.floor(Math.random() * 4);
         const x = 120 + lane * 160;
         const y = 210;
-        pulses.push({ x, y, r: 10, target: 70, speed: 2.4 + Math.random() * 1.4, hit: false });
+        const target = 70 - Math.min(12, Math.floor(difficulty * 3));
+        pulses.push({ x, y, r: 10, target, speed: (2.2 + Math.random() * 1.2) * difficulty, hit: false });
       }
 
       function flash(x, color) {
@@ -128,20 +131,26 @@
           return;
         }
 
+        const perfectWindow = Math.max(3, cfg.perfectWindow - Math.floor(difficulty));
+        const goodWindow = Math.max(perfectWindow + 3, cfg.goodWindow - Math.floor(difficulty * 1.5));
         const delta = Math.abs(candidate.r - candidate.target);
         candidate.hit = true;
 
-        if (delta <= cfg.perfectWindow) {
+        if (delta <= perfectWindow) {
           combo += 1;
-          score += 20 + combo * 4;
+          score += 20 + combo * 5;
           flash(candidate.x, "#00ff88");
-        } else if (delta <= cfg.goodWindow) {
+        } else if (delta <= goodWindow) {
           combo = Math.max(0, combo - 1);
           score += 8;
           flash(candidate.x, "#ffe600");
         } else {
           registerMiss();
           flash(candidate.x, "#ff2060");
+        }
+
+        if (combo > 0 && combo % 10 === 0) {
+          life = Math.min(Math.max(1, Math.floor(cfg.startingLives)), life + 1);
         }
       }
 
@@ -155,7 +164,9 @@
         }
 
         frame += 1;
-        if (frame % Math.max(12, Math.floor(cfg.spawnInterval)) === 0) {
+        difficulty = 1 + Math.min(3.2, score / 380);
+        const dynamicSpawn = Math.max(10, Math.floor(cfg.spawnInterval - score / 110 - combo * 0.5));
+        if (frame % dynamicSpawn === 0) {
           spawnPulse();
         }
 

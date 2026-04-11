@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Target Storm | webgames.lol</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body>
+    <main class="game-shell">
+      <header>
+        <h1>Target Storm</h1>
+        <p>Click moving targets fast. Misses and expired targets cost lives.</p>
+        <a class="back-link" href="/">← Back to webgames.lol</a>
+      </header>
+
+      <section class="panel">
+        <p id="tsInfo">Score: 0 | Combo: 0 | Lives: 5</p>
+        <div class="canvas-wrap">
+          <canvas id="tsCanvas" width="720" height="420" aria-label="Target Storm game"></canvas>
+        </div>
+        <div class="controls">
+          <button id="tsRestart">Restart</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Leaderboard</h2>
+          <p>Sharpest aim wins.</p>
+        </div>
+        <p id="lbStatus" class="status">Loading leaderboard...</p>
+        <ol id="lbList" class="leaderboard-list"></ol>
+      </section>
+    </main>
+
+    <script src="leaderboard.js"></script>
+    <script>
+      const canvas = document.getElementById("tsCanvas");
+      const ctx = canvas.getContext("2d");
+      const info = document.getElementById("tsInfo");
+      const restartButton = document.getElementById("tsRestart");
+      const leaderboard = createLeaderboardController({ game: "targetstorm", listId: "lbList", statusId: "lbStatus" });
+
+      const cfg = { startingLives: 5, spawnInterval: 55, targetLifetime: 130, baseTargetSpeed: 1.1 };
+
+      let targets;
+      let lives;
+      let score;
+      let combo;
+      let frame;
+      let over;
+
+      function reset() {
+        targets = [];
+        lives = Math.max(1, Math.floor(cfg.startingLives));
+        score = 0;
+        combo = 0;
+        frame = 0;
+        over = false;
+        leaderboard.resetRound();
+        updateInfo();
+      }
+
+      function spawnTarget() {
+        const r = 16 + Math.random() * 10;
+        targets.push({
+          x: 30 + Math.random() * (canvas.width - 60),
+          y: 30 + Math.random() * (canvas.height - 60),
+          vx: (Math.random() - 0.5) * (cfg.baseTargetSpeed + Math.min(3.5, score / 700)),
+          vy: (Math.random() - 0.5) * (cfg.baseTargetSpeed + Math.min(3.5, score / 700)),
+          r,
+          ttl: cfg.targetLifetime,
+          value: 10 + Math.floor(r)
+        });
+      }
+
+      function updateInfo(extra = "") {
+        info.textContent = `Score: ${score} | Combo: ${combo} | Lives: ${lives}${extra ? ` | ${extra}` : ""}`;
+      }
+
+      function loseLife() {
+        lives -= 1;
+        combo = 0;
+        if (lives <= 0) {
+          over = true;
+          leaderboard.submit(score);
+          updateInfo("Round over");
+        }
+      }
+
+      function update() {
+        if (over) return;
+
+        frame += 1;
+        const interval = Math.max(16, Math.floor(cfg.spawnInterval - score / 180));
+        if (frame % interval === 0) {
+          spawnTarget();
+        }
+
+        targets.forEach((t) => {
+          t.x += t.vx;
+          t.y += t.vy;
+          t.ttl -= 1;
+
+          if (t.x < t.r || t.x > canvas.width - t.r) t.vx *= -1;
+          if (t.y < t.r || t.y > canvas.height - t.r) t.vy *= -1;
+        });
+
+        const before = targets.length;
+        targets = targets.filter((t) => t.ttl > 0);
+        const expired = before - targets.length;
+        for (let i = 0; i < expired; i += 1) loseLife();
+
+        if (!over) {
+          score += Math.floor(combo / 4);
+          updateInfo();
+        }
+      }
+
+      function draw() {
+        const g = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+        g.addColorStop(0, "#230739");
+        g.addColorStop(1, "#0f1b2f");
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        targets.forEach((t) => {
+          const glow = Math.max(0.25, t.ttl / cfg.targetLifetime);
+          ctx.strokeStyle = `rgba(0,229,255,${glow})`;
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.arc(t.x, t.y, t.r, 0, Math.PI * 2);
+          ctx.stroke();
+
+          ctx.strokeStyle = `rgba(255,255,255,${glow})`;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(t.x - t.r / 2, t.y);
+          ctx.lineTo(t.x + t.r / 2, t.y);
+          ctx.moveTo(t.x, t.y - t.r / 2);
+          ctx.lineTo(t.x, t.y + t.r / 2);
+          ctx.stroke();
+        });
+
+        if (over) {
+          ctx.fillStyle = "rgba(0,0,0,0.45)";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = "#fff";
+          ctx.textAlign = "center";
+          ctx.font = "700 24px Orbitron";
+          ctx.fillText("No Lives Left", canvas.width / 2, canvas.height / 2 - 8);
+          ctx.font = "500 14px Rajdhani";
+          ctx.fillText("Press Restart to begin a new storm", canvas.width / 2, canvas.height / 2 + 18);
+        }
+      }
+
+      function onClick(event) {
+        if (over) return;
+
+        const rect = canvas.getBoundingClientRect();
+        const x = ((event.clientX - rect.left) / rect.width) * canvas.width;
+        const y = ((event.clientY - rect.top) / rect.height) * canvas.height;
+
+        let hit = -1;
+        for (let i = targets.length - 1; i >= 0; i -= 1) {
+          const t = targets[i];
+          const dx = x - t.x;
+          const dy = y - t.y;
+          if (dx * dx + dy * dy <= t.r * t.r) {
+            hit = i;
+            break;
+          }
+        }
+
+        if (hit >= 0) {
+          const target = targets[hit];
+          targets.splice(hit, 1);
+          combo += 1;
+          score += target.value + combo * 2;
+          updateInfo();
+        } else {
+          loseLife();
+        }
+      }
+
+      function loop() {
+        update();
+        draw();
+        requestAnimationFrame(loop);
+      }
+
+      canvas.addEventListener("mousedown", onClick);
+      restartButton.addEventListener("click", reset);
+
+      async function loadConfig() {
+        try {
+          const response = await fetch("/api/runtime-config.php");
+          const data = await response.json();
+          Object.assign(cfg, data.games?.targetstorm || {});
+        } catch {}
+      }
+
+      (async () => {
+        leaderboard.refresh();
+        await loadConfig();
+        reset();
+        loop();
+      })();
+    </script>
+  </body>
+</html>
