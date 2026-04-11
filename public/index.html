@@ -20,7 +20,7 @@
       <a class="logo" href="/">webgames.lol</a>
       <nav class="top-nav">
         <a href="#games">Games</a>
-        <a href="#tip">Tip Jar</a>
+        <a href="/public/tip.html">Tip Jar</a>
         <a href="/admin">Admin</a>
       </nav>
     </header>
@@ -136,43 +136,86 @@
             </div>
             <a href="/public/games/meteor.html">Play Meteor Drift</a>
           </article>
+
+          <article class="game-card">
+            <h3>Sky Hopper</h3>
+            <p>Thread your craft through shifting sky gates. Every clean pass boosts multiplier, pace, and pressure.</p>
+            <div class="game-tags">
+              <span class="tag">Arcade Flight</span>
+              <span class="tag">Multiplier</span>
+              <span class="tag">Leaderboard</span>
+            </div>
+            <a href="/public/games/skyhopper.html">Play Sky Hopper</a>
+          </article>
+
+          <article class="game-card">
+            <h3>Gravity Well</h3>
+            <p>Newtonian thruster challenge. Slingshot around volatile cores, collect shards, and avoid black-hole collapse.</p>
+            <div class="game-tags">
+              <span class="tag">Physics</span>
+              <span class="tag">Thrusters</span>
+              <span class="tag">Leaderboard</span>
+            </div>
+            <a href="/public/games/gravitywell.html">Play Gravity Well</a>
+          </article>
+
+          <article class="game-card">
+            <h3>Pulse Rush</h3>
+            <p>Rhythm-target gauntlet with shrinking timing windows. Click each pulse dead-center to keep the combo alive.</p>
+            <div class="game-tags">
+              <span class="tag">Rhythm</span>
+              <span class="tag">Precision</span>
+              <span class="tag">Leaderboard</span>
+            </div>
+            <a href="/public/games/pulserush.html">Play Pulse Rush</a>
+          </article>
+
+          <article class="game-card">
+            <h3>Hex Avoid</h3>
+            <p>Swarm survival in a hex arena. Dash between lanes while hunter drones synchronize and box you in.</p>
+            <div class="game-tags">
+              <span class="tag">Survival</span>
+              <span class="tag">Dash</span>
+              <span class="tag">Leaderboard</span>
+            </div>
+            <a href="/public/games/hexavoid.html">Play Hex Avoid</a>
+          </article>
+
+          <article class="game-card">
+            <h3>Rail Rider</h3>
+            <p>Switch lanes at lightspeed to dodge incoming trains and snag signal boosts for chain scoring.</p>
+            <div class="game-tags">
+              <span class="tag">Lane Switch</span>
+              <span class="tag">Reflex</span>
+              <span class="tag">Leaderboard</span>
+            </div>
+            <a href="/public/games/railrider.html">Play Rail Rider</a>
+          </article>
+
+          <article class="game-card">
+            <h3>Chain Reactor</h3>
+            <p>One click starts a blast. Time it to trigger massive chain reactions across drifting volatile orbs.</p>
+            <div class="game-tags">
+              <span class="tag">One Click</span>
+              <span class="tag">Chain Combo</span>
+              <span class="tag">Leaderboard</span>
+            </div>
+            <a href="/public/games/chainreactor.html">Play Chain Reactor</a>
+          </article>
         </div>
       </section>
 
-      <section class="panel tip-panel-compact" id="tip">
+      <section class="panel tip-panel-compact">
         <div class="panel-header">
-          <h2>Support webgames.lol</h2>
-          <p>Optional support if you want to help fund new game modes and features.</p>
+          <h2>Want to support development?</h2>
+          <p>The tip jar is now on its own page for a cleaner game-first experience.</p>
         </div>
-
-        <form id="tipForm" class="tip-form">
-          <label for="username">Username</label>
-          <input
-            type="text"
-            id="username"
-            name="username"
-            minlength="3"
-            maxlength="24"
-            pattern="[a-zA-Z0-9_-]{3,24}"
-            placeholder="arcade_hero"
-            required
-          />
-
-          <label for="priceId">Tip tier (from Stripe product catalogue)</label>
-          <select id="priceId" name="priceId" required>
-            <option value="">Loading tiers...</option>
-          </select>
-
-          <button type="submit" id="tipSubmit">Continue to Stripe</button>
-          <p id="tipMessage" class="status" aria-live="polite"></p>
-        </form>
+        <a class="btn" href="/public/tip.html">Open Tip Jar</a>
       </section>
     </main>
 
     <footer class="container site-footer">
       <p>webgames.lol © 2026 | Competitive browser arcade platform</p>
     </footer>
-
-    <script src="/public/app.js"></script>
   </body>
 </html>

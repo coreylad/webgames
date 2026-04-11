@@ -216,7 +216,13 @@ function leaderboard_game_slugs(): array
         'shooter',
         'tictactoe',
         'racer',
-        'meteor'
+        'meteor',
+        'skyhopper',
+        'gravitywell',
+        'pulserush',
+        'hexavoid',
+        'railrider',
+        'chainreactor'
     ];
 }
 
@@ -428,6 +434,11 @@ function verify_admin_token(string $token): bool
     $token = trim($token);
     if ($token === '') {
         return false;
+    }
+
+    // Active admin sessions are first-class auth tokens for dashboard APIs.
+    if (get_admin_session($token) !== null) {
+        return true;
     }
 
     $legacy = trim(env_value('ADMIN_DASHBOARD_TOKEN', ''));
@@ -797,4 +808,102 @@ function get_active_admin_sessions(string $adminId): array
         fn($s) => ($s['adminId'] ?? '') === $adminId &&
                   strtotime((string)($s['expiresAt'] ?? '0')) > $now
     ));
+}
+
+function runtime_config_defaults(): array
+{
+    return [
+        'platform' => [
+            'BASE_URL' => env_value('BASE_URL', detect_base_url()),
+            'STRIPE_TIER_PRODUCT_IDS' => env_value('STRIPE_TIER_PRODUCT_IDS', ''),
+            'STRIPE_TIER_PRICE_IDS' => env_value('STRIPE_TIER_PRICE_IDS', '')
+        ],
+        'games' => [
+            'skyhopper' => [
+                'gravity' => 0.33,
+                'flapVelocity' => -6.5,
+                'gateInterval' => 95,
+                'starInterval' => 140,
+                'baseGateSpeed' => 2.8
+            ],
+            'gravitywell' => [
+                'coreMass' => 2300,
+                'thrust' => 0.19,
+                'fuelDrain' => 0.12,
+                'shardSpawnChance' => 0.025
+            ],
+            'pulserush' => [
+                'spawnInterval' => 36,
+                'perfectWindow' => 7,
+                'goodWindow' => 16,
+                'startingLives' => 5
+            ],
+            'hexavoid' => [
+                'startingLives' => 3,
+                'cellSpawnInterval' => 90,
+                'botSpawnInterval' => 580,
+                'playerSpeed' => 3.2
+            ],
+            'railrider' => [
+                'baseTrainInterval' => 70,
+                'boostSpawnInterval' => 190,
+                'scoreTickInterval' => 18
+            ],
+            'chainreactor' => [
+                'roundSeconds' => 30,
+                'coreCount' => 34,
+                'baseBlastGrowth' => 2.8,
+                'baseBlastLife' => 45
+            ]
+        ]
+    ];
+}
+
+function ensure_runtime_config_store(): string
+{
+    $dir = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'data';
+    if (!is_dir($dir)) {
+        mkdir($dir, 0775, true);
+    }
+
+    $file = $dir . DIRECTORY_SEPARATOR . 'runtime-config.json';
+    if (!is_file($file)) {
+        file_put_contents($file, json_encode(runtime_config_defaults(), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    }
+
+    return $file;
+}
+
+function read_runtime_config_store(): array
+{
+    $file = ensure_runtime_config_store();
+    $raw = file_get_contents($file);
+    $defaults = runtime_config_defaults();
+    if ($raw === false || $raw === '') {
+        return $defaults;
+    }
+
+    $decoded = json_decode($raw, true);
+    if (!is_array($decoded)) {
+        return $defaults;
+    }
+
+    if (!isset($decoded['platform']) || !is_array($decoded['platform'])) {
+        $decoded['platform'] = [];
+    }
+
+    if (!isset($decoded['games']) || !is_array($decoded['games'])) {
+        $decoded['games'] = [];
+    }
+
+    return [
+        'platform' => array_merge($defaults['platform'], $decoded['platform']),
+        'games' => array_replace_recursive($defaults['games'], $decoded['games'])
+    ];
+}
+
+function write_runtime_config_store(array $config): void
+{
+    $file = ensure_runtime_config_store();
+    file_put_contents($file, json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
 }

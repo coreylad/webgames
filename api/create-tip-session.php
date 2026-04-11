@@ -52,7 +52,7 @@ $baseUrl = rtrim(env_value('BASE_URL', detect_base_url()), '/');
 $response = stripe_request('POST', 'checkout/sessions', [
     'mode' => 'payment',
     'success_url' => $baseUrl . '/public/success.html?session_id={CHECKOUT_SESSION_ID}',
-    'cancel_url' => $baseUrl . '/?tip=cancelled',
+    'cancel_url' => $baseUrl . '/public/tip.html?tip=cancelled',
     'line_items[0][price]' => $selectedTier['id'],
     'line_items[0][quantity]' => '1',
     'metadata[username]' => $username,

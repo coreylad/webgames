@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chain Reactor | webgames.lol</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body>
+    <main class="game-shell">
+      <header>
+        <h1>Chain Reactor</h1>
+        <p>Click once to start your blast. Trigger as many drifting cores as possible before time runs out.</p>
+        <a class="back-link" href="/">← Back to webgames.lol</a>
+      </header>
+
+      <section class="panel">
+        <p id="crInfo">Score: 0 | Cores: 0 | Time: 30</p>
+        <div class="canvas-wrap">
+          <canvas id="crCanvas" width="720" height="420" aria-label="Chain Reactor game"></canvas>
+        </div>
+        <div class="controls">
+          <button id="crRestart">Restart</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Leaderboard</h2>
+          <p>Highest chain reaction combos.</p>
+        </div>
+        <p id="lbStatus" class="status">Loading leaderboard...</p>
+        <ol id="lbList" class="leaderboard-list"></ol>
+      </section>
+    </main>
+
+    <script src="leaderboard.js"></script>
+    <script>
+      const canvas = document.getElementById("crCanvas");
+      const ctx = canvas.getContext("2d");
+      const info = document.getElementById("crInfo");
+      const restartButton = document.getElementById("crRestart");
+      const leaderboard = createLeaderboardController({ game: "chainreactor", listId: "lbList", statusId: "lbStatus" });
+
+      const cfg = {
+        roundSeconds: 30,
+        coreCount: 34,
+        baseBlastGrowth: 2.8,
+        baseBlastLife: 45
+      };
+
+      let cores;
+      let blasts;
+      let score;
+      let chain;
+      let seconds;
+      let started;
+      let over;
+      let tick;
+
+      function reset() {
+        cores = [];
+        blasts = [];
+        score = 0;
+        chain = 0;
+        seconds = Math.max(5, Math.floor(cfg.roundSeconds));
+        started = false;
+        over = false;
+        for (let i = 0; i < Math.max(8, Math.floor(cfg.coreCount)); i += 1) {
+          cores.push({
+            x: 20 + Math.random() * (canvas.width - 40),
+            y: 20 + Math.random() * (canvas.height - 40),
+            vx: (Math.random() - 0.5) * 1.6,
+            vy: (Math.random() - 0.5) * 1.6,
+            r: 8 + Math.random() * 4,
+            triggered: false
+          });
+        }
+
+        if (tick) clearInterval(tick);
+        tick = setInterval(() => {
+          if (!started || over) return;
+          seconds -= 1;
+          if (seconds <= 0) {
+            seconds = 0;
+            finish();
+          }
+        }, 1000);
+
+        leaderboard.resetRound();
+        updateInfo();
+      }
+
+      function updateInfo() {
+        info.textContent = `Score: ${score} | Cores: ${chain} | Time: ${seconds}${over ? " | Finished" : ""}`;
+      }
+
+      function trigger(x, y, power = 0) {
+        blasts.push({ x, y, r: 12, life: cfg.baseBlastLife + power * 4, power });
+      }
+
+      function finish() {
+        if (over) return;
+        over = true;
+        clearInterval(tick);
+        leaderboard.submit(score);
+        updateInfo();
+      }
+
+      function update() {
+        if (over) {
+          return;
+        }
+
+        cores.forEach((core) => {
+          if (!core.triggered) {
+            core.x += core.vx;
+            core.y += core.vy;
+            if (core.x < core.r || core.x > canvas.width - core.r) core.vx *= -1;
+            if (core.y < core.r || core.y > canvas.height - core.r) core.vy *= -1;
+          }
+        });
+
+        blasts.forEach((blast) => {
+          blast.r += cfg.baseBlastGrowth + blast.power * 0.15;
+          blast.life -= 1;
+        });
+
+        blasts = blasts.filter((blast) => blast.life > 0);
+
+        cores.forEach((core) => {
+          if (core.triggered) return;
+
+          for (const blast of blasts) {
+            const dx = core.x - blast.x;
+            const dy = core.y - blast.y;
+            if (dx * dx + dy * dy <= blast.r * blast.r) {
+              core.triggered = true;
+              chain += 1;
+              score += 20 + chain * 3;
+              trigger(core.x, core.y, Math.min(12, chain));
+              break;
+            }
+          }
+        });
+
+        updateInfo();
+      }
+
+      function draw() {
+        const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+        grad.addColorStop(0, "#10102b");
+        grad.addColorStop(1, "#260c1e");
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        cores.forEach((core) => {
+          ctx.fillStyle = core.triggered ? "rgba(255, 80, 120, 0.2)" : "#00e5ff";
+          ctx.beginPath();
+          ctx.arc(core.x, core.y, core.r, 0, Math.PI * 2);
+          ctx.fill();
+        });
+
+        blasts.forEach((blast) => {
+          ctx.globalAlpha = Math.max(0.1, blast.life / 60);
+          ctx.strokeStyle = "#ffe600";
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(blast.x, blast.y, blast.r, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        });
+
+        if (!started) {
+          ctx.fillStyle = "rgba(0,0,0,0.4)";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = "#ffffff";
+          ctx.textAlign = "center";
+          ctx.font = "700 24px Orbitron";
+          ctx.fillText("One Click. Massive Chain.", canvas.width / 2, canvas.height / 2 - 8);
+          ctx.font = "500 14px Rajdhani";
+          ctx.fillText("Click anywhere to trigger your first blast", canvas.width / 2, canvas.height / 2 + 18);
+        }
+
+        if (over) {
+          ctx.fillStyle = "rgba(0,0,0,0.45)";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = "#ffffff";
+          ctx.textAlign = "center";
+          ctx.font = "700 24px Orbitron";
+          ctx.fillText("Reaction Complete", canvas.width / 2, canvas.height / 2 - 8);
+          ctx.font = "500 14px Rajdhani";
+          ctx.fillText("Press Restart for another run", canvas.width / 2, canvas.height / 2 + 18);
+        }
+      }
+
+      function loop() {
+        update();
+        draw();
+        requestAnimationFrame(loop);
+      }
+
+      canvas.addEventListener("mousedown", (event) => {
+        if (over || started) return;
+
+        const rect = canvas.getBoundingClientRect();
+        const x = ((event.clientX - rect.left) / rect.width) * canvas.width;
+        const y = ((event.clientY - rect.top) / rect.height) * canvas.height;
+
+        started = true;
+        trigger(x, y);
+      });
+
+      restartButton.addEventListener("click", reset);
+
+      async function loadConfig() {
+        try {
+          const response = await fetch("/api/runtime-config.php");
+          const data = await response.json();
+          const gameCfg = data.games?.chainreactor || {};
+          Object.assign(cfg, gameCfg);
+        } catch {
+          // Use defaults if runtime config cannot be loaded.
+        }
+      }
+
+      (async () => {
+        leaderboard.refresh();
+        await loadConfig();
+        reset();
+        loop();
+      })();
+    </script>
+  </body>
+</html>

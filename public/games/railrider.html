@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Rail Rider | webgames.lol</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body>
+    <main class="game-shell">
+      <header>
+        <h1>Rail Rider</h1>
+        <p>Use A/D or left/right arrows to switch lanes and avoid oncoming trains.</p>
+        <a class="back-link" href="/">← Back to webgames.lol</a>
+      </header>
+
+      <section class="panel">
+        <p id="rrInfo">Score: 0 | Chains: 0 | Speed: 1x</p>
+        <div class="canvas-wrap">
+          <canvas id="rrCanvas" width="720" height="420" aria-label="Rail Rider game"></canvas>
+        </div>
+        <div class="controls">
+          <button id="rrRestart">Restart</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Leaderboard</h2>
+          <p>Top lane-switch survival runs.</p>
+        </div>
+        <p id="lbStatus" class="status">Loading leaderboard...</p>
+        <ol id="lbList" class="leaderboard-list"></ol>
+      </section>
+    </main>
+
+    <script src="leaderboard.js"></script>
+    <script>
+      const canvas = document.getElementById("rrCanvas");
+      const ctx = canvas.getContext("2d");
+      const info = document.getElementById("rrInfo");
+      const restartButton = document.getElementById("rrRestart");
+      const leaderboard = createLeaderboardController({ game: "railrider", listId: "lbList", statusId: "lbStatus" });
+
+      const cfg = {
+        baseTrainInterval: 70,
+        boostSpawnInterval: 190,
+        scoreTickInterval: 18
+      };
+
+      const lanes = [170, 260, 350, 440, 530];
+
+      let rider;
+      let trains;
+      let boosts;
+      let frame;
+      let score;
+      let chain;
+      let speed;
+      let over;
+
+      function reset() {
+        rider = { lane: 2, y: 360, blink: 0 };
+        trains = [];
+        boosts = [];
+        frame = 0;
+        score = 0;
+        chain = 0;
+        speed = 1;
+        over = false;
+        leaderboard.resetRound();
+        updateInfo();
+      }
+
+      function updateInfo() {
+        info.textContent = `Score: ${score} | Chains: ${chain} | Speed: ${speed.toFixed(1)}x${over ? " | Crash" : ""}`;
+      }
+
+      function spawnTrain() {
+        const lane = Math.floor(Math.random() * lanes.length);
+        trains.push({ lane, y: -80, speed: 3.1 + speed * 1.4, h: 78 });
+      }
+
+      function spawnBoost() {
+        boosts.push({ lane: Math.floor(Math.random() * lanes.length), y: -20, speed: 3.8 + speed, r: 11 });
+      }
+
+      function update() {
+        if (over) {
+          rider.blink += 1;
+          return;
+        }
+
+        frame += 1;
+        speed = 1 + Math.min(2.8, frame / 2100);
+
+        const spawnInterval = Math.max(35, cfg.baseTrainInterval - Math.floor(speed * 10));
+        if (frame % spawnInterval === 0) {
+          spawnTrain();
+        }
+
+        if (frame % Math.max(50, Math.floor(cfg.boostSpawnInterval)) === 0) {
+          spawnBoost();
+        }
+
+        trains.forEach((train) => {
+          train.y += train.speed;
+        });
+
+        boosts.forEach((boost) => {
+          boost.y += boost.speed;
+        });
+
+        trains = trains.filter((train) => {
+          if (train.y > canvas.height + 100) {
+            score += 6 + chain;
+            chain = Math.min(25, chain + 1);
+            return false;
+          }
+          return true;
+        });
+
+        boosts = boosts.filter((boost) => {
+          if (boost.y > canvas.height + 50) {
+            return false;
+          }
+
+          const dx = lanes[rider.lane] - lanes[boost.lane];
+          const dy = rider.y - boost.y;
+          if (Math.abs(dx) < 10 && Math.abs(dy) < 18) {
+            score += 40;
+            chain += 2;
+            return false;
+          }
+          return true;
+        });
+
+        for (const train of trains) {
+          const sameLane = rider.lane === train.lane;
+          const hitY = rider.y + 24 > train.y && rider.y - 24 < train.y + train.h;
+          if (sameLane && hitY) {
+            over = true;
+            leaderboard.submit(score);
+            break;
+          }
+        }
+
+        if (frame % Math.max(6, Math.floor(cfg.scoreTickInterval)) === 0 && !over) {
+          score += 1;
+        }
+
+        updateInfo();
+      }
+
+      function drawTracks() {
+        const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        grad.addColorStop(0, "#1f2635");
+        grad.addColorStop(1, "#0f121b");
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        lanes.forEach((x) => {
+          ctx.strokeStyle = "rgba(255,255,255,0.2)";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(x - 28, 0);
+          ctx.lineTo(x - 28, canvas.height);
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.moveTo(x + 28, 0);
+          ctx.lineTo(x + 28, canvas.height);
+          ctx.stroke();
+        });
+
+        for (let y = (frame * 6) % 40; y < canvas.height; y += 40) {
+          lanes.forEach((x) => {
+            ctx.strokeStyle = "rgba(255,255,255,0.14)";
+            ctx.beginPath();
+            ctx.moveTo(x - 26, y);
+            ctx.lineTo(x + 26, y);
+            ctx.stroke();
+          });
+        }
+      }
+
+      function draw() {
+        drawTracks();
+
+        trains.forEach((train) => {
+          const x = lanes[train.lane];
+          ctx.fillStyle = "#ff2060";
+          ctx.fillRect(x - 24, train.y, 48, train.h);
+          ctx.fillStyle = "#ffe600";
+          ctx.fillRect(x - 16, train.y + 12, 32, 10);
+        });
+
+        boosts.forEach((boost) => {
+          const x = lanes[boost.lane];
+          ctx.fillStyle = "#00e5ff";
+          ctx.beginPath();
+          ctx.arc(x, boost.y, boost.r, 0, Math.PI * 2);
+          ctx.fill();
+        });
+
+        const rx = lanes[rider.lane];
+        ctx.fillStyle = over && Math.sin(rider.blink / 5) > 0 ? "#ff2060" : "#00ff88";
+        ctx.beginPath();
+        ctx.moveTo(rx, rider.y - 20);
+        ctx.lineTo(rx - 20, rider.y + 18);
+        ctx.lineTo(rx + 20, rider.y + 18);
+        ctx.closePath();
+        ctx.fill();
+
+        if (over) {
+          ctx.fillStyle = "rgba(0,0,0,0.45)";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = "#ffffff";
+          ctx.textAlign = "center";
+          ctx.font = "700 24px Orbitron";
+          ctx.fillText("Train Impact", canvas.width / 2, canvas.height / 2 - 8);
+          ctx.font = "500 14px Rajdhani";
+          ctx.fillText("Press Restart to run again", canvas.width / 2, canvas.height / 2 + 18);
+        }
+      }
+
+      function loop() {
+        update();
+        draw();
+        requestAnimationFrame(loop);
+      }
+
+      function move(delta) {
+        if (over) return;
+        rider.lane = Math.max(0, Math.min(lanes.length - 1, rider.lane + delta));
+      }
+
+      window.addEventListener("keydown", (event) => {
+        const k = event.key.toLowerCase();
+        if (k === "arrowleft" || k === "a") move(-1);
+        if (k === "arrowright" || k === "d") move(1);
+      });
+
+      restartButton.addEventListener("click", reset);
+
+      async function loadConfig() {
+        try {
+          const response = await fetch("/api/runtime-config.php");
+          const data = await response.json();
+          const gameCfg = data.games?.railrider || {};
+          Object.assign(cfg, gameCfg);
+        } catch {
+          // Use defaults if runtime config is unavailable.
+        }
+      }
+
+      (async () => {
+        leaderboard.refresh();
+        await loadConfig();
+        reset();
+        loop();
+      })();
+    </script>
+  </body>
+</html>

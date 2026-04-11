@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gravity Well | webgames.lol</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body>
+    <main class="game-shell">
+      <header>
+        <h1>Gravity Well</h1>
+        <p>WASD or arrow thrust controls. Capture shards without being swallowed by the core.</p>
+        <a class="back-link" href="/">← Back to webgames.lol</a>
+      </header>
+
+      <section class="panel">
+        <p id="gwInfo">Score: 0 | Fuel: 100 | Best: 0</p>
+        <div class="canvas-wrap">
+          <canvas id="gwCanvas" width="720" height="420" aria-label="Gravity Well game"></canvas>
+        </div>
+        <div class="controls">
+          <button id="gwRestart">Restart</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Leaderboard</h2>
+          <p>Top gravity shard collectors.</p>
+        </div>
+        <p id="lbStatus" class="status">Loading leaderboard...</p>
+        <ol id="lbList" class="leaderboard-list"></ol>
+      </section>
+    </main>
+
+    <script src="leaderboard.js"></script>
+    <script>
+      const canvas = document.getElementById("gwCanvas");
+      const ctx = canvas.getContext("2d");
+      const info = document.getElementById("gwInfo");
+      const restartButton = document.getElementById("gwRestart");
+      const leaderboard = createLeaderboardController({ game: "gravitywell", listId: "lbList", statusId: "lbStatus" });
+
+      const cfg = {
+        coreMass: 2300,
+        thrust: 0.19,
+        fuelDrain: 0.12,
+        shardSpawnChance: 0.025
+      };
+
+      let ship;
+      let core;
+      let shards;
+      let particles;
+      let score;
+      let fuel;
+      let best;
+      let ended;
+      let keys;
+
+      function reset() {
+        ship = { x: 140, y: 210, vx: 0, vy: 0, angle: 0 };
+        core = { x: 470, y: 210, mass: cfg.coreMass, radius: 34 };
+        shards = [];
+        particles = [];
+        score = 0;
+        fuel = 100;
+        ended = false;
+        best = Number(localStorage.getItem("webgames.gravitywell.best") || 0);
+        keys = { up: false, down: false, left: false, right: false };
+        leaderboard.resetRound();
+        updateInfo("Drift safe");
+      }
+
+      function updateInfo(extra = "") {
+        info.textContent = `Score: ${score} | Fuel: ${Math.max(0, Math.floor(fuel))} | Best: ${best}${extra ? ` | ${extra}` : ""}`;
+      }
+
+      function spawnShard() {
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 90 + Math.random() * 210;
+        shards.push({
+          x: core.x + Math.cos(angle) * dist,
+          y: core.y + Math.sin(angle) * dist,
+          value: 6 + Math.floor(Math.random() * 10)
+        });
+      }
+
+      function explodeAt(x, y, color) {
+        for (let i = 0; i < 16; i += 1) {
+          particles.push({
+            x,
+            y,
+            vx: (Math.random() - 0.5) * 3,
+            vy: (Math.random() - 0.5) * 3,
+            life: 26 + Math.random() * 20,
+            color
+          });
+        }
+      }
+
+      function endRun(reason) {
+        if (ended) {
+          return;
+        }
+
+        ended = true;
+        if (score > best) {
+          best = score;
+          localStorage.setItem("webgames.gravitywell.best", String(best));
+        }
+        leaderboard.submit(score);
+        updateInfo(reason);
+      }
+
+      function update() {
+        if (ended) {
+          particles.forEach((p) => {
+            p.x += p.vx;
+            p.y += p.vy;
+            p.life -= 1;
+          });
+          particles = particles.filter((p) => p.life > 0);
+          return;
+        }
+
+        if (Math.random() < cfg.shardSpawnChance && shards.length < 12) {
+          spawnShard();
+        }
+
+        const dx = core.x - ship.x;
+        const dy = core.y - ship.y;
+        const distSq = Math.max(80, dx * dx + dy * dy);
+        const dist = Math.sqrt(distSq);
+        const gravity = core.mass / distSq;
+
+        ship.vx += (dx / dist) * gravity;
+        ship.vy += (dy / dist) * gravity;
+
+        const thrust = cfg.thrust;
+        if (fuel > 0) {
+          if (keys.up) {
+            ship.vy -= thrust;
+            fuel -= cfg.fuelDrain;
+          }
+          if (keys.down) {
+            ship.vy += thrust;
+            fuel -= cfg.fuelDrain;
+          }
+          if (keys.left) {
+            ship.vx -= thrust;
+            fuel -= cfg.fuelDrain;
+          }
+          if (keys.right) {
+            ship.vx += thrust;
+            fuel -= cfg.fuelDrain;
+          }
+        }
+
+        ship.vx *= 0.996;
+        ship.vy *= 0.996;
+        ship.x += ship.vx;
+        ship.y += ship.vy;
+
+        ship.angle = Math.atan2(ship.vy, ship.vx);
+
+        if (ship.x < -20 || ship.x > canvas.width + 20 || ship.y < -20 || ship.y > canvas.height + 20) {
+          endRun("Lost in deep space");
+        }
+
+        if (dist < core.radius + 10) {
+          explodeAt(ship.x, ship.y, "#ff2060");
+          endRun("Core collapse");
+        }
+
+        shards = shards.filter((shard) => {
+          const sx = ship.x - shard.x;
+          const sy = ship.y - shard.y;
+          if (sx * sx + sy * sy < 16 * 16) {
+            score += shard.value;
+            fuel = Math.min(100, fuel + 6);
+            explodeAt(shard.x, shard.y, "#00ff88");
+            return false;
+          }
+          return true;
+        });
+
+        particles.forEach((p) => {
+          p.x += p.vx;
+          p.y += p.vy;
+          p.life -= 1;
+        });
+        particles = particles.filter((p) => p.life > 0);
+
+        if (fuel <= 0) {
+          endRun("Fuel depleted");
+        } else {
+          updateInfo();
+        }
+      }
+
+      function draw() {
+        const bg = ctx.createRadialGradient(core.x, core.y, 10, core.x, core.y, 440);
+        bg.addColorStop(0, "#21113a");
+        bg.addColorStop(1, "#040914");
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        for (let i = 0; i < 120; i += 1) {
+          const x = (i * 53) % canvas.width;
+          const y = (i * 89) % canvas.height;
+          ctx.fillStyle = "rgba(255,255,255,0.16)";
+          ctx.fillRect(x, y, 1.5, 1.5);
+        }
+
+        ctx.fillStyle = "rgba(255, 50, 120, 0.35)";
+        ctx.beginPath();
+        ctx.arc(core.x, core.y, core.radius + 35 + Math.sin(Date.now() / 220) * 8, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = "#ff2060";
+        ctx.beginPath();
+        ctx.arc(core.x, core.y, core.radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        shards.forEach((shard) => {
+          ctx.fillStyle = "#00ff88";
+          ctx.beginPath();
+          ctx.arc(shard.x, shard.y, 5, 0, Math.PI * 2);
+          ctx.fill();
+        });
+
+        ctx.save();
+        ctx.translate(ship.x, ship.y);
+        ctx.rotate(ship.angle || 0);
+        ctx.fillStyle = "#00e5ff";
+        ctx.beginPath();
+        ctx.moveTo(12, 0);
+        ctx.lineTo(-10, -7);
+        ctx.lineTo(-7, 0);
+        ctx.lineTo(-10, 7);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+
+        particles.forEach((p) => {
+          ctx.globalAlpha = Math.max(0, p.life / 35);
+          ctx.fillStyle = p.color;
+          ctx.fillRect(p.x, p.y, 3, 3);
+          ctx.globalAlpha = 1;
+        });
+
+        if (ended) {
+          ctx.fillStyle = "rgba(0,0,0,0.4)";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = "#ffffff";
+          ctx.textAlign = "center";
+          ctx.font = "700 26px Orbitron";
+          ctx.fillText("Run Complete", canvas.width / 2, canvas.height / 2 - 6);
+          ctx.font = "500 14px Rajdhani";
+          ctx.fillText("Press Restart to launch again", canvas.width / 2, canvas.height / 2 + 18);
+        }
+      }
+
+      function loop() {
+        update();
+        draw();
+        requestAnimationFrame(loop);
+      }
+
+      window.addEventListener("keydown", (event) => {
+        const k = event.key.toLowerCase();
+        if (k === "arrowup" || k === "w") keys.up = true;
+        if (k === "arrowdown" || k === "s") keys.down = true;
+        if (k === "arrowleft" || k === "a") keys.left = true;
+        if (k === "arrowright" || k === "d") keys.right = true;
+      });
+
+      window.addEventListener("keyup", (event) => {
+        const k = event.key.toLowerCase();
+        if (k === "arrowup" || k === "w") keys.up = false;
+        if (k === "arrowdown" || k === "s") keys.down = false;
+        if (k === "arrowleft" || k === "a") keys.left = false;
+        if (k === "arrowright" || k === "d") keys.right = false;
+      });
+
+      restartButton.addEventListener("click", reset);
+
+      async function loadConfig() {
+        try {
+          const response = await fetch("/api/runtime-config.php");
+          const data = await response.json();
+          const gameCfg = data.games?.gravitywell || {};
+          Object.assign(cfg, gameCfg);
+        } catch {
+          // Use defaults on fetch failure.
+        }
+      }
+
+      (async () => {
+        leaderboard.refresh();
+        await loadConfig();
+        reset();
+        loop();
+      })();
+    </script>
+  </body>
+</html>

@@ -74,7 +74,8 @@ if ($action === 'login') {
 
 } elseif ($action === 'validate') {
     // Validate session
-    $token = trim((string)($_POST['token'] ?? ''));
+    $body = read_json_input();
+    $token = trim((string)($body['token'] ?? ($_POST['token'] ?? '')));
     
     $session = get_admin_session($token);
     
@@ -93,7 +94,8 @@ if ($action === 'login') {
 
 } elseif ($action === 'logout') {
     // Logout
-    $token = trim((string)($_POST['token'] ?? ''));
+    $body = read_json_input();
+    $token = trim((string)($body['token'] ?? ($_POST['token'] ?? '')));
     
     if ($token !== '') {
         destroy_admin_session($token);
@@ -106,7 +108,8 @@ if ($action === 'login') {
 
 } elseif ($action === 'list-sessions') {
     // List admin's active sessions
-    $token = trim((string)($_POST['token'] ?? ''));
+    $body = read_json_input();
+    $token = trim((string)($body['token'] ?? ($_POST['token'] ?? '')));
     
     $session = get_admin_session($token);
     if ($session === null) {

@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sky Hopper | webgames.lol</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body>
+    <main class="game-shell">
+      <header>
+        <h1>Sky Hopper</h1>
+        <p>Tap, click, or press Space to flap through neon sky gates.</p>
+        <a class="back-link" href="/">← Back to webgames.lol</a>
+      </header>
+
+      <section class="panel">
+        <p id="skyInfo">Score: 0 | Best: 0 | Combo: x1</p>
+        <div class="canvas-wrap">
+          <canvas id="skyCanvas" width="720" height="420" aria-label="Sky Hopper game"></canvas>
+        </div>
+        <div class="controls">
+          <button id="skyStart">Start</button>
+          <button id="skyRestart">Restart</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Leaderboard</h2>
+          <p>Highest sky gate runs.</p>
+        </div>
+        <p id="lbStatus" class="status">Loading leaderboard...</p>
+        <ol id="lbList" class="leaderboard-list"></ol>
+      </section>
+    </main>
+
+    <script src="leaderboard.js"></script>
+    <script>
+      const canvas = document.getElementById("skyCanvas");
+      const ctx = canvas.getContext("2d");
+      const info = document.getElementById("skyInfo");
+      const startButton = document.getElementById("skyStart");
+      const restartButton = document.getElementById("skyRestart");
+      const leaderboard = createLeaderboardController({ game: "skyhopper", listId: "lbList", statusId: "lbStatus" });
+
+      const cfg = {
+        gravity: 0.33,
+        flapVelocity: -6.5,
+        gateInterval: 95,
+        starInterval: 140,
+        baseGateSpeed: 2.8
+      };
+
+      let runner;
+      let gates;
+      let stars;
+      let frame;
+      let score;
+      let combo;
+      let best;
+      let running = false;
+      let over = false;
+
+      function reset() {
+        runner = { x: 150, y: 210, vy: 0, r: 14 };
+        gates = [];
+        stars = [];
+        frame = 0;
+        score = 0;
+        combo = 1;
+        running = false;
+        over = false;
+        best = Number(localStorage.getItem("webgames.skyhopper.best") || 0);
+        leaderboard.resetRound();
+        updateInfo("Ready");
+      }
+
+      function updateInfo(extra = "") {
+        info.textContent = `Score: ${score} | Best: ${best} | Combo: x${combo}${extra ? ` | ${extra}` : ""}`;
+      }
+
+      function flap() {
+        if (over) {
+          return;
+        }
+        running = true;
+        runner.vy = cfg.flapVelocity;
+      }
+
+      function spawnGate() {
+        const gap = 120 - Math.min(40, Math.floor(score / 20));
+        const center = 90 + Math.random() * (canvas.height - 180);
+        const speed = cfg.baseGateSpeed + Math.min(2.7, score / 90);
+        gates.push({
+          x: canvas.width + 30,
+          top: center - gap / 2,
+          bottom: center + gap / 2,
+          speed,
+          passed: false
+        });
+      }
+
+      function spawnStar() {
+        stars.push({
+          x: canvas.width + 40,
+          y: 40 + Math.random() * (canvas.height - 80),
+          speed: 2.8,
+          taken: false
+        });
+      }
+
+      function collideGate(gate) {
+        const hitX = runner.x + runner.r > gate.x - 20 && runner.x - runner.r < gate.x + 20;
+        if (!hitX) return false;
+        if (runner.y - runner.r < gate.top || runner.y + runner.r > gate.bottom) return true;
+        return false;
+      }
+
+      function update() {
+        if (!running || over) {
+          return;
+        }
+
+        frame += 1;
+        runner.vy += cfg.gravity;
+        runner.y += runner.vy;
+
+        if (frame % Math.max(24, Math.floor(cfg.gateInterval)) === 0) {
+          spawnGate();
+        }
+
+        if (frame % Math.max(28, Math.floor(cfg.starInterval)) === 0) {
+          spawnStar();
+        }
+
+        gates.forEach((gate) => {
+          gate.x -= gate.speed;
+          if (!gate.passed && gate.x < runner.x - runner.r) {
+            gate.passed = true;
+            score += 8 * combo;
+            combo = Math.min(8, combo + 1);
+          }
+        });
+
+        stars.forEach((star) => {
+          star.x -= star.speed;
+          const dx = runner.x - star.x;
+          const dy = runner.y - star.y;
+          if (!star.taken && dx * dx + dy * dy < (runner.r + 8) * (runner.r + 8)) {
+            star.taken = true;
+            score += 15;
+          }
+        });
+
+        gates = gates.filter((gate) => gate.x > -30);
+        stars = stars.filter((star) => star.x > -20 && !star.taken);
+
+        if (gates.some(collideGate) || runner.y < 0 || runner.y > canvas.height) {
+          over = true;
+          running = false;
+          combo = 1;
+          if (score > best) {
+            best = score;
+            localStorage.setItem("webgames.skyhopper.best", String(score));
+          }
+          leaderboard.submit(score);
+          updateInfo("Crashed");
+        } else {
+          updateInfo();
+        }
+      }
+
+      function drawBackground() {
+        const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        grad.addColorStop(0, "#0a1740");
+        grad.addColorStop(0.6, "#10295f");
+        grad.addColorStop(1, "#0b122b");
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        for (let i = 0; i < 45; i += 1) {
+          const x = (i * 181 + frame * 0.35) % canvas.width;
+          const y = (i * 71) % canvas.height;
+          ctx.fillStyle = "rgba(255,255,255,0.35)";
+          ctx.fillRect(x, y, 2, 2);
+        }
+      }
+
+      function drawRunner() {
+        ctx.save();
+        ctx.translate(runner.x, runner.y);
+        ctx.rotate(Math.max(-0.5, Math.min(0.4, runner.vy * 0.06)));
+
+        const body = ctx.createLinearGradient(-14, -14, 14, 14);
+        body.addColorStop(0, "#ffe600");
+        body.addColorStop(1, "#ff7a00");
+        ctx.fillStyle = body;
+        ctx.beginPath();
+        ctx.arc(0, 0, runner.r, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = "#091023";
+        ctx.beginPath();
+        ctx.arc(4, -3, 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+      }
+
+      function drawGates() {
+        gates.forEach((gate) => {
+          ctx.fillStyle = "#00e5ff";
+          ctx.fillRect(gate.x - 20, 0, 40, gate.top);
+          ctx.fillRect(gate.x - 20, gate.bottom, 40, canvas.height - gate.bottom);
+
+          ctx.fillStyle = "rgba(0, 229, 255, 0.25)";
+          ctx.fillRect(gate.x - 25, gate.top - 10, 50, 10);
+          ctx.fillRect(gate.x - 25, gate.bottom, 50, 10);
+        });
+      }
+
+      function drawStars() {
+        stars.forEach((star) => {
+          ctx.fillStyle = "#b44dff";
+          ctx.beginPath();
+          ctx.arc(star.x, star.y, 8, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = "#ffffff";
+          ctx.stroke();
+        });
+      }
+
+      function drawOverlay() {
+        if (!over) {
+          return;
+        }
+
+        ctx.fillStyle = "rgba(0,0,0,0.45)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#ffffff";
+        ctx.textAlign = "center";
+        ctx.font = "700 28px Orbitron";
+        ctx.fillText("Skyfall", canvas.width / 2, canvas.height / 2 - 8);
+        ctx.font = "500 14px Rajdhani";
+        ctx.fillText("Press Restart for another run", canvas.width / 2, canvas.height / 2 + 20);
+      }
+
+      function draw() {
+        drawBackground();
+        drawGates();
+        drawStars();
+        drawRunner();
+        drawOverlay();
+      }
+
+      function loop() {
+        update();
+        draw();
+        requestAnimationFrame(loop);
+      }
+
+      window.addEventListener("keydown", (event) => {
+        if (event.code === "Space" || event.key === "ArrowUp") {
+          event.preventDefault();
+          flap();
+        }
+      });
+
+      canvas.addEventListener("mousedown", flap);
+      canvas.addEventListener("touchstart", (event) => {
+        event.preventDefault();
+        flap();
+      });
+
+      startButton.addEventListener("click", () => {
+        running = true;
+        over = false;
+        updateInfo("Live");
+      });
+
+      restartButton.addEventListener("click", reset);
+
+      async function loadConfig() {
+        try {
+          const response = await fetch("/api/runtime-config.php");
+          const data = await response.json();
+          const gameCfg = data.games?.skyhopper || {};
+          Object.assign(cfg, gameCfg);
+        } catch {
+          // Keep defaults if config endpoint is unavailable.
+        }
+      }
+
+      (async () => {
+        leaderboard.refresh();
+        await loadConfig();
+        reset();
+        loop();
+      })();
+    </script>
+  </body>
+</html>

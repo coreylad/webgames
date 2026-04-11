@@ -98,8 +98,8 @@ switch ($action) {
         $lb = read_leaderboard_store();
         $totalGames = count($lb['games'] ?? []);
         $totalLeaderboardEntries = 0;
-        foreach ($lb['games'] as $game) {
-            $totalLeaderboardEntries += count($game['entries'] ?? []);
+        foreach (($lb['games'] ?? []) as $gameEntries) {
+            $totalLeaderboardEntries += is_array($gameEntries) ? count($gameEntries) : 0;
         }
         
         $tips = read_tip_store();
@@ -180,8 +180,9 @@ switch ($action) {
     
     case 'moderate-score':
         // Moderate a suspicious score
-        $scoreId = (string)($_POST['scoreId'] ?? '');
-        $action_type = (string)($_POST['action'] ?? ''); // approve, reject
+        $body = read_json_input();
+        $scoreId = trim((string)($body['scoreId'] ?? ($_POST['scoreId'] ?? '')));
+        $action_type = trim((string)($body['action'] ?? ($_POST['action'] ?? ''))); // approve, reject
         
         if (!in_array($action_type, ['approve', 'reject'])) {
             json_response(['error' => 'Invalid action'], 400);
@@ -231,6 +232,60 @@ switch ($action) {
             'status' => 'ok',
             'message' => 'Score moderated',
             'action' => $action_type
+        ];
+        break;
+
+    case 'runtime-config':
+        $output = [
+            'status' => 'ok',
+            'config' => read_runtime_config_store()
+        ];
+        break;
+
+    case 'update-runtime-config':
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            json_response(['error' => 'Method not allowed'], 405);
+        }
+
+        $body = read_json_input();
+        if (!isset($body['config']) || !is_array($body['config'])) {
+            json_response(['error' => 'Invalid config payload'], 400);
+        }
+
+        $defaults = runtime_config_defaults();
+        $input = $body['config'];
+        $platform = is_array($input['platform'] ?? null) ? $input['platform'] : [];
+        $games = is_array($input['games'] ?? null) ? $input['games'] : [];
+
+        $normalized = [
+            'platform' => [
+                'BASE_URL' => trim((string)($platform['BASE_URL'] ?? $defaults['platform']['BASE_URL'])),
+                'STRIPE_TIER_PRODUCT_IDS' => trim((string)($platform['STRIPE_TIER_PRODUCT_IDS'] ?? $defaults['platform']['STRIPE_TIER_PRODUCT_IDS'])),
+                'STRIPE_TIER_PRICE_IDS' => trim((string)($platform['STRIPE_TIER_PRICE_IDS'] ?? $defaults['platform']['STRIPE_TIER_PRICE_IDS']))
+            ],
+            'games' => array_replace_recursive($defaults['games'], $games)
+        ];
+
+        if ($normalized['platform']['BASE_URL'] !== '' && filter_var($normalized['platform']['BASE_URL'], FILTER_VALIDATE_URL) === false) {
+            json_response(['error' => 'BASE_URL must be a valid URL'], 400);
+        }
+
+        write_runtime_config_store($normalized);
+
+        $envSaved = write_env_values([
+            'BASE_URL' => $normalized['platform']['BASE_URL'],
+            'STRIPE_TIER_PRODUCT_IDS' => $normalized['platform']['STRIPE_TIER_PRODUCT_IDS'],
+            'STRIPE_TIER_PRICE_IDS' => $normalized['platform']['STRIPE_TIER_PRICE_IDS']
+        ]);
+
+        if (!$envSaved) {
+            json_response(['error' => 'Config saved but failed to write .env values'], 500);
+        }
+
+        $output = [
+            'status' => 'ok',
+            'message' => 'Runtime config updated',
+            'config' => $normalized
         ];
         break;
     

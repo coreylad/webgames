@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pulse Rush | webgames.lol</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body>
+    <main class="game-shell">
+      <header>
+        <h1>Pulse Rush</h1>
+        <p>Click each pulse ring near center timing. Misses break your combo and drain life.</p>
+        <a class="back-link" href="/">← Back to webgames.lol</a>
+      </header>
+
+      <section class="panel">
+        <p id="prInfo">Score: 0 | Combo: 0 | Life: 5</p>
+        <div class="canvas-wrap">
+          <canvas id="prCanvas" width="720" height="420" aria-label="Pulse Rush game"></canvas>
+        </div>
+        <div class="controls">
+          <button id="prStart">Start Set</button>
+          <button id="prRestart">Restart</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Leaderboard</h2>
+          <p>Highest rhythm rush scores.</p>
+        </div>
+        <p id="lbStatus" class="status">Loading leaderboard...</p>
+        <ol id="lbList" class="leaderboard-list"></ol>
+      </section>
+    </main>
+
+    <script src="leaderboard.js"></script>
+    <script>
+      const canvas = document.getElementById("prCanvas");
+      const ctx = canvas.getContext("2d");
+      const info = document.getElementById("prInfo");
+      const startButton = document.getElementById("prStart");
+      const restartButton = document.getElementById("prRestart");
+      const leaderboard = createLeaderboardController({ game: "pulserush", listId: "lbList", statusId: "lbStatus" });
+
+      const cfg = {
+        spawnInterval: 36,
+        perfectWindow: 7,
+        goodWindow: 16,
+        startingLives: 5
+      };
+
+      let pulses;
+      let flashes;
+      let score;
+      let combo;
+      let life;
+      let frame;
+      let running;
+      let over;
+
+      function reset() {
+        pulses = [];
+        flashes = [];
+        score = 0;
+        combo = 0;
+        life = Math.max(1, Math.floor(cfg.startingLives));
+        frame = 0;
+        running = false;
+        over = false;
+        leaderboard.resetRound();
+        updateInfo("Ready");
+      }
+
+      function updateInfo(extra = "") {
+        info.textContent = `Score: ${score} | Combo: ${combo} | Life: ${life}${extra ? ` | ${extra}` : ""}`;
+      }
+
+      function spawnPulse() {
+        const lane = Math.floor(Math.random() * 4);
+        const x = 120 + lane * 160;
+        const y = 210;
+        pulses.push({ x, y, r: 10, target: 70, speed: 2.4 + Math.random() * 1.4, hit: false });
+      }
+
+      function flash(x, color) {
+        flashes.push({ x, alpha: 1, color });
+      }
+
+      function registerMiss() {
+        combo = 0;
+        life -= 1;
+        if (life <= 0) {
+          over = true;
+          running = false;
+          leaderboard.submit(score);
+          updateInfo("Set over");
+        }
+      }
+
+      function onCanvasClick(event) {
+        if (!running || over) return;
+
+        const rect = canvas.getBoundingClientRect();
+        const clickX = ((event.clientX - rect.left) / rect.width) * canvas.width;
+
+        let candidate = null;
+        let minDx = Infinity;
+
+        pulses.forEach((pulse) => {
+          if (pulse.hit) return;
+          const dx = Math.abs(pulse.x - clickX);
+          if (dx < minDx) {
+            minDx = dx;
+            candidate = pulse;
+          }
+        });
+
+        if (!candidate || minDx > 80) {
+          registerMiss();
+          return;
+        }
+
+        const delta = Math.abs(candidate.r - candidate.target);
+        candidate.hit = true;
+
+        if (delta <= cfg.perfectWindow) {
+          combo += 1;
+          score += 20 + combo * 4;
+          flash(candidate.x, "#00ff88");
+        } else if (delta <= cfg.goodWindow) {
+          combo = Math.max(0, combo - 1);
+          score += 8;
+          flash(candidate.x, "#ffe600");
+        } else {
+          registerMiss();
+          flash(candidate.x, "#ff2060");
+        }
+      }
+
+      function update() {
+        if (!running || over) {
+          flashes.forEach((f) => {
+            f.alpha -= 0.03;
+          });
+          flashes = flashes.filter((f) => f.alpha > 0);
+          return;
+        }
+
+        frame += 1;
+        if (frame % Math.max(12, Math.floor(cfg.spawnInterval)) === 0) {
+          spawnPulse();
+        }
+
+        pulses.forEach((pulse) => {
+          if (!pulse.hit) {
+            pulse.r += pulse.speed;
+          }
+        });
+
+        pulses = pulses.filter((pulse) => {
+          if (pulse.hit) return pulse.r < pulse.target + 50;
+          if (pulse.r > pulse.target + 24) {
+            registerMiss();
+            return false;
+          }
+          return true;
+        });
+
+        flashes.forEach((f) => {
+          f.alpha -= 0.03;
+        });
+        flashes = flashes.filter((f) => f.alpha > 0);
+
+        updateInfo();
+      }
+
+      function draw() {
+        const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+        grad.addColorStop(0, "#260032");
+        grad.addColorStop(1, "#0b1028");
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        for (let i = 0; i < 4; i += 1) {
+          const x = 120 + i * 160;
+          ctx.strokeStyle = "rgba(255,255,255,0.14)";
+          ctx.beginPath();
+          ctx.arc(x, 210, 70, 0, Math.PI * 2);
+          ctx.stroke();
+
+          ctx.strokeStyle = "rgba(255,255,255,0.08)";
+          ctx.beginPath();
+          ctx.moveTo(x, 64);
+          ctx.lineTo(x, 356);
+          ctx.stroke();
+        }
+
+        pulses.forEach((pulse) => {
+          ctx.strokeStyle = pulse.hit ? "rgba(255,255,255,0.15)" : "#00e5ff";
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.arc(pulse.x, pulse.y, pulse.r, 0, Math.PI * 2);
+          ctx.stroke();
+        });
+
+        flashes.forEach((f) => {
+          ctx.globalAlpha = f.alpha;
+          ctx.fillStyle = f.color;
+          ctx.fillRect(f.x - 22, 183, 44, 54);
+          ctx.globalAlpha = 1;
+        });
+
+        if (!running && !over) {
+          ctx.fillStyle = "rgba(0,0,0,0.35)";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = "#ffffff";
+          ctx.textAlign = "center";
+          ctx.font = "700 24px Orbitron";
+          ctx.fillText("Pulse Rush", canvas.width / 2, canvas.height / 2 - 8);
+          ctx.font = "500 14px Rajdhani";
+          ctx.fillText("Press Start Set then click to the beat", canvas.width / 2, canvas.height / 2 + 18);
+        }
+
+        if (over) {
+          ctx.fillStyle = "rgba(0,0,0,0.45)";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = "#ffffff";
+          ctx.font = "700 24px Orbitron";
+          ctx.fillText("Set Complete", canvas.width / 2, canvas.height / 2 - 8);
+          ctx.font = "500 14px Rajdhani";
+          ctx.fillText("Press Restart to run it back", canvas.width / 2, canvas.height / 2 + 18);
+        }
+      }
+
+      function loop() {
+        update();
+        draw();
+        requestAnimationFrame(loop);
+      }
+
+      canvas.addEventListener("mousedown", onCanvasClick);
+      startButton.addEventListener("click", () => {
+        running = true;
+        over = false;
+        updateInfo("Live");
+      });
+      restartButton.addEventListener("click", reset);
+
+      async function loadConfig() {
+        try {
+          const response = await fetch("/api/runtime-config.php");
+          const data = await response.json();
+          const gameCfg = data.games?.pulserush || {};
+          Object.assign(cfg, gameCfg);
+        } catch {
+          // Use defaults if runtime config cannot be loaded.
+        }
+      }
+
+      (async () => {
+        leaderboard.refresh();
+        await loadConfig();
+        reset();
+        loop();
+      })();
+    </script>
+  </body>
+</html>

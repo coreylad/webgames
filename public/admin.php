@@ -305,6 +305,51 @@ $show_login     = !$needs_setup && !$show_dashboard;
         .wizard-summary .sum-label { opacity: .65; width: 130px; flex-shrink: 0; }
         .wizard-summary .sum-value { font-family: monospace; word-break: break-all; }
 
+        .runtime-groups {
+            display: grid;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        .runtime-group {
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            padding: 0.9rem;
+            background: rgba(255,255,255,0.03);
+        }
+        .runtime-group h3 {
+            margin: 0 0 0.7rem;
+            font-size: 0.92rem;
+            color: #dbe3f7;
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
+        }
+        .runtime-field-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 0.8rem;
+        }
+        .runtime-field label {
+            display: block;
+            font-size: 0.73rem;
+            text-transform: uppercase;
+            letter-spacing: 0.07em;
+            opacity: 0.75;
+            margin-bottom: 0.35rem;
+        }
+        .runtime-field input,
+        .runtime-field select {
+            width: 100%;
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 8px;
+            padding: 0.58rem 0.75rem;
+            color: #e0e6ed;
+            font-size: 0.9rem;
+        }
+        .runtime-json-wrap {
+            margin-top: 0.9rem;
+        }
+
         .tabs {
             display: flex;
             gap: 1rem;
@@ -442,6 +487,7 @@ $show_login     = !$needs_setup && !$show_dashboard;
             <button class="tab-btn active" onclick="switchTab('overview', event)">Overview</button>
             <button class="tab-btn" onclick="switchTab('moderation', event)">Moderation</button>
             <button class="tab-btn" onclick="switchTab('achievements', event)">Achievements</button>
+            <button class="tab-btn" onclick="switchTab('settings', event)">Settings</button>
             <button class="tab-btn" onclick="switchTab('webhooks', event)">Webhooks</button>
         </div>
 
@@ -489,6 +535,29 @@ $show_login     = !$needs_setup && !$show_dashboard;
                         <thead><tr><th>Rank</th><th>Player</th><th>Achievements</th><th>Points</th></tr></thead>
                         <tbody id="achievementLbTbody"><tr><td colspan="4" class="loading">Loading achievement data</td></tr></tbody>
                     </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings -->
+        <div class="tab-content" id="settings">
+            <div class="section">
+                <h2>Runtime Variables</h2>
+                <div class="settings-panel">
+                    <p class="settings-note" style="margin-bottom:0.85rem;">
+                        Edit platform and game tuning variables. Values are persisted to data/runtime-config.json and platform keys also sync to .env.
+                    </p>
+                    <div id="runtimeConfigFields" class="runtime-groups"></div>
+                    <div class="wizard-nav" style="margin-top:0.2rem;">
+                        <button class="btn" type="button" id="reloadRuntimeConfigBtn" onclick="loadRuntimeConfig()">Reload</button>
+                        <button class="btn" type="button" id="applyJsonToFieldsBtn" onclick="applyJsonToFields()">Apply JSON To Fields</button>
+                        <button class="btn" type="button" id="saveRuntimeConfigBtn" onclick="saveRuntimeConfig()">Save Runtime Variables</button>
+                    </div>
+                    <div class="runtime-json-wrap form-group" style="margin-bottom:0.9rem;">
+                        <label for="runtimeConfigEditor">Runtime Config JSON</label>
+                        <textarea id="runtimeConfigEditor" rows="22" spellcheck="false" style="width:100%;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:0.8rem 0.9rem;color:#e0e6ed;font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;font-size:0.84rem;line-height:1.45;"></textarea>
+                    </div>
+                    <div class="settings-status" id="runtimeConfigStatus"></div>
                 </div>
             </div>
         </div>
@@ -983,6 +1052,237 @@ $show_login     = !$needs_setup && !$show_dashboard;
         } catch (err) { console.error('Webhook proxy config error:', err); }
     }
 
+    let runtimeConfigState = {};
+
+    function deepClone(value) {
+        return JSON.parse(JSON.stringify(value));
+    }
+
+    function readPath(obj, path) {
+        return path.reduce((curr, key) => (curr && Object.prototype.hasOwnProperty.call(curr, key) ? curr[key] : undefined), obj);
+    }
+
+    function writePath(obj, path, value) {
+        let curr = obj;
+        for (let i = 0; i < path.length - 1; i += 1) {
+            const key = path[i];
+            if (!curr[key] || typeof curr[key] !== 'object') {
+                curr[key] = {};
+            }
+            curr = curr[key];
+        }
+        curr[path[path.length - 1]] = value;
+    }
+
+    function collectScalarEntries(basePath, value, out) {
+        if (value === null || value === undefined) {
+            return;
+        }
+
+        if (typeof value === 'object' && !Array.isArray(value)) {
+            Object.keys(value).forEach((key) => {
+                collectScalarEntries(basePath.concat(key), value[key], out);
+            });
+            return;
+        }
+
+        out.push({
+            path: basePath,
+            value,
+            type: typeof value
+        });
+    }
+
+    function createRuntimeField(entry) {
+        const wrap = document.createElement('div');
+        wrap.className = 'runtime-field';
+
+        const label = document.createElement('label');
+        label.textContent = entry.path.slice(2).join(' · ');
+        wrap.appendChild(label);
+
+        const dataPath = entry.path.join('.');
+        let input;
+
+        if (entry.type === 'boolean') {
+            input = document.createElement('select');
+            input.innerHTML = '<option value="true">true</option><option value="false">false</option>';
+            input.value = entry.value ? 'true' : 'false';
+            input.dataset.runtimeType = 'boolean';
+        } else {
+            input = document.createElement('input');
+            input.type = entry.type === 'number' ? 'number' : 'text';
+            if (entry.type === 'number') {
+                input.step = 'any';
+            }
+            input.value = String(entry.value);
+            input.dataset.runtimeType = entry.type === 'number' ? 'number' : 'string';
+        }
+
+        input.dataset.runtimePath = dataPath;
+        input.addEventListener('change', updateRuntimeStateFromFields);
+        wrap.appendChild(input);
+        return wrap;
+    }
+
+    function renderRuntimeFields(config) {
+        const host = document.getElementById('runtimeConfigFields');
+        if (!host) return;
+
+        host.innerHTML = '';
+        const groups = [
+            { key: 'platform', title: 'Platform Variables' }
+        ];
+
+        const gameKeys = Object.keys(config.games || {}).sort();
+        gameKeys.forEach((gameKey) => {
+            groups.push({ key: gameKey, title: `Game: ${gameKey}`, isGame: true });
+        });
+
+        groups.forEach((group) => {
+            const entries = [];
+            const basePath = group.isGame ? ['games', group.key] : ['platform'];
+            const source = group.isGame ? (config.games?.[group.key] || {}) : (config.platform || {});
+            collectScalarEntries(basePath, source, entries);
+            if (!entries.length) {
+                return;
+            }
+
+            const card = document.createElement('div');
+            card.className = 'runtime-group';
+
+            const title = document.createElement('h3');
+            title.textContent = group.title;
+            card.appendChild(title);
+
+            const grid = document.createElement('div');
+            grid.className = 'runtime-field-grid';
+            entries.sort((a, b) => a.path.join('.').localeCompare(b.path.join('.')));
+            entries.forEach((entry) => {
+                grid.appendChild(createRuntimeField(entry));
+            });
+
+            card.appendChild(grid);
+            host.appendChild(card);
+        });
+    }
+
+    function updateRuntimeStateFromFields() {
+        const statusEl = document.getElementById('runtimeConfigStatus');
+        const editor = document.getElementById('runtimeConfigEditor');
+        if (!editor) return;
+
+        const next = deepClone(runtimeConfigState);
+        const fields = document.querySelectorAll('#runtimeConfigFields [data-runtime-path]');
+        fields.forEach((field) => {
+            const path = String(field.dataset.runtimePath || '').split('.');
+            const type = String(field.dataset.runtimeType || 'string');
+            let value = field.value;
+
+            if (type === 'number') {
+                value = Number(value);
+            } else if (type === 'boolean') {
+                value = value === 'true';
+            }
+
+            writePath(next, path, value);
+        });
+
+        runtimeConfigState = next;
+        editor.value = JSON.stringify(runtimeConfigState, null, 2);
+        if (statusEl && !statusEl.classList.contains('error')) {
+            statusEl.className = 'settings-status';
+            statusEl.textContent = 'Field changes staged. Save to apply.';
+        }
+    }
+
+    function applyJsonToFields() {
+        const statusEl = document.getElementById('runtimeConfigStatus');
+        const editor = document.getElementById('runtimeConfigEditor');
+        if (!editor || !statusEl) return;
+
+        try {
+            const parsed = JSON.parse(editor.value || '{}');
+            runtimeConfigState = parsed;
+            renderRuntimeFields(runtimeConfigState);
+            editor.value = JSON.stringify(runtimeConfigState, null, 2);
+            statusEl.className = 'settings-status success';
+            statusEl.textContent = 'JSON applied to field editor.';
+        } catch (err) {
+            statusEl.className = 'settings-status error';
+            statusEl.textContent = 'Invalid JSON: ' + err.message;
+        }
+    }
+
+    async function loadRuntimeConfig() {
+        const statusEl = document.getElementById('runtimeConfigStatus');
+        const editor = document.getElementById('runtimeConfigEditor');
+        if (!statusEl || !editor) return;
+
+        statusEl.className = 'settings-status';
+        statusEl.textContent = 'Loading runtime variables...';
+
+        try {
+            const data = await fetch_admin_api('runtime-config');
+            const config = data.config || {};
+            runtimeConfigState = deepClone(config);
+            renderRuntimeFields(runtimeConfigState);
+            editor.value = JSON.stringify(runtimeConfigState, null, 2);
+            statusEl.className = 'settings-status success';
+            statusEl.textContent = 'Runtime variables loaded.';
+        } catch (err) {
+            statusEl.className = 'settings-status error';
+            statusEl.textContent = 'Failed to load runtime variables.';
+            console.error('Runtime config load error:', err);
+        }
+    }
+
+    async function saveRuntimeConfig() {
+        const statusEl = document.getElementById('runtimeConfigStatus');
+        const editor = document.getElementById('runtimeConfigEditor');
+        const saveBtn = document.getElementById('saveRuntimeConfigBtn');
+        if (!statusEl || !editor || !saveBtn) return;
+
+        updateRuntimeStateFromFields();
+
+        let parsed;
+        try {
+            parsed = JSON.parse(editor.value || '{}');
+        } catch (err) {
+            statusEl.className = 'settings-status error';
+            statusEl.textContent = 'Invalid JSON: ' + err.message;
+            return;
+        }
+
+        statusEl.className = 'settings-status';
+        statusEl.textContent = 'Saving runtime variables...';
+        saveBtn.disabled = true;
+
+        try {
+            const res = await fetch(`/api/admin-analytics.php?action=update-runtime-config&token=${encodeURIComponent(sessionToken)}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ config: parsed })
+            });
+
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || data.status !== 'ok') {
+                throw new Error(data.error || 'Unable to save runtime variables');
+            }
+
+            runtimeConfigState = deepClone(data.config || parsed);
+            renderRuntimeFields(runtimeConfigState);
+            editor.value = JSON.stringify(runtimeConfigState, null, 2);
+            statusEl.className = 'settings-status success';
+            statusEl.textContent = 'Runtime variables saved.';
+        } catch (err) {
+            statusEl.className = 'settings-status error';
+            statusEl.textContent = err.message;
+        } finally {
+            saveBtn.disabled = false;
+        }
+    }
+
     // ── Boot ───────────────────────────────────────────────────────────────
     // PHP already decided what to show, just load data if dashboard is visible.
     <?php if ($show_dashboard): ?>
@@ -991,6 +1291,7 @@ $show_login     = !$needs_setup && !$show_dashboard;
     loadAchievementLeaderboard();
     loadWebhookEvents();
     loadWebhookProxyConfig();
+    loadRuntimeConfig();
     setInterval(() => { loadDashboard(); loadSuspiciousScores(); loadWebhookEvents(); }, 30000);
     <?php endif; ?>
 </script>

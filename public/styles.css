@@ -323,6 +323,12 @@ button[disabled] { opacity: 0.45; transform: none; cursor: wait; }
 .game-card:nth-child(7) { --card-accent: #00cfff; }
 .game-card:nth-child(8) { --card-accent: #c8ff00; }
 .game-card:nth-child(9) { --card-accent: #ff4fd2; }
+.game-card:nth-child(10) { --card-accent: #52ffa8; }
+.game-card:nth-child(11) { --card-accent: #ff7d57; }
+.game-card:nth-child(12) { --card-accent: #6ab8ff; }
+.game-card:nth-child(13) { --card-accent: #e9ff66; }
+.game-card:nth-child(14) { --card-accent: #ff66a3; }
+.game-card:nth-child(15) { --card-accent: #7d8bff; }
 
 .game-card h3 {
   margin: 0 0 0.5rem;
