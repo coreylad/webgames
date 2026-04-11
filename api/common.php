@@ -810,6 +810,101 @@ function get_active_admin_sessions(string $adminId): array
     ));
 }
 
+function stripe_checkout_defaults(): array
+{
+    return [
+        'oneTimeCheckout' => [
+            'productId' => '',
+            'priceId' => '',
+            'productName' => 'Example Product',
+            'currency' => 'usd',
+            'amountCents' => 2000,
+            'lastSessionId' => '',
+            'lastCheckoutUrl' => '',
+            'lastCreatedAt' => null,
+            'lastCompletedAt' => null,
+            'lastCompletedEventId' => '',
+            'completedSessions' => []
+        ]
+    ];
+}
+
+function ensure_stripe_checkout_store(): string
+{
+    $dir = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'data';
+    if (!is_dir($dir)) {
+        mkdir($dir, 0775, true);
+    }
+
+    $file = $dir . DIRECTORY_SEPARATOR . 'stripe-checkout.json';
+    if (!is_file($file)) {
+        file_put_contents($file, json_encode(stripe_checkout_defaults(), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    }
+
+    return $file;
+}
+
+function read_stripe_checkout_store(): array
+{
+    $file = ensure_stripe_checkout_store();
+    $raw = file_get_contents($file);
+    $defaults = stripe_checkout_defaults();
+    if ($raw === false || $raw === '') {
+        return $defaults;
+    }
+
+    $decoded = json_decode($raw, true);
+    if (!is_array($decoded)) {
+        return $defaults;
+    }
+
+    $merged = array_replace_recursive($defaults, $decoded);
+    if (!isset($merged['oneTimeCheckout']['completedSessions']) || !is_array($merged['oneTimeCheckout']['completedSessions'])) {
+        $merged['oneTimeCheckout']['completedSessions'] = [];
+    }
+
+    return $merged;
+}
+
+function write_stripe_checkout_store(array $store): void
+{
+    $file = ensure_stripe_checkout_store();
+    file_put_contents($file, json_encode($store, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+}
+
+function update_one_time_checkout_store(array $updates): array
+{
+    $store = read_stripe_checkout_store();
+    $current = $store['oneTimeCheckout'] ?? [];
+    $store['oneTimeCheckout'] = array_merge($current, $updates);
+    write_stripe_checkout_store($store);
+    return $store['oneTimeCheckout'];
+}
+
+function add_one_time_checkout_completion(array $entry): array
+{
+    $store = read_stripe_checkout_store();
+    $oneTime = $store['oneTimeCheckout'] ?? stripe_checkout_defaults()['oneTimeCheckout'];
+    $history = $oneTime['completedSessions'] ?? [];
+    if (!is_array($history)) {
+        $history = [];
+    }
+
+    $history[] = $entry;
+    if (count($history) > 30) {
+        $history = array_slice($history, -30);
+    }
+
+    $oneTime['completedSessions'] = $history;
+    $oneTime['lastCompletedAt'] = (string)($entry['completedAt'] ?? now_iso());
+    $oneTime['lastCompletedEventId'] = (string)($entry['eventId'] ?? '');
+    $oneTime['lastSessionId'] = (string)($entry['sessionId'] ?? '');
+    $store['oneTimeCheckout'] = $oneTime;
+    write_stripe_checkout_store($store);
+
+    return $oneTime;
+}
+
 function runtime_config_defaults(): array
 {
     return [

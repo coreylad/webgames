@@ -542,6 +542,77 @@ $show_login     = !$needs_setup && !$show_dashboard;
         <!-- Settings -->
         <div class="tab-content" id="settings">
             <div class="section">
+                <h2>Stripe One-Time Checkout</h2>
+                <div class="settings-panel">
+                    <p class="settings-note" style="margin-bottom:0.85rem;">
+                        Configure a one-time Stripe product+price, then generate a Checkout Session URL and verify completion via webhook events.
+                    </p>
+                    <p class="settings-note" style="margin-bottom:0.85rem;">
+                        Requires STRIPE_SECRET_KEY and STRIPE_PUBLISHABLE_KEY in your server environment. Get these from the Stripe Dashboard.
+                    </p>
+
+                    <div class="settings-grid">
+                        <div class="form-group">
+                            <label for="stripeOneTimeName">Product Name</label>
+                            <input type="text" id="stripeOneTimeName" value="Example Product" />
+                        </div>
+                        <div class="form-group">
+                            <label for="stripeOneTimeCurrency">Currency</label>
+                            <input type="text" id="stripeOneTimeCurrency" value="usd" maxlength="3" />
+                        </div>
+                        <div class="form-group">
+                            <label for="stripeOneTimeAmount">Unit Amount (cents)</label>
+                            <input type="number" id="stripeOneTimeAmount" value="2000" min="50" step="1" />
+                        </div>
+                        <div class="form-group">
+                            <label for="stripeOneTimeProductId">Product ID</label>
+                            <input type="text" id="stripeOneTimeProductId" readonly />
+                        </div>
+                        <div class="form-group">
+                            <label for="stripeOneTimePriceId">Price ID</label>
+                            <input type="text" id="stripeOneTimePriceId" readonly />
+                        </div>
+                        <div class="form-group">
+                            <label for="stripeOneTimeLastSession">Last Session ID</label>
+                            <input type="text" id="stripeOneTimeLastSession" readonly />
+                        </div>
+                    </div>
+
+                    <div class="wizard-nav">
+                        <button class="btn" type="button" id="stripeOneTimeReloadBtn" onclick="loadStripeOneTimeConfig()">Reload Stripe Config</button>
+                        <button class="btn" type="button" id="stripeOneTimeCreateProductBtn" onclick="createStripeOneTimeProduct()">Create Product + Price</button>
+                        <button class="btn" type="button" id="stripeOneTimeCreateSessionBtn" onclick="createStripeOneTimeSession()">Create Checkout Session</button>
+                    </div>
+
+                    <div class="form-group" style="margin-top:0.9rem;">
+                        <label for="stripeOneTimeCheckoutUrl">Last Checkout URL</label>
+                        <input type="text" id="stripeOneTimeCheckoutUrl" readonly />
+                    </div>
+                    <div class="wizard-nav" style="margin-top:0.2rem;">
+                        <button class="btn" type="button" id="stripeOneTimeOpenCheckoutBtn" onclick="openStripeCheckoutUrl()">Open Checkout</button>
+                    </div>
+
+                    <div class="settings-status" id="stripeOneTimeStatus"></div>
+
+                    <h3 style="margin-top:1.2rem;margin-bottom:0.6rem;">Recent Completed Sessions</h3>
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Completed At</th>
+                                    <th>Session ID</th>
+                                    <th>Amount</th>
+                                    <th>Status</th>
+                                    <th>Event ID</th>
+                                </tr>
+                            </thead>
+                            <tbody id="stripeOneTimeCompletedTbody">
+                                <tr><td colspan="5">No completed sessions yet</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
                 <h2>Runtime Variables</h2>
                 <div class="settings-panel">
                     <p class="settings-note" style="margin-bottom:0.85rem;">
@@ -1052,6 +1123,136 @@ $show_login     = !$needs_setup && !$show_dashboard;
         } catch (err) { console.error('Webhook proxy config error:', err); }
     }
 
+    let stripeOneTimeConfigState = null;
+
+    function renderStripeOneTimeConfig(config) {
+        stripeOneTimeConfigState = config || null;
+        document.getElementById('stripeOneTimeName').value = config?.productName || 'Example Product';
+        document.getElementById('stripeOneTimeCurrency').value = (config?.currency || 'usd');
+        document.getElementById('stripeOneTimeAmount').value = Number(config?.amountCents || 2000);
+        document.getElementById('stripeOneTimeProductId').value = config?.productId || '';
+        document.getElementById('stripeOneTimePriceId').value = config?.priceId || '';
+        document.getElementById('stripeOneTimeLastSession').value = config?.lastSessionId || '';
+        document.getElementById('stripeOneTimeCheckoutUrl').value = config?.lastCheckoutUrl || '';
+
+        const tbody = document.getElementById('stripeOneTimeCompletedTbody');
+        const history = Array.isArray(config?.completedSessions) ? config.completedSessions : [];
+        tbody.innerHTML = '';
+        if (!history.length) {
+            tbody.innerHTML = '<tr><td colspan="5">No completed sessions yet</td></tr>';
+            return;
+        }
+
+        history.slice().reverse().forEach((entry) => {
+            const tr = document.createElement('tr');
+            const amount = `$${(Number(entry.amountCents || 0) / 100).toFixed(2)} ${String(entry.currency || 'usd').toUpperCase()}`;
+            tr.innerHTML = `
+                <td>${entry.completedAt ? new Date(entry.completedAt).toLocaleString() : '—'}</td>
+                <td><code style="font-size:.75rem">${entry.sessionId || '—'}</code></td>
+                <td>${amount}</td>
+                <td>${entry.paymentStatus || '—'}</td>
+                <td><code style="font-size:.75rem">${entry.eventId || '—'}</code></td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    async function loadStripeOneTimeConfig() {
+        const statusEl = document.getElementById('stripeOneTimeStatus');
+        statusEl.className = 'settings-status';
+        statusEl.textContent = 'Loading Stripe one-time config...';
+
+        try {
+            const data = await fetch_admin_api('stripe-one-time-config');
+            renderStripeOneTimeConfig(data.config || {});
+            statusEl.className = 'settings-status success';
+            statusEl.textContent = 'Stripe one-time config loaded.';
+        } catch (err) {
+            statusEl.className = 'settings-status error';
+            statusEl.textContent = 'Unable to load Stripe one-time config.';
+            console.error('Stripe one-time config error:', err);
+        }
+    }
+
+    async function createStripeOneTimeProduct() {
+        const statusEl = document.getElementById('stripeOneTimeStatus');
+        const createBtn = document.getElementById('stripeOneTimeCreateProductBtn');
+
+        const payload = {
+            name: document.getElementById('stripeOneTimeName').value.trim(),
+            currency: document.getElementById('stripeOneTimeCurrency').value.trim().toLowerCase(),
+            amountCents: Number(document.getElementById('stripeOneTimeAmount').value || 0)
+        };
+
+        statusEl.className = 'settings-status';
+        statusEl.textContent = 'Creating Stripe product and default price...';
+        createBtn.disabled = true;
+
+        try {
+            const res = await fetch(`/api/admin-analytics.php?action=stripe-create-one-time-product&token=${encodeURIComponent(sessionToken)}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || data.status !== 'ok') {
+                throw new Error(data.error || 'Failed to create Stripe product');
+            }
+
+            renderStripeOneTimeConfig(data.config || {});
+            statusEl.className = 'settings-status success';
+            statusEl.textContent = 'Stripe product and price created.';
+        } catch (err) {
+            statusEl.className = 'settings-status error';
+            statusEl.textContent = err.message;
+        } finally {
+            createBtn.disabled = false;
+        }
+    }
+
+    async function createStripeOneTimeSession() {
+        const statusEl = document.getElementById('stripeOneTimeStatus');
+        const createBtn = document.getElementById('stripeOneTimeCreateSessionBtn');
+
+        statusEl.className = 'settings-status';
+        statusEl.textContent = 'Creating Stripe Checkout Session...';
+        createBtn.disabled = true;
+
+        try {
+            const res = await fetch(`/api/admin-analytics.php?action=stripe-create-one-time-checkout-session&token=${encodeURIComponent(sessionToken)}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ priceId: stripeOneTimeConfigState?.priceId || '' })
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || data.status !== 'ok') {
+                throw new Error(data.error || 'Failed to create Checkout Session');
+            }
+
+            renderStripeOneTimeConfig(data.config || stripeOneTimeConfigState || {});
+            statusEl.className = 'settings-status success';
+            statusEl.textContent = 'Checkout Session created. Use Open Checkout to complete payment.';
+        } catch (err) {
+            statusEl.className = 'settings-status error';
+            statusEl.textContent = err.message;
+        } finally {
+            createBtn.disabled = false;
+        }
+    }
+
+    function openStripeCheckoutUrl() {
+        const url = document.getElementById('stripeOneTimeCheckoutUrl').value.trim();
+        const statusEl = document.getElementById('stripeOneTimeStatus');
+
+        if (!url) {
+            statusEl.className = 'settings-status error';
+            statusEl.textContent = 'No checkout URL yet. Create a Checkout Session first.';
+            return;
+        }
+
+        window.open(url, '_blank', 'noopener');
+    }
+
     let runtimeConfigState = {};
 
     function deepClone(value) {
@@ -1291,6 +1492,7 @@ $show_login     = !$needs_setup && !$show_dashboard;
     loadAchievementLeaderboard();
     loadWebhookEvents();
     loadWebhookProxyConfig();
+    loadStripeOneTimeConfig();
     loadRuntimeConfig();
     setInterval(() => { loadDashboard(); loadSuspiciousScores(); loadWebhookEvents(); }, 30000);
     <?php endif; ?>

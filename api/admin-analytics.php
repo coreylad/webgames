@@ -242,6 +242,114 @@ switch ($action) {
         ];
         break;
 
+    case 'stripe-one-time-config':
+        $output = [
+            'status' => 'ok',
+            'config' => read_stripe_checkout_store()['oneTimeCheckout']
+        ];
+        break;
+
+    case 'stripe-create-one-time-product':
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            json_response(['error' => 'Method not allowed'], 405);
+        }
+
+        $body = read_json_input();
+        $name = trim((string)($body['name'] ?? 'Example Product'));
+        $currency = strtolower(trim((string)($body['currency'] ?? 'usd')));
+        $amountCents = (int)($body['amountCents'] ?? 2000);
+
+        if ($name === '') {
+            json_response(['error' => 'Product name is required'], 400);
+        }
+
+        if (!preg_match('/^[a-z]{3}$/', $currency)) {
+            json_response(['error' => 'Currency must be a 3-letter ISO code'], 400);
+        }
+
+        if ($amountCents < 50 || $amountCents > 100000000) {
+            json_response(['error' => 'Amount must be between 50 and 100000000 cents'], 400);
+        }
+
+        $response = stripe_request('POST', 'products', [
+            'name' => $name,
+            'default_price_data[currency]' => $currency,
+            'default_price_data[unit_amount]' => (string)$amountCents,
+            'metadata[integration]' => 'one_time_checkout'
+        ]);
+
+        if (!($response['ok'] ?? false)) {
+            json_response(['error' => (string)($response['error'] ?? 'Unable to create product in Stripe')], (int)($response['status'] ?? 500));
+        }
+
+        $product = $response['data'];
+        $updated = update_one_time_checkout_store([
+            'productId' => (string)($product['id'] ?? ''),
+            'priceId' => (string)($product['default_price'] ?? ''),
+            'productName' => $name,
+            'currency' => $currency,
+            'amountCents' => $amountCents
+        ]);
+
+        $output = [
+            'status' => 'ok',
+            'productId' => (string)($product['id'] ?? ''),
+            'priceId' => (string)($product['default_price'] ?? ''),
+            'config' => $updated
+        ];
+        break;
+
+    case 'stripe-create-one-time-checkout-session':
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            json_response(['error' => 'Method not allowed'], 405);
+        }
+
+        $store = read_stripe_checkout_store();
+        $checkoutConfig = $store['oneTimeCheckout'];
+        $priceId = trim((string)($checkoutConfig['priceId'] ?? ''));
+
+        $body = read_json_input();
+        if (isset($body['priceId']) && is_string($body['priceId']) && trim($body['priceId']) !== '') {
+            $priceId = trim($body['priceId']);
+        }
+
+        if ($priceId === '') {
+            json_response(['error' => 'No Stripe price configured. Create product and price first.'], 400);
+        }
+
+        $baseUrl = rtrim(env_value('BASE_URL', detect_base_url()), '/');
+        $successUrl = $baseUrl . '/public/success.html?session_id={CHECKOUT_SESSION_ID}';
+        $cancelUrl = $baseUrl . '/public/tip.html?tip=cancelled';
+
+        $sessionResponse = stripe_request('POST', 'checkout/sessions', [
+            'line_items[0][price]' => $priceId,
+            'line_items[0][quantity]' => '1',
+            'mode' => 'payment',
+            'success_url' => $successUrl,
+            'cancel_url' => $cancelUrl,
+            'metadata[integration]' => 'one_time_checkout'
+        ]);
+
+        if (!($sessionResponse['ok'] ?? false)) {
+            json_response(['error' => (string)($sessionResponse['error'] ?? 'Unable to create Checkout Session')], (int)($sessionResponse['status'] ?? 500));
+        }
+
+        $session = $sessionResponse['data'];
+        $updated = update_one_time_checkout_store([
+            'priceId' => $priceId,
+            'lastSessionId' => (string)($session['id'] ?? ''),
+            'lastCheckoutUrl' => (string)($session['url'] ?? ''),
+            'lastCreatedAt' => now_iso()
+        ]);
+
+        $output = [
+            'status' => 'ok',
+            'sessionId' => (string)($session['id'] ?? ''),
+            'url' => (string)($session['url'] ?? ''),
+            'config' => $updated
+        ];
+        break;
+
     case 'update-runtime-config':
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             json_response(['error' => 'Method not allowed'], 405);

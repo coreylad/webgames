@@ -248,6 +248,7 @@ function process_checkout_completed(array $event, string $webhookId): void
     $metadata = is_array($session['metadata'] ?? null) ? $session['metadata'] : [];
     $tipRecordId = (string)($metadata['tipRecordId'] ?? '');
     $username = (string)($metadata['username'] ?? 'anonymous');
+    $integration = (string)($metadata['integration'] ?? '');
 
     $updates = [
         'username' => $username,
@@ -270,6 +271,17 @@ function process_checkout_completed(array $event, string $webhookId): void
             static fn(array $tip): bool => ($tip['sessionId'] ?? '') === ($session['id'] ?? ''),
             $updates
         );
+    }
+
+    if ($integration === 'one_time_checkout') {
+        add_one_time_checkout_completion([
+            'eventId' => (string)($event['id'] ?? ''),
+            'sessionId' => (string)($session['id'] ?? ''),
+            'paymentStatus' => (string)($session['payment_status'] ?? ''),
+            'amountCents' => (int)($session['amount_total'] ?? 0),
+            'currency' => strtolower((string)($session['currency'] ?? 'usd')),
+            'completedAt' => now_iso()
+        ]);
     }
 
     // Track revenue analytics

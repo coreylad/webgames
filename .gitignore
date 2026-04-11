@@ -9,3 +9,6 @@ data/achievements.json
 data/seasons.json
 data/webhook-events.json
 data/suspicious-scores.json
+data/admin-sessions.json
+data/runtime-config.json
+data/stripe-checkout.json
