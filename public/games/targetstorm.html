@@ -55,6 +55,7 @@
       let score;
       let combo;
       let frame;
+      let graceFrames;
       let over;
 
       function reset() {
@@ -63,26 +64,29 @@
         score = 0;
         combo = 0;
         frame = 0;
+        graceFrames = 240;
         over = false;
         leaderboard.resetRound();
         updateInfo();
       }
 
       function spawnTarget() {
+        const difficulty = Math.min(1, Math.max(0, (frame - graceFrames) / 2600));
         const r = 16 + Math.random() * 10;
         targets.push({
           x: 30 + Math.random() * (canvas.width - 60),
           y: 30 + Math.random() * (canvas.height - 60),
-          vx: (Math.random() - 0.5) * (cfg.baseTargetSpeed + Math.min(3.5, score / 700)),
-          vy: (Math.random() - 0.5) * (cfg.baseTargetSpeed + Math.min(3.5, score / 700)),
+          vx: (Math.random() - 0.5) * (cfg.baseTargetSpeed + Math.min(2.4, score / 1400) + difficulty * 1.2),
+          vy: (Math.random() - 0.5) * (cfg.baseTargetSpeed + Math.min(2.4, score / 1400) + difficulty * 1.2),
           r,
-          ttl: cfg.targetLifetime,
+          ttl: Math.max(70, Math.floor(cfg.targetLifetime - difficulty * 42)),
           value: 10 + Math.floor(r)
         });
       }
 
       function updateInfo(extra = "") {
-        info.textContent = `Score: ${score} | Combo: ${combo} | Lives: ${lives}${extra ? ` | ${extra}` : ""}`;
+        const onboarding = frame < graceFrames ? " | Warmup" : "";
+        info.textContent = `Score: ${score} | Combo: ${combo} | Lives: ${lives}${onboarding}${extra ? ` | ${extra}` : ""}`;
       }
 
       function loseLife() {
@@ -99,7 +103,7 @@
         if (over) return;
 
         frame += 1;
-        const interval = Math.max(16, Math.floor(cfg.spawnInterval - score / 180));
+        const interval = Math.max(20, Math.floor(cfg.spawnInterval - score / 320));
         if (frame % interval === 0) {
           spawnTarget();
         }
@@ -116,7 +120,9 @@
         const before = targets.length;
         targets = targets.filter((t) => t.ttl > 0);
         const expired = before - targets.length;
-        for (let i = 0; i < expired; i += 1) loseLife();
+        for (let i = 0; i < expired; i += 1) {
+          if (frame > graceFrames) loseLife();
+        }
 
         if (!over) {
           score += Math.floor(combo / 4);
@@ -186,7 +192,9 @@
           score += target.value + combo * 2;
           updateInfo();
         } else {
-          loseLife();
+          if (frame > graceFrames) {
+            loseLife();
+          }
         }
       }
 

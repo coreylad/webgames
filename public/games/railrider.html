@@ -63,23 +63,28 @@
       let score;
       let chain;
       let speed;
+      let lives;
+      let graceFrames;
       let over;
 
       function reset() {
-        rider = { lane: 2, y: 360, blink: 0 };
+        rider = { lane: 2, y: 360, blink: 0, invuln: 0 };
         trains = [];
         boosts = [];
         frame = 0;
         score = 0;
         chain = 0;
-        speed = 1;
+        speed = 0.85;
+        lives = 3;
+        graceFrames = 220;
         over = false;
         leaderboard.resetRound();
         updateInfo();
       }
 
       function updateInfo() {
-        info.textContent = `Score: ${score} | Chains: ${chain} | Speed: ${speed.toFixed(1)}x${over ? " | Crash" : ""}`;
+        const onboarding = frame < graceFrames ? " | Warmup" : "";
+        info.textContent = `Score: ${score} | Chains: ${chain} | Lives: ${lives} | Speed: ${speed.toFixed(1)}x${onboarding}${over ? " | Crash" : ""}`;
       }
 
       function spawnTrain() {
@@ -98,10 +103,12 @@
         }
 
         frame += 1;
-        speed = 1 + Math.min(2.8, frame / 2100);
+        speed = 0.85 + Math.min(2.2, frame / 3200);
+        rider.invuln = Math.max(0, rider.invuln - 1);
 
-        const spawnInterval = Math.max(35, cfg.baseTrainInterval - Math.floor(speed * 10));
-        if (frame % spawnInterval === 0) {
+        const difficulty = Math.min(1, Math.max(0, (frame - graceFrames) / 2600));
+        const spawnInterval = Math.max(42, Math.floor(cfg.baseTrainInterval - difficulty * 26 - speed * 4));
+        if (frame > 70 && frame % spawnInterval === 0) {
           spawnTrain();
         }
 
@@ -144,9 +151,15 @@
         for (const train of trains) {
           const sameLane = rider.lane === train.lane;
           const hitY = rider.y + 24 > train.y && rider.y - 24 < train.y + train.h;
-          if (sameLane && hitY) {
-            over = true;
-            leaderboard.submit(score);
+          if (sameLane && hitY && rider.invuln === 0 && frame > 80) {
+            lives -= 1;
+            chain = 0;
+            rider.invuln = 70;
+            train.y = canvas.height + 300;
+            if (lives <= 0) {
+              over = true;
+              leaderboard.submit(score);
+            }
             break;
           }
         }
@@ -210,7 +223,8 @@
         });
 
         const rx = lanes[rider.lane];
-        ctx.fillStyle = over && Math.sin(rider.blink / 5) > 0 ? "#ff2060" : "#00ff88";
+        const flashInvuln = rider.invuln > 0 && Math.sin(rider.blink / 3) > 0;
+        ctx.fillStyle = over && Math.sin(rider.blink / 5) > 0 ? "#ff2060" : (flashInvuln ? "#ffe600" : "#00ff88");
         ctx.beginPath();
         ctx.moveTo(rx, rider.y - 20);
         ctx.lineTo(rx - 20, rider.y + 18);

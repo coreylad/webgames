@@ -932,7 +932,7 @@ function runtime_config_defaults(): array
                 'shardSpawnChance' => 0.025
             ],
             'pulserush' => [
-                'spawnInterval' => 36,
+                'spawnInterval' => 44,
                 'perfectWindow' => 7,
                 'goodWindow' => 16,
                 'startingLives' => 5
@@ -944,9 +944,9 @@ function runtime_config_defaults(): array
                 'playerSpeed' => 3.2
             ],
             'railrider' => [
-                'baseTrainInterval' => 70,
-                'boostSpawnInterval' => 190,
-                'scoreTickInterval' => 18
+                'baseTrainInterval' => 88,
+                'boostSpawnInterval' => 210,
+                'scoreTickInterval' => 22
             ],
             'chainreactor' => [
                 'roundSeconds' => 30,
@@ -955,28 +955,40 @@ function runtime_config_defaults(): array
                 'baseBlastLife' => 45
             ],
             'vaultjump' => [
-                'gravity' => 0.52,
-                'jumpVelocity' => -9.6,
-                'baseSpeed' => 4.6,
-                'spawnInterval' => 88
+                'gravity' => 0.46,
+                'jumpVelocity' => -9.8,
+                'baseSpeed' => 3.8,
+                'spawnInterval' => 104
             ],
             'targetstorm' => [
                 'startingLives' => 5,
-                'spawnInterval' => 55,
-                'targetLifetime' => 130,
-                'baseTargetSpeed' => 1.1
+                'spawnInterval' => 70,
+                'targetLifetime' => 170,
+                'baseTargetSpeed' => 0.85
             ],
             'orbitaldash' => [
-                'orbitalSpeed' => 0.038,
-                'dashSpeed' => 6.4,
-                'dashCooldown' => 34,
-                'mineSpawnInterval' => 150
+                'orbitalSpeed' => 0.034,
+                'dashSpeed' => 6.1,
+                'dashCooldown' => 30,
+                'mineSpawnInterval' => 190
             ],
             'signalfall' => [
-                'startingLives' => 4,
-                'fallSpeed' => 3.2,
-                'spawnInterval' => 42,
+                'startingLives' => 5,
+                'fallSpeed' => 2.5,
+                'spawnInterval' => 54,
                 'laneCount' => 5
+            ],
+            'racer' => [
+                'startingShield' => 4,
+                'baseSpeed' => 3.2,
+                'spawnBaseline' => 68,
+                'nitroDrain' => 0.65
+            ],
+            'meteor' => [
+                'startingHull' => 120,
+                'baseSpeed' => 1.7,
+                'spawnBaseline' => 44,
+                'shipSpeed' => 5.3
             ]
         ]
     ];

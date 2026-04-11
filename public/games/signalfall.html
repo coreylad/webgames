@@ -57,6 +57,7 @@
       let score;
       let streak;
       let frame;
+      let graceFrames;
       let over;
 
       function recalcLanes() {
@@ -75,21 +76,25 @@
         score = 0;
         streak = 0;
         frame = 0;
+        graceFrames = 220;
         over = false;
         leaderboard.resetRound();
         updateInfo();
       }
 
       function updateInfo(extra = "") {
-        info.textContent = `Score: ${score} | Streak: ${streak} | Lives: ${lives}${extra ? ` | ${extra}` : ""}`;
+        const onboarding = frame < graceFrames ? " | Warmup" : "";
+        info.textContent = `Score: ${score} | Streak: ${streak} | Lives: ${lives}${onboarding}${extra ? ` | ${extra}` : ""}`;
       }
 
       function spawnPacket() {
+        const difficulty = Math.min(1, Math.max(0, (frame - graceFrames) / 2600));
+        const badChance = 0.14 + difficulty * 0.24;
         packets.push({
           lane: Math.floor(Math.random() * lanes.length),
           y: -16,
-          type: Math.random() < 0.72 ? "good" : "bad",
-          speed: cfg.fallSpeed + Math.min(5.2, score / 750)
+          type: Math.random() < (1 - badChance) ? "good" : "bad",
+          speed: cfg.fallSpeed + Math.min(3.2, score / 1300) + difficulty * 1.1
         });
       }
 
@@ -107,7 +112,7 @@
         if (over) return;
 
         frame += 1;
-        const interval = Math.max(12, Math.floor(cfg.spawnInterval - score / 260));
+        const interval = Math.max(18, Math.floor(cfg.spawnInterval - score / 520));
         if (frame % interval === 0) spawnPacket();
 
         packets.forEach((p) => {
@@ -130,7 +135,7 @@
           }
 
           if (p.y > canvas.height + 10) {
-            if (p.type === "good") hurt();
+            if (p.type === "good" && frame > graceFrames) hurt();
             return false;
           }
 

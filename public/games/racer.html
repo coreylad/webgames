@@ -48,6 +48,13 @@
       const restartBtn = document.getElementById("racerRestart");
       const leaderboard = createLeaderboardController({ game: "racer", listId: "lbList", statusId: "lbStatus" });
 
+      const cfg = {
+        startingShield: 4,
+        baseSpeed: 3.2,
+        spawnBaseline: 68,
+        nitroDrain: 0.65
+      };
+
       const lanes = [85, 170, 255, 340];
 
       let player;
@@ -63,6 +70,8 @@
       let shield;
       let flash;
       let keys;
+      let frameCount;
+      let graceFrames;
 
       function reset() {
         player = {
@@ -78,15 +87,17 @@
         cars = [];
         pickups = [];
         score = 0;
-        speed = 4.2;
+        speed = cfg.baseSpeed;
         ended = false;
         spawnTimer = 0;
         pickupTimer = 0;
         stripeOffset = 0;
         nitro = 100;
-        shield = 3;
+        shield = Math.max(1, Math.floor(cfg.startingShield));
         flash = 0;
         keys = { accel: false, brake: false, nitro: false };
+        frameCount = 0;
+        graceFrames = 180;
         leaderboard.resetRound();
       }
 
@@ -140,17 +151,17 @@
       }
 
       function applyDifficulty() {
-        let accel = 0.006;
-        if (keys.accel) accel += 0.022;
-        if (keys.brake) accel -= 0.03;
+        let accel = 0.0038;
+        if (keys.accel) accel += 0.014;
+        if (keys.brake) accel -= 0.02;
         if (keys.nitro && nitro > 0) {
-          accel += 0.045;
-          nitro = Math.max(0, nitro - 0.9);
+          accel += 0.03;
+          nitro = Math.max(0, nitro - cfg.nitroDrain);
         } else {
-          nitro = Math.min(100, nitro + 0.25);
+          nitro = Math.min(100, nitro + 0.3);
         }
 
-        speed = Math.min(14, Math.max(3.2, speed + accel));
+        speed = Math.min(11.5, Math.max(cfg.baseSpeed, speed + accel));
       }
 
       function updatePlayer() {
@@ -176,10 +187,10 @@
             car.passedNear = true;
           }
 
-          if (!ended && player.invuln === 0 && hit(p, car)) {
+          if (!ended && frameCount > graceFrames && player.invuln === 0 && hit(p, car)) {
             shield -= 1;
             flash = 16;
-            player.invuln = 50;
+            player.invuln = 60;
             car.y = canvas.height + 200;
             if (shield <= 0) {
               ended = true;
@@ -210,18 +221,21 @@
           return;
         }
 
+        frameCount += 1;
+
         applyDifficulty();
         updatePlayer();
 
         spawnTimer += 1;
-        const spawnThreshold = Math.max(12, 46 - speed * 2.1);
-        if (spawnTimer >= spawnThreshold) {
+        const difficulty = Math.min(1, Math.max(0, (frameCount - graceFrames) / 2600));
+        const spawnThreshold = Math.max(24, cfg.spawnBaseline - difficulty * 28 - speed * 1.15);
+        if (frameCount > 70 && spawnTimer >= spawnThreshold) {
           spawnTimer = 0;
           spawnCar();
         }
 
         pickupTimer += 1;
-        if (pickupTimer > 340) {
+        if (pickupTimer > 280) {
           pickupTimer = 0;
           spawnNitroPickup();
         }
@@ -231,9 +245,10 @@
 
         stripeOffset = (stripeOffset + speed * 1.6) % 44;
         flash = Math.max(0, flash - 1);
-        score += 0.23 * speed;
+        score += 0.2 * speed;
 
-        info.textContent = `Score: ${Math.floor(score)} | Shield: ${shield} | Nitro: ${Math.floor(nitro)}%`;
+        const onboarding = frameCount < graceFrames ? " | Warmup" : "";
+        info.textContent = `Score: ${Math.floor(score)} | Shield: ${shield} | Nitro: ${Math.floor(nitro)}%${onboarding}`;
       }
 
       function drawRoad() {
@@ -372,9 +387,23 @@
       });
 
       restartBtn.addEventListener("click", reset);
-      leaderboard.refresh();
-      reset();
-      frame();
+
+      async function loadConfig() {
+        try {
+          const response = await fetch("/api/runtime-config.php");
+          const data = await response.json();
+          Object.assign(cfg, data.games?.racer || {});
+        } catch {
+          // Use defaults when runtime config is unavailable.
+        }
+      }
+
+      (async () => {
+        leaderboard.refresh();
+        await loadConfig();
+        reset();
+        frame();
+      })();
     </script>
   </body>
 </html>
