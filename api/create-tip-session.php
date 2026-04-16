@@ -11,16 +11,27 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 $body = read_json_input();
 $username = trim((string)($body['username'] ?? ''));
 $priceId = trim((string)($body['priceId'] ?? ''));
+$processor = active_payment_processor();
 
 if (!is_valid_username($username)) {
     json_response(['error' => 'Username must be 3-24 characters and only include letters, numbers, _ or -.'], 400);
 }
 
-if ($priceId === '' || preg_match('/^price_[a-zA-Z0-9]+$/', $priceId) !== 1) {
+if ($priceId === '') {
     json_response(['error' => 'Please select a valid tip tier.'], 400);
 }
 
-$tiers = fetch_tip_tiers();
+$tiers = [];
+if ($processor === 'paypal') {
+    $paypal = paypal_tip_tiers();
+    $tiers = $paypal['tiers'];
+} else {
+    if (preg_match('/^price_[a-zA-Z0-9]+$/', $priceId) !== 1) {
+        json_response(['error' => 'Please select a valid Stripe tip tier.'], 400);
+    }
+    $tiers = fetch_tip_tiers();
+}
+
 $selectedTier = null;
 foreach ($tiers as $tier) {
     if (($tier['id'] ?? '') === $priceId) {
@@ -30,12 +41,13 @@ foreach ($tiers as $tier) {
 }
 
 if ($selectedTier === null) {
-    json_response(['error' => 'Selected tier is not available in Stripe product catalogue.'], 400);
+    json_response(['error' => 'Selected tier is not available for the active payment processor.'], 400);
 }
 
 $tipRecord = add_tip_record([
     'id' => generate_id(),
     'username' => $username,
+    'processor' => $processor,
     'priceId' => $selectedTier['id'],
     'tierName' => $selectedTier['productName'],
     'amountCents' => (int)$selectedTier['amountCents'],
@@ -47,6 +59,40 @@ $tipRecord = add_tip_record([
     'createdAt' => now_iso(),
     'updatedAt' => now_iso()
 ]);
+
+if ($processor === 'paypal') {
+    $paypal = paypal_tip_tiers();
+    $checkoutUrl = trim((string)($paypal['checkoutUrl'] ?? ''));
+
+    if ($checkoutUrl === '') {
+        update_tip_record(
+            static fn(array $tip): bool => ($tip['id'] ?? '') === $tipRecord['id'],
+            ['status' => 'checkout_failed']
+        );
+        json_response(['error' => 'PayPal checkout URL is not configured.'], 500);
+    }
+
+    $separator = str_contains($checkoutUrl, '?') ? '&' : '?';
+    $redirectUrl = $checkoutUrl
+        . $separator . 'username=' . rawurlencode($username)
+        . '&amount=' . rawurlencode((string)($selectedTier['amount'] ?? ((int)$selectedTier['amountCents'] / 100)))
+        . '&currency=' . rawurlencode((string)($selectedTier['currency'] ?? 'USD'))
+        . '&tipRecordId=' . rawurlencode((string)$tipRecord['id']);
+
+    update_tip_record(
+        static fn(array $tip): bool => ($tip['id'] ?? '') === $tipRecord['id'],
+        [
+            'status' => 'checkout_redirected',
+            'sessionId' => 'paypal_' . generate_id()
+        ]
+    );
+
+    json_response([
+        'processor' => 'paypal',
+        'checkoutUrl' => $redirectUrl,
+        'sessionId' => 'paypal_redirect'
+    ]);
+}
 
 $baseUrl = rtrim(env_value('BASE_URL', detect_base_url()), '/');
 $response = stripe_request('POST', 'checkout/sessions', [
@@ -79,6 +125,7 @@ update_tip_record(
 );
 
 json_response([
+    'processor' => 'stripe',
     'checkoutUrl' => (string)($session['url'] ?? ''),
     'sessionId' => (string)($session['id'] ?? '')
 ]);

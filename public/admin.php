@@ -542,6 +542,90 @@ $show_login     = !$needs_setup && !$show_dashboard;
         <!-- Settings -->
         <div class="tab-content" id="settings">
             <div class="section">
+                <h2>Payment Processors</h2>
+                <div class="settings-panel">
+                    <p class="settings-note" style="margin-bottom:0.85rem;">
+                        Choose the active checkout provider, rotate Stripe credentials, and configure optional PayPal fallback settings.
+                    </p>
+
+                    <div class="settings-grid">
+                        <div class="form-group">
+                            <label for="activePaymentProcessor">Active Processor</label>
+                            <select id="activePaymentProcessor">
+                                <option value="stripe">Stripe</option>
+                                <option value="paypal">PayPal</option>
+                            </select>
+                            <div class="settings-note">This controls which processor is used by the public tip flow.</div>
+                        </div>
+                    </div>
+
+                    <h3 style="margin-top:1rem;margin-bottom:0.65rem;">Stripe Account Settings</h3>
+                    <div class="settings-grid">
+                        <div class="form-group">
+                            <label for="stripeSecretKeyInput">Stripe Secret Key</label>
+                            <input type="password" id="stripeSecretKeyInput" placeholder="sk_live_..." />
+                        </div>
+                        <div class="form-group">
+                            <label for="stripePublishableKeyInput">Stripe Publishable Key</label>
+                            <input type="text" id="stripePublishableKeyInput" placeholder="pk_live_..." />
+                        </div>
+                        <div class="form-group">
+                            <label for="stripeWebhookSecretInput">Stripe Webhook Secret</label>
+                            <input type="password" id="stripeWebhookSecretInput" placeholder="whsec_..." />
+                        </div>
+                        <div class="form-group">
+                            <label for="stripeTierProductIdsInput">Stripe Tier Product IDs</label>
+                            <input type="text" id="stripeTierProductIdsInput" placeholder="prod_abc,prod_xyz" />
+                        </div>
+                        <div class="form-group">
+                            <label for="stripeTierPriceIdsInput">Stripe Tier Price IDs</label>
+                            <input type="text" id="stripeTierPriceIdsInput" placeholder="price_abc,price_xyz" />
+                        </div>
+                    </div>
+                    <div class="wizard-nav" style="margin-top:0.2rem;">
+                        <button class="btn" type="button" id="savePaymentProcessorsBtn" onclick="savePaymentProcessorsConfig()">Save Payment Settings</button>
+                        <button class="btn btn-reject" type="button" id="resetStripeAccountBtn" onclick="resetStripeAccountConfig()">Reset Stripe Account</button>
+                    </div>
+
+                    <h3 style="margin-top:1.1rem;margin-bottom:0.65rem;">PayPal Advanced Settings</h3>
+                    <div class="settings-grid">
+                        <div class="form-group">
+                            <label for="paypalEnvironmentInput">PayPal Environment</label>
+                            <select id="paypalEnvironmentInput">
+                                <option value="sandbox">sandbox</option>
+                                <option value="live">live</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="paypalClientIdInput">PayPal Client ID</label>
+                            <input type="text" id="paypalClientIdInput" placeholder="PayPal app client id" />
+                        </div>
+                        <div class="form-group">
+                            <label for="paypalClientSecretInput">PayPal Client Secret</label>
+                            <input type="password" id="paypalClientSecretInput" placeholder="PayPal app client secret" />
+                        </div>
+                        <div class="form-group">
+                            <label for="paypalWebhookIdInput">PayPal Webhook ID</label>
+                            <input type="text" id="paypalWebhookIdInput" placeholder="Webhook ID (optional)" />
+                        </div>
+                        <div class="form-group">
+                            <label for="paypalCurrencyInput">PayPal Currency</label>
+                            <input type="text" id="paypalCurrencyInput" placeholder="USD" maxlength="3" />
+                        </div>
+                        <div class="form-group">
+                            <label for="paypalTipAmountsInput">PayPal Tip Amounts</label>
+                            <input type="text" id="paypalTipAmountsInput" placeholder="5,10,20" />
+                        </div>
+                        <div class="form-group" style="grid-column: 1 / -1;">
+                            <label for="paypalCheckoutUrlInput">PayPal Checkout URL</label>
+                            <input type="url" id="paypalCheckoutUrlInput" placeholder="https://your-paypal-checkout-endpoint.example/checkout" />
+                            <div class="settings-note">When active processor is PayPal, tip flow redirects to this URL.</div>
+                        </div>
+                    </div>
+
+                    <div class="settings-status" id="paymentProcessorsStatus"></div>
+                </div>
+
                 <h2>Stripe One-Time Checkout</h2>
                 <div class="settings-panel">
                     <p class="settings-note" style="margin-bottom:0.85rem;">
@@ -744,6 +828,7 @@ $show_login     = !$needs_setup && !$show_dashboard;
     // We still need it client-side to pass to the API endpoints.
     let sessionToken = getCookie('admin_token');
     let sessionUsername = <?= json_encode($authed_user) ?>;
+    let sessionForcedLogout = false;
 
     function getCookie(name) {
         const match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
@@ -846,8 +931,10 @@ $show_login     = !$needs_setup && !$show_dashboard;
     }
 
     // ── Logout ─────────────────────────────────────────────────────────────
-    async function handleLogout() {
-        if (!confirm('Are you sure you want to logout?')) return;
+    async function performLogout(confirmFirst) {
+        if (confirmFirst && !confirm('Are you sure you want to logout?')) {
+            return;
+        }
 
         try {
             await fetch('/api/admin-login.php?action=logout', {
@@ -861,6 +948,19 @@ $show_login     = !$needs_setup && !$show_dashboard;
 
         deleteCookie('admin_token');
         location.reload();
+    }
+
+    async function handleLogout() {
+        await performLogout(true);
+    }
+
+    async function handleSessionExpired() {
+        if (sessionForcedLogout) {
+            return;
+        }
+
+        sessionForcedLogout = true;
+        await performLogout(false);
     }
 
     // ── Tabs ───────────────────────────────────────────────────────────────
@@ -879,8 +979,137 @@ $show_login     = !$needs_setup && !$show_dashboard;
         Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
 
         const res = await fetch(url);
-        if (res.status === 401) { handleLogout(); return {}; }
+        if (res.status === 401) { await handleSessionExpired(); return {}; }
         return res.json();
+    }
+
+    let paymentProcessorConfigState = null;
+
+    function renderPaymentProcessorsConfig(config) {
+        paymentProcessorConfigState = config || null;
+
+        document.getElementById('activePaymentProcessor').value = config?.activeProcessor || 'stripe';
+
+        document.getElementById('stripeSecretKeyInput').value = config?.stripe?.secretKey || '';
+        document.getElementById('stripePublishableKeyInput').value = config?.stripe?.publishableKey || '';
+        document.getElementById('stripeWebhookSecretInput').value = config?.stripe?.webhookSecret || '';
+        document.getElementById('stripeTierProductIdsInput').value = config?.stripe?.tierProductIds || '';
+        document.getElementById('stripeTierPriceIdsInput').value = config?.stripe?.tierPriceIds || '';
+
+        document.getElementById('paypalEnvironmentInput').value = config?.paypal?.environment || 'sandbox';
+        document.getElementById('paypalClientIdInput').value = config?.paypal?.clientId || '';
+        document.getElementById('paypalClientSecretInput').value = config?.paypal?.clientSecret || '';
+        document.getElementById('paypalWebhookIdInput').value = config?.paypal?.webhookId || '';
+        document.getElementById('paypalCurrencyInput').value = config?.paypal?.currency || 'USD';
+        document.getElementById('paypalTipAmountsInput').value = config?.paypal?.tipAmounts || '5,10,20';
+        document.getElementById('paypalCheckoutUrlInput').value = config?.paypal?.checkoutUrl || '';
+    }
+
+    async function loadPaymentProcessorsConfig() {
+        const statusEl = document.getElementById('paymentProcessorsStatus');
+        statusEl.className = 'settings-status';
+        statusEl.textContent = 'Loading payment settings...';
+
+        try {
+            const data = await fetch_admin_api('payment-processors-config');
+            const config = data.config || {};
+            renderPaymentProcessorsConfig(config);
+            statusEl.className = 'settings-status success';
+            statusEl.textContent = 'Payment settings loaded.';
+        } catch (err) {
+            statusEl.className = 'settings-status error';
+            statusEl.textContent = 'Unable to load payment settings.';
+            console.error('Payment settings load error:', err);
+        }
+    }
+
+    async function savePaymentProcessorsConfig() {
+        const statusEl = document.getElementById('paymentProcessorsStatus');
+        const saveBtn = document.getElementById('savePaymentProcessorsBtn');
+
+        const payload = {
+            activeProcessor: String(document.getElementById('activePaymentProcessor').value || 'stripe').toLowerCase(),
+            stripe: {
+                secretKey: document.getElementById('stripeSecretKeyInput').value.trim(),
+                publishableKey: document.getElementById('stripePublishableKeyInput').value.trim(),
+                webhookSecret: document.getElementById('stripeWebhookSecretInput').value.trim(),
+                tierProductIds: document.getElementById('stripeTierProductIdsInput').value.trim(),
+                tierPriceIds: document.getElementById('stripeTierPriceIdsInput').value.trim()
+            },
+            paypal: {
+                environment: String(document.getElementById('paypalEnvironmentInput').value || 'sandbox').toLowerCase(),
+                clientId: document.getElementById('paypalClientIdInput').value.trim(),
+                clientSecret: document.getElementById('paypalClientSecretInput').value.trim(),
+                webhookId: document.getElementById('paypalWebhookIdInput').value.trim(),
+                currency: String(document.getElementById('paypalCurrencyInput').value || 'USD').toUpperCase(),
+                tipAmounts: document.getElementById('paypalTipAmountsInput').value.trim(),
+                checkoutUrl: document.getElementById('paypalCheckoutUrlInput').value.trim()
+            }
+        };
+
+        statusEl.className = 'settings-status';
+        statusEl.textContent = 'Saving payment settings...';
+        saveBtn.disabled = true;
+
+        try {
+            const res = await fetch(`/api/admin-analytics.php?action=update-payment-processors-config&token=${encodeURIComponent(sessionToken)}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || data.status !== 'ok') {
+                throw new Error(data.error || 'Unable to save payment settings');
+            }
+
+            renderPaymentProcessorsConfig(data.config || payload);
+            statusEl.className = 'settings-status success';
+            statusEl.textContent = 'Payment settings saved.';
+            await loadRuntimeConfig();
+        } catch (err) {
+            statusEl.className = 'settings-status error';
+            statusEl.textContent = err.message;
+        } finally {
+            saveBtn.disabled = false;
+        }
+    }
+
+    async function resetStripeAccountConfig() {
+        const statusEl = document.getElementById('paymentProcessorsStatus');
+        const resetBtn = document.getElementById('resetStripeAccountBtn');
+
+        if (!confirm('Reset Stripe keys, tier IDs, and one-time checkout metadata so you can connect a new Stripe account?')) {
+            return;
+        }
+
+        statusEl.className = 'settings-status';
+        statusEl.textContent = 'Resetting Stripe account configuration...';
+        resetBtn.disabled = true;
+
+        try {
+            const res = await fetch(`/api/admin-analytics.php?action=stripe-reset-account&token=${encodeURIComponent(sessionToken)}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({})
+            });
+
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || data.status !== 'ok') {
+                throw new Error(data.error || 'Unable to reset Stripe configuration');
+            }
+
+            statusEl.className = 'settings-status success';
+            statusEl.textContent = data.message || 'Stripe configuration reset.';
+            await loadPaymentProcessorsConfig();
+            await loadStripeOneTimeConfig();
+            await loadRuntimeConfig();
+        } catch (err) {
+            statusEl.className = 'settings-status error';
+            statusEl.textContent = err.message;
+        } finally {
+            resetBtn.disabled = false;
+        }
     }
 
     // ── Dashboard data ─────────────────────────────────────────────────────
@@ -1492,6 +1721,7 @@ $show_login     = !$needs_setup && !$show_dashboard;
     loadAchievementLeaderboard();
     loadWebhookEvents();
     loadWebhookProxyConfig();
+    loadPaymentProcessorsConfig();
     loadStripeOneTimeConfig();
     loadRuntimeConfig();
     setInterval(() => { loadDashboard(); loadSuspiciousScores(); loadWebhookEvents(); }, 30000);

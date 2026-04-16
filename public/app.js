@@ -3,6 +3,7 @@ const tipMessage = document.getElementById("tipMessage");
 const usernameInput = document.getElementById("username");
 const priceIdSelect = document.getElementById("priceId");
 const tipSubmit = document.getElementById("tipSubmit");
+let activeTipProcessor = "stripe";
 
 async function loadTipTiers() {
   if (!priceIdSelect) {
@@ -22,8 +23,10 @@ async function loadTipTiers() {
 
     const tiers = Array.isArray(payload.tiers) ? payload.tiers : [];
     if (tiers.length === 0) {
-      throw new Error("No Stripe tip tiers were returned.");
+      throw new Error("No tip tiers were returned.");
     }
+
+    activeTipProcessor = payload.processor === "paypal" ? "paypal" : "stripe";
 
     priceIdSelect.innerHTML = "";
     tiers.forEach((tier, index) => {
@@ -35,6 +38,8 @@ async function loadTipTiers() {
       }
       priceIdSelect.appendChild(option);
     });
+
+    tipSubmit.textContent = activeTipProcessor === "paypal" ? "Continue to PayPal" : "Continue to Stripe";
 
     tipSubmit.disabled = false;
   } catch (error) {
@@ -66,7 +71,9 @@ if (tipForm) {
     const priceId = String(formData.get("priceId") || "").trim();
 
     tipMessage.className = "status";
-    tipMessage.textContent = "Creating secure Stripe checkout...";
+    tipMessage.textContent = activeTipProcessor === "paypal"
+      ? "Redirecting to PayPal checkout..."
+      : "Creating secure Stripe checkout...";
     tipSubmit.disabled = true;
 
     try {
