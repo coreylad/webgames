@@ -866,7 +866,7 @@ function get_admin_session(string $token): ?array
     $store = read_admin_sessions_store();
     $now   = time();
 
-    foreach ($store['sessions'] as &$session) {
+    foreach ($store['sessions'] as $session) {
         if (!hash_equals((string)($session['token'] ?? ''), $token)) {
             continue;
         }
@@ -874,9 +874,6 @@ function get_admin_session(string $token): ?array
         if (strtotime((string)($session['expiresAt'] ?? '0')) < $now) {
             continue;
         }
-
-        $session['lastActivityAt'] = now_iso();
-        write_admin_sessions_store($store);
 
         return $session;
     }

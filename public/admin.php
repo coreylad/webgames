@@ -829,6 +829,7 @@ $show_login     = !$needs_setup && !$show_dashboard;
     let sessionToken = getCookie('admin_token');
     let sessionUsername = <?= json_encode($authed_user) ?>;
     let sessionForcedLogout = false;
+    let sessionValidationInFlight = false;
 
     function getCookie(name) {
         const match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
@@ -963,6 +964,32 @@ $show_login     = !$needs_setup && !$show_dashboard;
         await performLogout(false);
     }
 
+    async function validateCurrentSession() {
+        if (!sessionToken) {
+            return false;
+        }
+
+        if (sessionValidationInFlight) {
+            return true;
+        }
+
+        sessionValidationInFlight = true;
+        try {
+            const response = await fetch('/api/admin-login.php?action=validate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token: sessionToken })
+            });
+
+            return response.status === 200;
+        } catch (err) {
+            console.error('Session validation failed:', err);
+            return false;
+        } finally {
+            sessionValidationInFlight = false;
+        }
+    }
+
     // ── Tabs ───────────────────────────────────────────────────────────────
     function switchTab(tabName, event) {
         document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
@@ -979,7 +1006,13 @@ $show_login     = !$needs_setup && !$show_dashboard;
         Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
 
         const res = await fetch(url);
-        if (res.status === 401) { await handleSessionExpired(); return {}; }
+        if (res.status === 401) {
+            const stillValid = await validateCurrentSession();
+            if (!stillValid) {
+                await handleSessionExpired();
+            }
+            return {};
+        }
         return res.json();
     }
 
