@@ -110,7 +110,7 @@ switch ($action) {
         ]);
 
         if (!$saved) {
-            json_response(['error' => 'Unable to update payment processor settings'], 500);
+            json_response(['error' => 'Unable to update payment processor settings. Ensure .env is writable by the web server user (www-data).'], 500);
         }
 
         $runtime = read_runtime_config_store();

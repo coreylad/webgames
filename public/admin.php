@@ -270,6 +270,28 @@ $show_login     = !$needs_setup && !$show_dashboard;
         .settings-status { margin-top: 0.75rem; font-size: 0.9rem; min-height: 1.2em; }
         .settings-status.success { color: #34d399; }
         .settings-status.error   { color: #ef4444; }
+        .save-toast {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            z-index: 12000;
+            background: rgba(16, 185, 129, 0.95);
+            color: #ffffff;
+            border: 1px solid rgba(134, 239, 172, 0.6);
+            border-radius: 10px;
+            padding: 0.7rem 1rem;
+            font-size: 0.9rem;
+            font-weight: 600;
+            box-shadow: 0 10px 24px rgba(0,0,0,0.25);
+            transform: translateY(-8px);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease, transform 0.2s ease;
+        }
+        .save-toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
         .callout {
             background: rgba(102,126,234,0.12);
             border-left: 3px solid #667eea;
@@ -830,6 +852,30 @@ $show_login     = !$needs_setup && !$show_dashboard;
     let sessionUsername = <?= json_encode($authed_user) ?>;
     let sessionForcedLogout = false;
     let sessionValidationInFlight = false;
+    let saveToastTimeoutId = null;
+
+    function showSaveToast(message, isError = false) {
+        let toast = document.getElementById('saveToast');
+        if (!toast) {
+            toast = document.createElement('div');
+            toast.id = 'saveToast';
+            toast.className = 'save-toast';
+            document.body.appendChild(toast);
+        }
+
+        toast.textContent = message;
+        toast.style.background = isError ? 'rgba(239, 68, 68, 0.95)' : 'rgba(16, 185, 129, 0.95)';
+        toast.style.borderColor = isError ? 'rgba(252, 165, 165, 0.6)' : 'rgba(134, 239, 172, 0.6)';
+        toast.classList.add('show');
+
+        if (saveToastTimeoutId) {
+            clearTimeout(saveToastTimeoutId);
+        }
+
+        saveToastTimeoutId = setTimeout(() => {
+            toast.classList.remove('show');
+        }, 2600);
+    }
 
     function getCookie(name) {
         const match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
@@ -1087,7 +1133,10 @@ $show_login     = !$needs_setup && !$show_dashboard;
         try {
             const res = await fetch(`/api/admin-analytics.php?action=update-payment-processors-config&token=${encodeURIComponent(sessionToken)}`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Admin-Token': sessionToken
+                },
                 body: JSON.stringify(payload)
             });
 
@@ -1099,10 +1148,12 @@ $show_login     = !$needs_setup && !$show_dashboard;
             renderPaymentProcessorsConfig(data.config || payload);
             statusEl.className = 'settings-status success';
             statusEl.textContent = 'Payment settings saved.';
+            showSaveToast('Payment settings saved successfully.');
             await loadRuntimeConfig();
         } catch (err) {
             statusEl.className = 'settings-status error';
             statusEl.textContent = err.message;
+            showSaveToast(err.message || 'Unable to save payment settings.', true);
         } finally {
             saveBtn.disabled = false;
         }
@@ -1123,7 +1174,10 @@ $show_login     = !$needs_setup && !$show_dashboard;
         try {
             const res = await fetch(`/api/admin-analytics.php?action=stripe-reset-account&token=${encodeURIComponent(sessionToken)}`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Admin-Token': sessionToken
+                },
                 body: JSON.stringify({})
             });
 
@@ -1134,12 +1188,14 @@ $show_login     = !$needs_setup && !$show_dashboard;
 
             statusEl.className = 'settings-status success';
             statusEl.textContent = data.message || 'Stripe configuration reset.';
+            showSaveToast('Stripe account settings reset successfully.');
             await loadPaymentProcessorsConfig();
             await loadStripeOneTimeConfig();
             await loadRuntimeConfig();
         } catch (err) {
             statusEl.className = 'settings-status error';
             statusEl.textContent = err.message;
+            showSaveToast(err.message || 'Unable to reset Stripe settings.', true);
         } finally {
             resetBtn.disabled = false;
         }
