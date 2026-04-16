@@ -15,6 +15,149 @@ $action = (string)($_GET['action'] ?? '');
 $output = [];
 
 switch ($action) {
+    case 'payment-processors-config':
+        $output = [
+            'status' => 'ok',
+            'config' => [
+                'activeProcessor' => active_payment_processor(),
+                'stripe' => [
+                    'secretKey' => env_value('STRIPE_SECRET_KEY', ''),
+                    'publishableKey' => env_value('STRIPE_PUBLISHABLE_KEY', ''),
+                    'webhookSecret' => env_value('STRIPE_WEBHOOK_SECRET', ''),
+                    'tierProductIds' => env_value('STRIPE_TIER_PRODUCT_IDS', ''),
+                    'tierPriceIds' => env_value('STRIPE_TIER_PRICE_IDS', '')
+                ],
+                'paypal' => [
+                    'environment' => env_value('PAYPAL_ENV', 'sandbox'),
+                    'clientId' => env_value('PAYPAL_CLIENT_ID', ''),
+                    'clientSecret' => env_value('PAYPAL_CLIENT_SECRET', ''),
+                    'webhookId' => env_value('PAYPAL_WEBHOOK_ID', ''),
+                    'currency' => env_value('PAYPAL_CURRENCY', 'USD'),
+                    'tipAmounts' => env_value('PAYPAL_TIP_AMOUNTS', '5,10,20'),
+                    'checkoutUrl' => env_value('PAYPAL_CHECKOUT_URL', '')
+                ]
+            ]
+        ];
+        break;
+
+    case 'update-payment-processors-config':
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            json_response(['error' => 'Method not allowed'], 405);
+        }
+
+        $body = read_json_input();
+        $activeProcessor = strtolower(trim((string)($body['activeProcessor'] ?? 'stripe')));
+        if (!in_array($activeProcessor, ['stripe', 'paypal'], true)) {
+            json_response(['error' => 'Active processor must be stripe or paypal'], 400);
+        }
+
+        $stripe = is_array($body['stripe'] ?? null) ? $body['stripe'] : [];
+        $paypal = is_array($body['paypal'] ?? null) ? $body['paypal'] : [];
+
+        $stripeSecretKey = trim((string)($stripe['secretKey'] ?? env_value('STRIPE_SECRET_KEY', '')));
+        $stripePublishableKey = trim((string)($stripe['publishableKey'] ?? env_value('STRIPE_PUBLISHABLE_KEY', '')));
+        $stripeWebhookSecret = trim((string)($stripe['webhookSecret'] ?? env_value('STRIPE_WEBHOOK_SECRET', '')));
+        $stripeTierProductIds = trim((string)($stripe['tierProductIds'] ?? env_value('STRIPE_TIER_PRODUCT_IDS', '')));
+        $stripeTierPriceIds = trim((string)($stripe['tierPriceIds'] ?? env_value('STRIPE_TIER_PRICE_IDS', '')));
+
+        $paypalEnvironment = strtolower(trim((string)($paypal['environment'] ?? env_value('PAYPAL_ENV', 'sandbox'))));
+        if (!in_array($paypalEnvironment, ['sandbox', 'live'], true)) {
+            json_response(['error' => 'PayPal environment must be sandbox or live'], 400);
+        }
+
+        $paypalCurrency = strtoupper(trim((string)($paypal['currency'] ?? env_value('PAYPAL_CURRENCY', 'USD'))));
+        if (!preg_match('/^[A-Z]{3}$/', $paypalCurrency)) {
+            json_response(['error' => 'PayPal currency must be a 3-letter ISO code'], 400);
+        }
+
+        $paypalTipAmounts = trim((string)($paypal['tipAmounts'] ?? env_value('PAYPAL_TIP_AMOUNTS', '5,10,20')));
+        if ($paypalTipAmounts !== '') {
+            foreach (explode(',', $paypalTipAmounts) as $rawAmount) {
+                $value = trim($rawAmount);
+                if ($value === '') {
+                    continue;
+                }
+
+                if (!is_numeric($value) || (float)$value <= 0) {
+                    json_response(['error' => 'PayPal tip amounts must be positive numbers separated by commas'], 400);
+                }
+            }
+        }
+
+        $paypalCheckoutUrl = trim((string)($paypal['checkoutUrl'] ?? env_value('PAYPAL_CHECKOUT_URL', '')));
+        if ($paypalCheckoutUrl !== '' && filter_var($paypalCheckoutUrl, FILTER_VALIDATE_URL) === false) {
+            json_response(['error' => 'PayPal checkout URL must be a valid URL'], 400);
+        }
+
+        $paypalClientId = trim((string)($paypal['clientId'] ?? env_value('PAYPAL_CLIENT_ID', '')));
+        $paypalClientSecret = trim((string)($paypal['clientSecret'] ?? env_value('PAYPAL_CLIENT_SECRET', '')));
+        $paypalWebhookId = trim((string)($paypal['webhookId'] ?? env_value('PAYPAL_WEBHOOK_ID', '')));
+
+        $saved = write_env_values([
+            'PAYMENT_PROCESSOR' => $activeProcessor,
+            'STRIPE_SECRET_KEY' => $stripeSecretKey,
+            'STRIPE_PUBLISHABLE_KEY' => $stripePublishableKey,
+            'STRIPE_WEBHOOK_SECRET' => $stripeWebhookSecret,
+            'STRIPE_TIER_PRODUCT_IDS' => $stripeTierProductIds,
+            'STRIPE_TIER_PRICE_IDS' => $stripeTierPriceIds,
+            'PAYPAL_ENV' => $paypalEnvironment,
+            'PAYPAL_CLIENT_ID' => $paypalClientId,
+            'PAYPAL_CLIENT_SECRET' => $paypalClientSecret,
+            'PAYPAL_WEBHOOK_ID' => $paypalWebhookId,
+            'PAYPAL_CURRENCY' => $paypalCurrency,
+            'PAYPAL_TIP_AMOUNTS' => $paypalTipAmounts,
+            'PAYPAL_CHECKOUT_URL' => $paypalCheckoutUrl
+        ]);
+
+        if (!$saved) {
+            json_response(['error' => 'Unable to update payment processor settings'], 500);
+        }
+
+        $runtime = read_runtime_config_store();
+        if (!isset($runtime['platform']) || !is_array($runtime['platform'])) {
+            $runtime['platform'] = [];
+        }
+        $runtime['platform']['PAYMENT_PROCESSOR'] = $activeProcessor;
+        write_runtime_config_store($runtime);
+
+        $output = [
+            'status' => 'ok',
+            'message' => 'Payment processor settings updated',
+            'config' => [
+                'activeProcessor' => $activeProcessor,
+                'stripe' => [
+                    'secretKey' => $stripeSecretKey,
+                    'publishableKey' => $stripePublishableKey,
+                    'webhookSecret' => $stripeWebhookSecret,
+                    'tierProductIds' => $stripeTierProductIds,
+                    'tierPriceIds' => $stripeTierPriceIds
+                ],
+                'paypal' => [
+                    'environment' => $paypalEnvironment,
+                    'clientId' => $paypalClientId,
+                    'clientSecret' => $paypalClientSecret,
+                    'webhookId' => $paypalWebhookId,
+                    'currency' => $paypalCurrency,
+                    'tipAmounts' => $paypalTipAmounts,
+                    'checkoutUrl' => $paypalCheckoutUrl
+                ]
+            ]
+        ];
+        break;
+
+    case 'stripe-reset-account':
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            json_response(['error' => 'Method not allowed'], 405);
+        }
+
+        reset_stripe_configuration();
+
+        $output = [
+            'status' => 'ok',
+            'message' => 'Stripe configuration reset. You can now connect a different Stripe account.'
+        ];
+        break;
+
     case 'webhook-proxy-config':
         $forwardUrl = trim(env_value('WEBHOOK_FORWARD_URL', ''));
         $forwardAuthHeader = trim(env_value('WEBHOOK_FORWARD_AUTH_HEADER', 'x-webgames-proxy-token'));
@@ -368,6 +511,9 @@ switch ($action) {
         $normalized = [
             'platform' => [
                 'BASE_URL' => trim((string)($platform['BASE_URL'] ?? $defaults['platform']['BASE_URL'])),
+                'PAYMENT_PROCESSOR' => in_array(strtolower(trim((string)($platform['PAYMENT_PROCESSOR'] ?? $defaults['platform']['PAYMENT_PROCESSOR']))), ['stripe', 'paypal'], true)
+                    ? strtolower(trim((string)($platform['PAYMENT_PROCESSOR'] ?? $defaults['platform']['PAYMENT_PROCESSOR'])))
+                    : 'stripe',
                 'STRIPE_TIER_PRODUCT_IDS' => trim((string)($platform['STRIPE_TIER_PRODUCT_IDS'] ?? $defaults['platform']['STRIPE_TIER_PRODUCT_IDS'])),
                 'STRIPE_TIER_PRICE_IDS' => trim((string)($platform['STRIPE_TIER_PRICE_IDS'] ?? $defaults['platform']['STRIPE_TIER_PRICE_IDS']))
             ],
@@ -382,6 +528,7 @@ switch ($action) {
 
         $envSaved = write_env_values([
             'BASE_URL' => $normalized['platform']['BASE_URL'],
+            'PAYMENT_PROCESSOR' => $normalized['platform']['PAYMENT_PROCESSOR'],
             'STRIPE_TIER_PRODUCT_IDS' => $normalized['platform']['STRIPE_TIER_PRODUCT_IDS'],
             'STRIPE_TIER_PRICE_IDS' => $normalized['platform']['STRIPE_TIER_PRICE_IDS']
         ]);

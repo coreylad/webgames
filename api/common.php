@@ -21,8 +21,17 @@ function load_env_values(): array
     }
 
     $values = [
+        'PAYMENT_PROCESSOR' => 'stripe',
         'STRIPE_SECRET_KEY' => '',
+        'STRIPE_PUBLISHABLE_KEY' => '',
         'STRIPE_WEBHOOK_SECRET' => '',
+        'PAYPAL_CLIENT_ID' => '',
+        'PAYPAL_CLIENT_SECRET' => '',
+        'PAYPAL_WEBHOOK_ID' => '',
+        'PAYPAL_ENV' => 'sandbox',
+        'PAYPAL_CURRENCY' => 'USD',
+        'PAYPAL_TIP_AMOUNTS' => '5,10,20',
+        'PAYPAL_CHECKOUT_URL' => '',
         'WEBHOOK_FORWARD_URL' => '',
         'WEBHOOK_FORWARD_AUTH_HEADER' => 'x-webgames-proxy-token',
         'WEBHOOK_FORWARD_AUTH_TOKEN' => '',
@@ -485,6 +494,89 @@ function parse_csv_env(string $key): array
     return array_values(array_filter($parts, static fn($value) => $value !== ''));
 }
 
+function active_payment_processor(): string
+{
+    $processor = strtolower(trim(env_value('PAYMENT_PROCESSOR', 'stripe')));
+    if (!in_array($processor, ['stripe', 'paypal'], true)) {
+        return 'stripe';
+    }
+
+    return $processor;
+}
+
+function paypal_tip_tiers(): array
+{
+    $amountTokens = parse_csv_env('PAYPAL_TIP_AMOUNTS');
+    $currency = strtoupper(trim(env_value('PAYPAL_CURRENCY', 'USD')));
+    $checkoutUrl = trim(env_value('PAYPAL_CHECKOUT_URL', ''));
+
+    if (!preg_match('/^[A-Z]{3}$/', $currency)) {
+        $currency = 'USD';
+    }
+
+    $tiers = [];
+    $seen = [];
+
+    foreach ($amountTokens as $token) {
+        if (!is_numeric($token)) {
+            continue;
+        }
+
+        $amount = (float)$token;
+        if ($amount <= 0) {
+            continue;
+        }
+
+        $amount = round($amount, 2);
+        $tierKey = number_format($amount, 2, '.', '');
+        if (isset($seen[$tierKey])) {
+            continue;
+        }
+
+        $seen[$tierKey] = true;
+        $amountCents = (int)round($amount * 100);
+        $tiers[] = [
+            'id' => 'paypal_' . str_replace('.', '_', $tierKey),
+            'provider' => 'paypal',
+            'amount' => $amount,
+            'amountCents' => $amountCents,
+            'currency' => $currency,
+            'productName' => 'PayPal Tip',
+            'label' => format_money($amountCents, $currency)
+        ];
+    }
+
+    usort($tiers, static fn(array $a, array $b): int => ($a['amountCents'] ?? 0) <=> ($b['amountCents'] ?? 0));
+
+    return [
+        'tiers' => $tiers,
+        'checkoutUrl' => $checkoutUrl,
+        'currency' => $currency
+    ];
+}
+
+function reset_stripe_configuration(): void
+{
+    write_env_values([
+        'STRIPE_SECRET_KEY' => '',
+        'STRIPE_PUBLISHABLE_KEY' => '',
+        'STRIPE_WEBHOOK_SECRET' => '',
+        'STRIPE_TIER_PRODUCT_IDS' => '',
+        'STRIPE_TIER_PRICE_IDS' => ''
+    ]);
+
+    write_stripe_checkout_store(stripe_checkout_defaults());
+
+    $runtimeConfig = read_runtime_config_store();
+    if (!isset($runtimeConfig['platform']) || !is_array($runtimeConfig['platform'])) {
+        $runtimeConfig['platform'] = [];
+    }
+
+    $runtimeConfig['platform']['STRIPE_TIER_PRODUCT_IDS'] = '';
+    $runtimeConfig['platform']['STRIPE_TIER_PRICE_IDS'] = '';
+    write_runtime_config_store($runtimeConfig);
+}
+
 function format_money(int $amountCents, string $currency): string
 {
     $value = number_format($amountCents / 100, 2);
@@ -914,6 +1006,7 @@ function runtime_config_defaults(): array
     return [
         'platform' => [
             'BASE_URL' => env_value('BASE_URL', detect_base_url()),
+            'PAYMENT_PROCESSOR' => active_payment_processor(),
             'STRIPE_TIER_PRODUCT_IDS' => env_value('STRIPE_TIER_PRODUCT_IDS', ''),
             'STRIPE_TIER_PRICE_IDS' => env_value('STRIPE_TIER_PRICE_IDS', '')
         ],

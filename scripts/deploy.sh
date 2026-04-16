@@ -46,6 +46,8 @@ DATA_FILES=(
   "webhook-events.json"
   "suspicious-scores.json"
   "admin-sessions.json"
+  "stripe-checkout.json"
+  "runtime-config.json"
 )
 
 for f in "${DATA_FILES[@]}"; do
@@ -58,6 +60,25 @@ done
 touch "${APP_DIR}/.env"
 chown www-data:www-data "${APP_DIR}/.env"
 chmod 660 "${APP_DIR}/.env"
+
+ensure_env_key() {
+  local key="$1"
+  local value="$2"
+  if ! grep -qE "^${key}=" "${APP_DIR}/.env"; then
+    echo "${key}=${value}" >> "${APP_DIR}/.env"
+  fi
+}
+
+# Seed new payment settings without overwriting existing values.
+ensure_env_key "PAYMENT_PROCESSOR" "stripe"
+ensure_env_key "STRIPE_PUBLISHABLE_KEY" ""
+ensure_env_key "PAYPAL_CLIENT_ID" ""
+ensure_env_key "PAYPAL_CLIENT_SECRET" ""
+ensure_env_key "PAYPAL_WEBHOOK_ID" ""
+ensure_env_key "PAYPAL_ENV" "sandbox"
+ensure_env_key "PAYPAL_CURRENCY" "USD"
+ensure_env_key "PAYPAL_TIP_AMOUNTS" "5,10,20"
+ensure_env_key "PAYPAL_CHECKOUT_URL" ""
 
 echo "[4/4] Reloading nginx..."
 nginx -t && systemctl reload nginx
