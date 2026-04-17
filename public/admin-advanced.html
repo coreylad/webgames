@@ -655,6 +655,86 @@
                     <div style="max-width:860px;">
 
                         <div class="settings-panel">
+                            <h3 style="margin-bottom:1rem;color:#667eea;">Payment Processor Settings</h3>
+                            <p style="opacity:0.82;margin-bottom:0.9rem;">Update Stripe and PayPal keys directly from this page. Changes are saved to server .env and used by checkout/webhooks.</p>
+
+                            <div class="settings-grid">
+                                <div class="form-group">
+                                    <label for="advActiveProcessor">Active Processor</label>
+                                    <select id="advActiveProcessor">
+                                        <option value="stripe">Stripe</option>
+                                        <option value="paypal">PayPal</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <h3 style="margin-top:1rem;margin-bottom:0.65rem;">Stripe Account Settings</h3>
+                            <div class="settings-grid">
+                                <div class="form-group">
+                                    <label for="advStripeSecretKey">Stripe Secret Key</label>
+                                    <input type="password" id="advStripeSecretKey" placeholder="sk_live_..." />
+                                </div>
+                                <div class="form-group">
+                                    <label for="advStripePublishableKey">Stripe Publishable Key</label>
+                                    <input type="text" id="advStripePublishableKey" placeholder="pk_live_..." />
+                                </div>
+                                <div class="form-group">
+                                    <label for="advStripeWebhookSecret">Stripe Webhook Secret</label>
+                                    <input type="password" id="advStripeWebhookSecret" placeholder="whsec_..." />
+                                </div>
+                                <div class="form-group">
+                                    <label for="advStripeTierProductIds">Stripe Tier Product IDs</label>
+                                    <input type="text" id="advStripeTierProductIds" placeholder="prod_abc,prod_xyz" />
+                                </div>
+                                <div class="form-group">
+                                    <label for="advStripeTierPriceIds">Stripe Tier Price IDs</label>
+                                    <input type="text" id="advStripeTierPriceIds" placeholder="price_abc,price_xyz" />
+                                </div>
+                            </div>
+
+                            <h3 style="margin-top:1.1rem;margin-bottom:0.65rem;">PayPal Advanced Settings</h3>
+                            <div class="settings-grid">
+                                <div class="form-group">
+                                    <label for="advPaypalEnvironment">PayPal Environment</label>
+                                    <select id="advPaypalEnvironment">
+                                        <option value="sandbox">sandbox</option>
+                                        <option value="live">live</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="advPaypalClientId">PayPal Client ID</label>
+                                    <input type="text" id="advPaypalClientId" placeholder="PayPal app client id" />
+                                </div>
+                                <div class="form-group">
+                                    <label for="advPaypalClientSecret">PayPal Client Secret</label>
+                                    <input type="password" id="advPaypalClientSecret" placeholder="PayPal app client secret" />
+                                </div>
+                                <div class="form-group">
+                                    <label for="advPaypalWebhookId">PayPal Webhook ID</label>
+                                    <input type="text" id="advPaypalWebhookId" placeholder="Webhook ID (optional)" />
+                                </div>
+                                <div class="form-group">
+                                    <label for="advPaypalCurrency">PayPal Currency</label>
+                                    <input type="text" id="advPaypalCurrency" placeholder="USD" maxlength="3" />
+                                </div>
+                                <div class="form-group">
+                                    <label for="advPaypalTipAmounts">PayPal Tip Amounts</label>
+                                    <input type="text" id="advPaypalTipAmounts" placeholder="5,10,20" />
+                                </div>
+                                <div class="form-group" style="grid-column: 1 / -1;">
+                                    <label for="advPaypalCheckoutUrl">PayPal Checkout URL</label>
+                                    <input type="url" id="advPaypalCheckoutUrl" placeholder="https://your-paypal-checkout-endpoint.example/checkout" />
+                                </div>
+                            </div>
+
+                            <div class="wizard-nav" style="margin-top:0.2rem;">
+                                <button class="btn" type="button" id="advReloadPaymentSettingsBtn" onclick="loadAdvancedPaymentSettings()">Reload Settings</button>
+                                <button class="btn" type="button" id="advSavePaymentSettingsBtn" onclick="saveAdvancedPaymentSettings()">Save Payment Settings</button>
+                            </div>
+                            <div id="advPaymentSettingsStatus" class="settings-status" style="margin-top:0.85rem;"></div>
+                        </div>
+
+                        <div class="settings-panel">
                             <h3 style="margin-bottom:1rem;color:#667eea;">Backfill Stripe Data To This Site</h3>
                             <p style="opacity:0.82;margin-bottom:0.9rem;">Use this when older Stripe payments are missing or stuck pending in your admin data store.</p>
                             <div style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;margin-bottom:0.75rem;">
@@ -831,6 +911,7 @@ BASE_URL=https://yourdomain.com</pre>
             loadAchievementLeaderboard();
             loadWebhookEvents();
             loadWebhookProxyConfig();
+            loadAdvancedPaymentSettings();
 
             // Auto-refresh every 30 seconds
             setInterval(() => {
@@ -1004,6 +1085,95 @@ BASE_URL=https://yourdomain.com</pre>
                 statusEl.className = 'settings-status error';
                 statusEl.textContent = 'Unable to load webhook proxy settings.';
                 console.error('Webhook proxy settings error:', err);
+            }
+        }
+
+        function renderAdvancedPaymentSettings(config) {
+            document.getElementById('advActiveProcessor').value = config?.activeProcessor || 'stripe';
+
+            document.getElementById('advStripeSecretKey').value = config?.stripe?.secretKey || '';
+            document.getElementById('advStripePublishableKey').value = config?.stripe?.publishableKey || '';
+            document.getElementById('advStripeWebhookSecret').value = config?.stripe?.webhookSecret || '';
+            document.getElementById('advStripeTierProductIds').value = config?.stripe?.tierProductIds || '';
+            document.getElementById('advStripeTierPriceIds').value = config?.stripe?.tierPriceIds || '';
+
+            document.getElementById('advPaypalEnvironment').value = config?.paypal?.environment || 'sandbox';
+            document.getElementById('advPaypalClientId').value = config?.paypal?.clientId || '';
+            document.getElementById('advPaypalClientSecret').value = config?.paypal?.clientSecret || '';
+            document.getElementById('advPaypalWebhookId').value = config?.paypal?.webhookId || '';
+            document.getElementById('advPaypalCurrency').value = config?.paypal?.currency || 'USD';
+            document.getElementById('advPaypalTipAmounts').value = config?.paypal?.tipAmounts || '5,10,20';
+            document.getElementById('advPaypalCheckoutUrl').value = config?.paypal?.checkoutUrl || '';
+        }
+
+        async function loadAdvancedPaymentSettings() {
+            const statusEl = document.getElementById('advPaymentSettingsStatus');
+            statusEl.className = 'settings-status';
+            statusEl.textContent = 'Loading payment settings...';
+
+            try {
+                const data = await fetch_admin_api('payment-processors-config');
+                renderAdvancedPaymentSettings(data.config || {});
+                statusEl.className = 'settings-status success';
+                statusEl.textContent = 'Payment settings loaded.';
+            } catch (err) {
+                statusEl.className = 'settings-status error';
+                statusEl.textContent = 'Unable to load payment settings.';
+                console.error('Payment settings load error:', err);
+            }
+        }
+
+        async function saveAdvancedPaymentSettings() {
+            const statusEl = document.getElementById('advPaymentSettingsStatus');
+            const saveBtn = document.getElementById('advSavePaymentSettingsBtn');
+
+            const payload = {
+                activeProcessor: String(document.getElementById('advActiveProcessor').value || 'stripe').toLowerCase(),
+                stripe: {
+                    secretKey: document.getElementById('advStripeSecretKey').value.trim(),
+                    publishableKey: document.getElementById('advStripePublishableKey').value.trim(),
+                    webhookSecret: document.getElementById('advStripeWebhookSecret').value.trim(),
+                    tierProductIds: document.getElementById('advStripeTierProductIds').value.trim(),
+                    tierPriceIds: document.getElementById('advStripeTierPriceIds').value.trim()
+                },
+                paypal: {
+                    environment: String(document.getElementById('advPaypalEnvironment').value || 'sandbox').toLowerCase(),
+                    clientId: document.getElementById('advPaypalClientId').value.trim(),
+                    clientSecret: document.getElementById('advPaypalClientSecret').value.trim(),
+                    webhookId: document.getElementById('advPaypalWebhookId').value.trim(),
+                    currency: String(document.getElementById('advPaypalCurrency').value || 'USD').toUpperCase(),
+                    tipAmounts: document.getElementById('advPaypalTipAmounts').value.trim(),
+                    checkoutUrl: document.getElementById('advPaypalCheckoutUrl').value.trim()
+                }
+            };
+
+            statusEl.className = 'settings-status';
+            statusEl.textContent = 'Saving payment settings...';
+            saveBtn.disabled = true;
+
+            try {
+                const response = await fetch(`/api/admin-analytics.php?action=update-payment-processors-config&token=${encodeURIComponent(sessionToken)}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Admin-Token': sessionToken
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok || data.status !== 'ok') {
+                    throw new Error(data.error || 'Unable to save payment settings');
+                }
+
+                renderAdvancedPaymentSettings(data.config || payload);
+                statusEl.className = 'settings-status success';
+                statusEl.textContent = 'Payment settings saved.';
+            } catch (err) {
+                statusEl.className = 'settings-status error';
+                statusEl.textContent = err.message;
+            } finally {
+                saveBtn.disabled = false;
             }
         }
 

@@ -18,19 +18,36 @@ APP_NAME="webgames"
 APP_DIR="/var/www/${APP_NAME}"
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-echo "[1/4] Pulling latest code..."
+normalize_path() {
+  local p="$1"
+  (cd "$p" 2>/dev/null && pwd -P) || return 1
+}
+
+REPO_REAL="$(normalize_path "${REPO_DIR}")"
+APP_REAL="$(normalize_path "${APP_DIR}" || echo "")"
+
+if [ -z "${APP_REAL}" ]; then
+  mkdir -p "${APP_DIR}"
+  APP_REAL="$(normalize_path "${APP_DIR}")"
+fi
+
+echo "[1/5] Pulling latest code..."
 cd "${REPO_DIR}"
 git pull --ff-only
 
-echo "[2/4] Syncing files to ${APP_DIR}..."
-rsync -a --delete \
-  --exclude '.git' \
-  --exclude 'node_modules' \
-  --exclude '.env' \
-  --exclude 'data/' \
-  "${REPO_DIR}/" "${APP_DIR}/"
+echo "[2/5] Syncing files to ${APP_DIR}..."
+if [ "${REPO_REAL}" = "${APP_REAL}" ]; then
+  echo "Repo and app directory are the same; skipping rsync copy step."
+else
+  rsync -a --delete \
+    --exclude '.git' \
+    --exclude 'node_modules' \
+    --exclude '.env' \
+    --exclude 'data/' \
+    "${REPO_DIR}/" "${APP_DIR}/"
+fi
 
-echo "[3/4] Ensuring data directory permissions..."
+echo "[3/5] Ensuring data directory permissions..."
 mkdir -p "${APP_DIR}/data"
 chown www-data:www-data "${APP_DIR}/data"
 chmod 775 "${APP_DIR}/data"
@@ -71,7 +88,11 @@ ensure_env_key() {
 
 # Seed new payment settings without overwriting existing values.
 ensure_env_key "PAYMENT_PROCESSOR" "stripe"
+ensure_env_key "STRIPE_SECRET_KEY" ""
 ensure_env_key "STRIPE_PUBLISHABLE_KEY" ""
+ensure_env_key "STRIPE_WEBHOOK_SECRET" ""
+ensure_env_key "STRIPE_TIER_PRODUCT_IDS" ""
+ensure_env_key "STRIPE_TIER_PRICE_IDS" ""
 ensure_env_key "PAYPAL_CLIENT_ID" ""
 ensure_env_key "PAYPAL_CLIENT_SECRET" ""
 ensure_env_key "PAYPAL_WEBHOOK_ID" ""
@@ -80,7 +101,27 @@ ensure_env_key "PAYPAL_CURRENCY" "USD"
 ensure_env_key "PAYPAL_TIP_AMOUNTS" "5,10,20"
 ensure_env_key "PAYPAL_CHECKOUT_URL" ""
 
-echo "[4/4] Reloading nginx..."
+echo "[4/5] Verifying required served files..."
+REQUIRED_FILES=(
+  "index.php"
+  "admin.php"
+  "public/index.html"
+  "public/admin.php"
+  "public/admin-advanced.html"
+  "api/admin-analytics.php"
+  "api/admin-tips.php"
+  "api/stripe-webhook.php"
+  "scripts/deploy.sh"
+)
+
+for f in "${REQUIRED_FILES[@]}"; do
+  if [ ! -f "${APP_DIR}/${f}" ]; then
+    echo "Missing required file after deploy: ${APP_DIR}/${f}"
+    exit 1
+  fi
+done
+
+echo "[5/5] Reloading nginx..."
 nginx -t && systemctl reload nginx
 
 echo ""
