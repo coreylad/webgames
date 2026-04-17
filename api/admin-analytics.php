@@ -277,7 +277,6 @@ switch ($action) {
         // Main dashboard with key metrics
         require_once __DIR__ . '/webhook-advanced.php';
         
-        $revenue = get_revenue_analytics('month');
         $webhook = get_webhook_health();
         
         $lb = read_leaderboard_store();
@@ -293,27 +292,42 @@ switch ($action) {
         $analytics = read_analytics_store();
         $uniquePlayers = count(array_unique(array_map(fn($s) => $s['username'], $analytics['sessions'] ?? [])));
         
-        // Format revenue breakdown by type
+        // Build revenue breakdown from paid tips by type
+        $byType = [];
+        foreach ($paidTips as $tip) {
+            $type = $tip['type'] ?? 'tip';
+            $amountCents = $tip['amountCents'] ?? 0;
+            if (!isset($byType[$type])) {
+                $byType[$type] = 0;
+            }
+            $byType[$type] += $amountCents;
+        }
+        
+        // Format revenue breakdown
         $breakdown = [];
-        foreach (($revenue['byType'] ?? []) as $type => $amountCents) {
+        foreach ($byType as $type => $amountCents) {
             $breakdown[] = [
                 'type' => $type,
                 'amountCents' => $amountCents,
-                'formatted' => format_money($amountCents, 'gbp')
+                'count' => count(array_filter($paidTips, fn($t) => ($t['type'] ?? 'tip') === $type))
             ];
         }
         
-        // Format recent transactions
+        // Sort paid tips by date descending for recent transactions
+        usort($paidTips, fn($a, $b) => strcmp($b['paidAt'] ?? '', $a['paidAt'] ?? ''));
+        
+        // Format recent transactions (last 50)
         $recentTxs = [];
-        foreach (($revenue['recentTransactions'] ?? []) as $tx) {
+        foreach (array_slice($paidTips, 0, 50) as $tip) {
             $recentTxs[] = [
-                'createdAt' => $tx['timestamp'] ?? now_iso(),
-                'username' => $tx['username'] ?? 'anonymous',
-                'amountCents' => $tx['amountCents'] ?? 0,
-                'formatted' => format_money($tx['amountCents'] ?? 0, 'gbp'),
-                'type' => $tx['type'] ?? '—'
+                'createdAt' => $tip['paidAt'] ?? now_iso(),
+                'username' => $tip['username'] ?? 'anonymous',
+                'amountCents' => $tip['amountCents'] ?? 0,
+                'type' => $tip['type'] ?? 'tip'
             ];
         }
+        
+        $totalRevenue = array_sum(array_map(fn($t) => $t['amountCents'] ?? 0, $paidTips));
         
         $output = [
             'status' => 'ok',
@@ -325,7 +339,7 @@ switch ($action) {
                 ],
                 'monetization' => [
                     'totalTips' => count($paidTips),
-                    'totalRevenueCents' => array_sum(array_map(fn($t) => $t['amountCents'] ?? 0, $paidTips)),
+                    'totalRevenueCents' => $totalRevenue,
                     'breakdown' => $breakdown
                 ],
                 'players' => [

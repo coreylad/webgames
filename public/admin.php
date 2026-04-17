@@ -1393,7 +1393,7 @@ $show_login     = !$needs_setup && !$show_dashboard;
             } else {
                 rev.forEach(r => {
                     const tr = revTbody.insertRow();
-                    tr.innerHTML = `<td>${r.type}</td><td class="score-high">£${(r.amountCents/100).toFixed(2)}</td><td>${Object.values(m.monetization?.breakdown ?? []).filter(x => x.type === r.type).length || 1}</td>`;
+                    tr.innerHTML = `<td>${r.type}</td><td class="score-high">£${(r.amountCents/100).toFixed(2)}</td><td>${r.count}</td>`;
                 });
             }
 
