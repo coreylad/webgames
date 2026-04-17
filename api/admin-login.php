@@ -58,7 +58,8 @@ if ($action === 'login') {
     $session = create_admin_session(
         (string)($admin['id'] ?? ''),
         (string)($admin['username'] ?? ''),
-        $ip
+        $ip,
+        (string)($admin['role'] ?? 'admin')
     );
     
     track_event('admin_login', $username, 'system', ['ip' => $ip]);

@@ -1089,7 +1089,7 @@ function write_admin_sessions_store(array $store): void
     file_put_contents($file, json_encode($store, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
 }
 
-function create_admin_session(string $adminId, string $username, string $ip): array
+function create_admin_session(string $adminId, string $username, string $ip, string $role = 'admin'): array
 {
     $store = read_admin_sessions_store();
 
@@ -1106,6 +1106,7 @@ function create_admin_session(string $adminId, string $username, string $ip): ar
         'id'             => generate_id(),
         'adminId'        => $adminId,
         'username'       => $username,
+        'role'           => $role,
         'token'          => $token,
         'ip'             => $ip,
         'userAgent'      => (string)($_SERVER['HTTP_USER_AGENT'] ?? ''),

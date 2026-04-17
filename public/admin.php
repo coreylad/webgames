@@ -6,6 +6,7 @@ $sessions_file = __DIR__ . '/../data/admin-sessions.json';
 $admins_file   = __DIR__ . '/../data/admins.json';
 
 $authed_user = null;
+$user_role   = 'admin';
 $needs_setup = true;
 
 // Check if any admins are registered
@@ -27,6 +28,7 @@ if ($cookie_token !== '' && is_file($sessions_file)) {
             strtotime((string)$sess['expiresAt']) > time()
         ) {
             $authed_user = htmlspecialchars((string)$sess['username'], ENT_QUOTES, 'UTF-8');
+            $user_role   = (string)($sess['role'] ?? 'admin');
             break;
         }
     }
@@ -530,11 +532,13 @@ $show_login     = !$needs_setup && !$show_dashboard;
 
         <div class="tabs">
             <button class="tab-btn active" onclick="switchTab('overview', event)">Overview</button>
+            <?php if ($user_role === 'admin'): ?>
             <button class="tab-btn" onclick="switchTab('moderation', event)">Moderation</button>
             <button class="tab-btn" onclick="switchTab('achievements', event)">Achievements</button>
             <button class="tab-btn" onclick="switchTab('payment-settings', event)">Payment Settings</button>
             <button class="tab-btn" onclick="switchTab('games', event)">Games</button>
             <button class="tab-btn" onclick="switchTab('webhooks', event)">Webhooks</button>
+            <?php endif; ?>
         </div>
 
         <!-- Overview -->
@@ -560,6 +564,7 @@ $show_login     = !$needs_setup && !$show_dashboard;
         </div>
 
         <!-- Moderation -->
+        <?php if ($user_role === 'admin'): ?>
         <div class="tab-content" id="moderation">
             <div class="section">
                 <h2>Suspicious Scores</h2>
@@ -571,8 +576,10 @@ $show_login     = !$needs_setup && !$show_dashboard;
                 </div>
             </div>
         </div>
+        <?php endif; ?>
 
         <!-- Achievements -->
+        <?php if ($user_role === 'admin'): ?>
         <div class="tab-content" id="achievements">
             <div class="section">
                 <h2>Top Achievement Earners</h2>
@@ -584,8 +591,10 @@ $show_login     = !$needs_setup && !$show_dashboard;
                 </div>
             </div>
         </div>
+        <?php endif; ?>
 
         <!-- Payment Settings -->
+        <?php if ($user_role === 'admin'): ?>
         <div class="tab-content" id="payment-settings">
             <div class="section">
                 <h2>Payment Processors</h2>
@@ -796,8 +805,10 @@ $show_login     = !$needs_setup && !$show_dashboard;
 
             </div>
         </div>
+        <?php endif; ?>
 
         <!-- Games -->
+        <?php if ($user_role === 'admin'): ?>
         <div class="tab-content" id="games">
             <div class="section">
                 <h2>Games</h2>
@@ -819,8 +830,10 @@ $show_login     = !$needs_setup && !$show_dashboard;
                 </div>
             </div>
         </div>
+        <?php endif; ?>
 
         <!-- Webhooks -->
+        <?php if ($user_role === 'admin'): ?>
         <div class="tab-content" id="webhooks">
             <div class="section">
                 <h2>Webhook Proxy</h2>
@@ -923,6 +936,7 @@ $show_login     = !$needs_setup && !$show_dashboard;
                 </div>
             </div>
         </div>
+        <?php endif; ?>
     </div>
 </div>
 
@@ -931,6 +945,7 @@ $show_login     = !$needs_setup && !$show_dashboard;
     // We still need it client-side to pass to the API endpoints.
     let sessionToken = getCookie('admin_token');
     let sessionUsername = <?= json_encode($authed_user) ?>;
+    let userRole = <?= json_encode($user_role) ?>;
     let sessionForcedLogout = false;
     let sessionValidationInFlight = false;
     let saveToastTimeoutId = null;

@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # ── add-admin.sh ─────────────────────────────────────────────────────────────
-# Create a new admin account for the /admin dashboard.
+# Create a new admin or mod account for the /admin dashboard.
 #
 # Usage:
-#   sudo bash scripts/add-admin.sh [--username NAME] [--password PASS]
+#   sudo bash scripts/add-admin.sh [--username NAME] [--password PASS] [--role ROLE]
 #
+# Roles: admin (full access) or mod (overview only)
 # Or from anywhere:  sudo bash /var/www/webgames/scripts/add-admin.sh
 # -----------------------------------------------------------------------------
 set -euo pipefail
@@ -14,15 +15,17 @@ ADMINS_FILE="${APP_DIR}/data/admins.json"
 
 USERNAME=""
 PASSWORD=""
+ROLE="admin"
 
 # ── Argument parsing ──────────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --username)  USERNAME="$2"; shift 2 ;;
         --password)  PASSWORD="$2"; shift 2 ;;
+        --role)      ROLE="$2"; shift 2 ;;
         *)
             echo "Unknown option: $1"
-            echo "Usage: sudo bash add-admin.sh [--username NAME] [--password PASS]"
+            echo "Usage: sudo bash add-admin.sh [--username NAME] [--password PASS] [--role ROLE]"
             exit 1
             ;;
     esac
@@ -46,6 +49,13 @@ if [[ -z "$PASSWORD" ]]; then
     done
 fi
 
+if [[ "$ROLE" == "admin" ]]; then
+    read -rp "Role (admin or mod) [admin]: " ROLE_INPUT
+    if [[ -n "$ROLE_INPUT" ]]; then
+        ROLE="$ROLE_INPUT"
+    fi
+fi
+
 # ── Sanity checks before calling PHP ─────────────────────────────────────────
 if [[ ! -f "$ADMINS_FILE" ]]; then
     echo "Error: admins file not found at ${ADMINS_FILE}"
@@ -62,6 +72,7 @@ fi
 php -r "
 \$username  = strtolower(trim('$(printf '%s' "$USERNAME" | sed "s/'/'\\\\''/g")'));
 \$password  = '$(printf '%s' "$PASSWORD" | sed "s/'/'\\\\''/g")';
+\$role      = strtolower(trim('$(printf '%s' "$ROLE" | sed "s/'/'\\\\''/g")'));
 \$file      = '${ADMINS_FILE}';
 
 // Validate username
@@ -73,6 +84,12 @@ if (!preg_match('/^[a-z0-9_-]{3,24}$/', \$username)) {
 // Validate password length
 if (strlen(\$password) < 8) {
     fwrite(STDERR, \"Error: Password must be at least 8 characters.\n\");
+    exit(1);
+}
+
+// Validate role
+if (!\$role || !\in_array(\$role, ['admin', 'mod'], true)) {
+    fwrite(STDERR, \"Error: Role must be 'admin' or 'mod'.\n\");
     exit(1);
 }
 
@@ -95,6 +112,7 @@ foreach (\$store['admins'] as \$admin) {
 \$record = [
     'id'        => bin2hex(random_bytes(16)),
     'username'  => \$username,
+    'role'      => \$role,
     'tokenHash' => password_hash(\$password, PASSWORD_DEFAULT),
     'createdAt' => (new DateTime())->format(DateTime::ATOM),
 ];
@@ -103,5 +121,5 @@ foreach (\$store['admins'] as \$admin) {
 // Write back
 file_put_contents(\$file, json_encode(\$store, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
 
-echo \"Admin '\$username' created successfully.\n\";
+echo \$role . \" '\$username' created successfully.\n\";
 "
