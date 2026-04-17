@@ -108,8 +108,8 @@ ensure_env_key "WEBHOOK_FORWARD_AUTH_TOKEN" ""
 
 echo "[4/5] Verifying required served files..."
 REQUIRED_FILES=(
-  "index.php"
   "admin.php"
+  "installer.php"
   "public/index.html"
   "public/admin.php"
   "public/admin-advanced.html"
