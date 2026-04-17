@@ -270,6 +270,29 @@ $show_login     = !$needs_setup && !$show_dashboard;
         .settings-status { margin-top: 0.75rem; font-size: 0.9rem; min-height: 1.2em; }
         .settings-status.success { color: #34d399; }
         .settings-status.error   { color: #ef4444; }
+        .api-log-shell {
+            background: #05080f;
+            border: 1px solid rgba(96, 165, 250, 0.25);
+            border-radius: 10px;
+            padding: 0.75rem;
+            margin-top: 0.75rem;
+        }
+        .api-log-window {
+            margin: 0;
+            min-height: 140px;
+            max-height: 260px;
+            overflow: auto;
+            white-space: pre-wrap;
+            word-break: break-word;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            font-size: 0.78rem;
+            line-height: 1.5;
+            color: #93c5fd;
+            background: #03060b;
+            border: 1px solid rgba(148, 163, 184, 0.25);
+            border-radius: 8px;
+            padding: 0.75rem;
+        }
         .save-toast {
             position: fixed;
             top: 1rem;
@@ -509,7 +532,8 @@ $show_login     = !$needs_setup && !$show_dashboard;
             <button class="tab-btn active" onclick="switchTab('overview', event)">Overview</button>
             <button class="tab-btn" onclick="switchTab('moderation', event)">Moderation</button>
             <button class="tab-btn" onclick="switchTab('achievements', event)">Achievements</button>
-            <button class="tab-btn" onclick="switchTab('settings', event)">Settings</button>
+            <button class="tab-btn" onclick="switchTab('payment-settings', event)">Payment Settings</button>
+            <button class="tab-btn" onclick="switchTab('games', event)">Games</button>
             <button class="tab-btn" onclick="switchTab('webhooks', event)">Webhooks</button>
         </div>
 
@@ -561,8 +585,8 @@ $show_login     = !$needs_setup && !$show_dashboard;
             </div>
         </div>
 
-        <!-- Settings -->
-        <div class="tab-content" id="settings">
+        <!-- Payment Settings -->
+        <div class="tab-content" id="payment-settings">
             <div class="section">
                 <h2>Payment Processors</h2>
                 <div class="settings-panel">
@@ -648,6 +672,37 @@ $show_login     = !$needs_setup && !$show_dashboard;
                     <div class="settings-status" id="paymentProcessorsStatus"></div>
                 </div>
 
+                <h2>Stripe Backfill</h2>
+                <div class="settings-panel">
+                    <p class="settings-note" style="margin-bottom:0.85rem;">
+                        Pull historical Stripe Checkout sessions and upsert them into local transaction data. Use this if webhook events were missed or old transactions are missing.
+                    </p>
+
+                    <div class="settings-grid">
+                        <div class="form-group">
+                            <label>Backfill Mode</label>
+                            <div style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
+                                <label style="display:flex;gap:0.35rem;align-items:center;">
+                                    <input type="radio" name="stripeBackfillMode" value="full" checked />
+                                    Full history
+                                </label>
+                                <label style="display:flex;gap:0.35rem;align-items:center;">
+                                    <input type="radio" name="stripeBackfillMode" value="days" />
+                                    Last
+                                </label>
+                                <input id="stripeBackfillDaysInput" type="number" min="1" max="3650" value="365" style="width:100px;" />
+                                <span style="opacity:0.85;">days</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="wizard-nav" style="margin-top:0.2rem;">
+                        <button class="btn" type="button" id="stripeBackfillRunBtn" onclick="runStripeBackfillFromSettings()">Run Stripe Backfill</button>
+                    </div>
+
+                    <div class="settings-status" id="stripeBackfillStatus"></div>
+                </div>
+
                 <h2>Stripe One-Time Checkout</h2>
                 <div class="settings-panel">
                     <p class="settings-note" style="margin-bottom:0.85rem;">
@@ -719,19 +774,36 @@ $show_login     = !$needs_setup && !$show_dashboard;
                     </div>
                 </div>
 
-                <h2>Runtime Variables</h2>
+                <h2>Payment API Log</h2>
+                <div class="settings-panel">
+                    <p class="settings-note" style="margin-bottom:0.7rem;">Live API error output for Payment Settings actions.</p>
+                    <div class="wizard-nav" style="margin-top:0.2rem;">
+                        <button class="btn" type="button" onclick="clearPaymentApiLog()">Clear Log</button>
+                    </div>
+                    <div class="api-log-shell">
+                        <pre id="paymentApiLog" class="api-log-window">No API errors yet.</pre>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Games -->
+        <div class="tab-content" id="games">
+            <div class="section">
+                <h2>Games</h2>
                 <div class="settings-panel">
                     <p class="settings-note" style="margin-bottom:0.85rem;">
-                        Edit platform and game tuning variables. Values are persisted to data/runtime-config.json and platform keys also sync to .env.
+                        Edit all game variables here. Values are persisted to data/runtime-config.json.
                     </p>
                     <div id="runtimeConfigFields" class="runtime-groups"></div>
                     <div class="wizard-nav" style="margin-top:0.2rem;">
                         <button class="btn" type="button" id="reloadRuntimeConfigBtn" onclick="loadRuntimeConfig()">Reload</button>
                         <button class="btn" type="button" id="applyJsonToFieldsBtn" onclick="applyJsonToFields()">Apply JSON To Fields</button>
-                        <button class="btn" type="button" id="saveRuntimeConfigBtn" onclick="saveRuntimeConfig()">Save Runtime Variables</button>
+                        <button class="btn" type="button" id="saveRuntimeConfigBtn" onclick="saveRuntimeConfig()">Save Game Variables</button>
                     </div>
                     <div class="runtime-json-wrap form-group" style="margin-bottom:0.9rem;">
-                        <label for="runtimeConfigEditor">Runtime Config JSON</label>
+                        <label for="runtimeConfigEditor">Game Variables JSON</label>
                         <textarea id="runtimeConfigEditor" rows="22" spellcheck="false" style="width:100%;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:0.8rem 0.9rem;color:#e0e6ed;font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;font-size:0.84rem;line-height:1.45;"></textarea>
                     </div>
                     <div class="settings-status" id="runtimeConfigStatus"></div>
@@ -1062,6 +1134,48 @@ $show_login     = !$needs_setup && !$show_dashboard;
         return res.json();
     }
 
+    function appendPaymentApiLog(level, source, message, payload = null) {
+        const logEl = document.getElementById('paymentApiLog');
+        if (!logEl) {
+            return;
+        }
+
+        const ts = new Date().toLocaleTimeString();
+        const lines = [];
+        lines.push(`[${ts}] ${String(level).toUpperCase()} ${source}: ${message}`);
+        if (payload !== null && payload !== undefined) {
+            try {
+                lines.push(JSON.stringify(payload, null, 2));
+            } catch (err) {
+                lines.push(String(payload));
+            }
+        }
+
+        const block = lines.join('\n');
+        const current = (logEl.textContent || '').trim();
+        const base = current === 'No API errors yet.' ? '' : current;
+        const next = (base ? `${base}\n\n${block}` : block)
+            .split('\n')
+            .slice(-260)
+            .join('\n');
+
+        logEl.textContent = next;
+        logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function logPaymentApiError(source, err, payload = null) {
+        const msg = err instanceof Error ? err.message : String(err || 'Unknown error');
+        appendPaymentApiLog('error', source, msg, payload);
+    }
+
+    function clearPaymentApiLog() {
+        const logEl = document.getElementById('paymentApiLog');
+        if (!logEl) {
+            return;
+        }
+        logEl.textContent = 'No API errors yet.';
+    }
+
     let paymentProcessorConfigState = null;
 
     function renderPaymentProcessorsConfig(config) {
@@ -1098,6 +1212,7 @@ $show_login     = !$needs_setup && !$show_dashboard;
         } catch (err) {
             statusEl.className = 'settings-status error';
             statusEl.textContent = 'Unable to load payment settings.';
+            logPaymentApiError('payment-processors-config', err);
             console.error('Payment settings load error:', err);
         }
     }
@@ -1153,6 +1268,7 @@ $show_login     = !$needs_setup && !$show_dashboard;
         } catch (err) {
             statusEl.className = 'settings-status error';
             statusEl.textContent = err.message;
+            logPaymentApiError('update-payment-processors-config', err, payload);
             showSaveToast(err.message || 'Unable to save payment settings.', true);
         } finally {
             saveBtn.disabled = false;
@@ -1195,6 +1311,7 @@ $show_login     = !$needs_setup && !$show_dashboard;
         } catch (err) {
             statusEl.className = 'settings-status error';
             statusEl.textContent = err.message;
+            logPaymentApiError('stripe-reset-account', err);
             showSaveToast(err.message || 'Unable to reset Stripe settings.', true);
         } finally {
             resetBtn.disabled = false;
@@ -1488,6 +1605,7 @@ $show_login     = !$needs_setup && !$show_dashboard;
         } catch (err) {
             statusEl.className = 'settings-status error';
             statusEl.textContent = 'Unable to load Stripe one-time config.';
+            logPaymentApiError('stripe-one-time-config', err);
             console.error('Stripe one-time config error:', err);
         }
     }
@@ -1523,6 +1641,7 @@ $show_login     = !$needs_setup && !$show_dashboard;
         } catch (err) {
             statusEl.className = 'settings-status error';
             statusEl.textContent = err.message;
+            logPaymentApiError('stripe-create-one-time-product', err, payload);
         } finally {
             createBtn.disabled = false;
         }
@@ -1553,6 +1672,7 @@ $show_login     = !$needs_setup && !$show_dashboard;
         } catch (err) {
             statusEl.className = 'settings-status error';
             statusEl.textContent = err.message;
+            logPaymentApiError('stripe-create-one-time-checkout-session', err);
         } finally {
             createBtn.disabled = false;
         }
@@ -1569,6 +1689,59 @@ $show_login     = !$needs_setup && !$show_dashboard;
         }
 
         window.open(url, '_blank', 'noopener');
+    }
+
+    async function runStripeBackfillFromSettings() {
+        const statusEl = document.getElementById('stripeBackfillStatus');
+        const runBtn = document.getElementById('stripeBackfillRunBtn');
+        const modeNode = document.querySelector('input[name="stripeBackfillMode"]:checked');
+        const mode = modeNode ? String(modeNode.value) : 'full';
+
+        let days = Number(document.getElementById('stripeBackfillDaysInput').value || 365);
+        if (!Number.isFinite(days) || days < 1) {
+            days = 365;
+        }
+        if (days > 3650) {
+            days = 3650;
+        }
+
+        statusEl.className = 'settings-status';
+        statusEl.textContent = 'Running Stripe backfill...';
+        runBtn.disabled = true;
+
+        try {
+            const res = await fetch(`/api/admin-analytics.php?action=stripe-backfill&token=${encodeURIComponent(sessionToken)}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Admin-Token': sessionToken
+                },
+                body: JSON.stringify({
+                    mode,
+                    days,
+                    maxPages: 500
+                })
+            });
+
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || data.status !== 'ok') {
+                throw new Error(data.error || 'Stripe backfill failed');
+            }
+
+            const result = data.backfill || {};
+            statusEl.className = 'settings-status success';
+            statusEl.textContent =
+                `Backfill complete. Sessions: ${result.sessionsFetched || 0}, created: ${result.created || 0}, updated: ${result.updated || 0}, paid: ${result.paid || 0}, pending: ${result.pending || 0}, failed: ${result.failed || 0}${result.reachedPageLimit ? ' (page limit reached)' : ''}.`;
+
+            await loadDashboard();
+            await loadWebhookEvents();
+        } catch (err) {
+            statusEl.className = 'settings-status error';
+            statusEl.textContent = err.message;
+            logPaymentApiError('stripe-backfill', err, { mode, days });
+        } finally {
+            runBtn.disabled = false;
+        }
     }
 
     let runtimeConfigState = {};
@@ -1649,11 +1822,13 @@ $show_login     = !$needs_setup && !$show_dashboard;
         if (!host) return;
 
         host.innerHTML = '';
-        const groups = [
-            { key: 'platform', title: 'Platform Variables' }
-        ];
-
         const gameKeys = Object.keys(config.games || {}).sort();
+        if (!gameKeys.length) {
+            host.innerHTML = '<div class="settings-note">No game variables found in runtime config.</div>';
+            return;
+        }
+
+        const groups = [];
         gameKeys.forEach((gameKey) => {
             groups.push({ key: gameKey, title: `Game: ${gameKey}`, isGame: true });
         });
@@ -1739,7 +1914,7 @@ $show_login     = !$needs_setup && !$show_dashboard;
         if (!statusEl || !editor) return;
 
         statusEl.className = 'settings-status';
-        statusEl.textContent = 'Loading runtime variables...';
+        statusEl.textContent = 'Loading game variables...';
 
         try {
             const data = await fetch_admin_api('runtime-config');
@@ -1748,10 +1923,10 @@ $show_login     = !$needs_setup && !$show_dashboard;
             renderRuntimeFields(runtimeConfigState);
             editor.value = JSON.stringify(runtimeConfigState, null, 2);
             statusEl.className = 'settings-status success';
-            statusEl.textContent = 'Runtime variables loaded.';
+            statusEl.textContent = 'Game variables loaded.';
         } catch (err) {
             statusEl.className = 'settings-status error';
-            statusEl.textContent = 'Failed to load runtime variables.';
+            statusEl.textContent = 'Failed to load game variables.';
             console.error('Runtime config load error:', err);
         }
     }
@@ -1774,7 +1949,7 @@ $show_login     = !$needs_setup && !$show_dashboard;
         }
 
         statusEl.className = 'settings-status';
-        statusEl.textContent = 'Saving runtime variables...';
+        statusEl.textContent = 'Saving game variables...';
         saveBtn.disabled = true;
 
         try {
@@ -1793,7 +1968,7 @@ $show_login     = !$needs_setup && !$show_dashboard;
             renderRuntimeFields(runtimeConfigState);
             editor.value = JSON.stringify(runtimeConfigState, null, 2);
             statusEl.className = 'settings-status success';
-            statusEl.textContent = 'Runtime variables saved.';
+            statusEl.textContent = 'Game variables saved.';
         } catch (err) {
             statusEl.className = 'settings-status error';
             statusEl.textContent = err.message;
