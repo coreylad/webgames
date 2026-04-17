@@ -671,6 +671,121 @@ switch ($action) {
             'ranking' => get_player_ranking($game, $username)
         ];
         break;
+
+    case 'list-staff':
+        // List all staff members (admins and mods)
+        ensure_bootstrap_admin();
+        $store = read_admin_store();
+        
+        // Get current user's ID from session
+        $sessions_file = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR . 'admin-sessions.json';
+        $current_admin_id = null;
+        if (is_file($sessions_file)) {
+            $raw = file_get_contents($sessions_file);
+            $store_sessions = $raw !== false && $raw !== '' ? json_decode($raw, true) : [];
+            foreach (($store_sessions['sessions'] ?? []) as $sess) {
+                if (($sess['token'] ?? '') === $token) {
+                    $current_admin_id = $sess['adminId'] ?? null;
+                    break;
+                }
+            }
+        }
+        
+        $staff = [];
+        foreach ($store['admins'] ?? [] as $admin) {
+            // Skip the current user
+            if (($admin['id'] ?? '') === $current_admin_id) {
+                continue;
+            }
+            $staff[] = [
+                'username' => $admin['username'] ?? '',
+                'role' => $admin['role'] ?? 'admin',
+                'createdAt' => $admin['createdAt'] ?? now_iso()
+            ];
+        }
+        
+        $output = [
+            'status' => 'ok',
+            'staff' => $staff
+        ];
+        break;
+
+    case 'add-staff':
+        // Add a new staff member (admin or mod)
+        // Only admins can add staff
+                // Extract token and verify it's an admin
+                $token = trim(get_header_value('x-admin-token'));
+                if ($token === '' && isset($_GET['token']) && is_string($_GET['token'])) {
+                    $token = trim($_GET['token']);
+                }
+        
+                $current_user_role = 'admin'; // Default to admin for backwards compatibility
+                $sessions_file = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR . 'admin-sessions.json';
+                if (is_file($sessions_file)) {
+                    $raw = file_get_contents($sessions_file);
+                    $store_sessions = $raw !== false && $raw !== '' ? json_decode($raw, true) : [];
+                    foreach (($store_sessions['sessions'] ?? []) as $sess) {
+                        if (($sess['token'] ?? '') === $token) {
+                            $current_user_role = $sess['role'] ?? 'admin';
+                            break;
+                        }
+                    }
+                }
+        
+                // Only admins can add staff
+                if ($current_user_role !== 'admin') {
+                    json_response(['error' => 'Only admins can add staff members'], 403);
+                }
+        $data = read_json_input();
+        $username = strtolower(trim((string)($data['username'] ?? '')));
+        $password = (string)($data['password'] ?? '');
+        $role = strtolower(trim((string)($data['role'] ?? 'admin')));
+        
+        if ($username === '' || $password === '') {
+            json_response(['error' => 'Username and password required'], 400);
+        }
+        
+        if (!preg_match('/^[a-z0-9_-]{3,24}$/', $username)) {
+            json_response(['error' => 'Invalid username format'], 400);
+        }
+        
+        if (strlen($password) < 8) {
+            json_response(['error' => 'Password must be at least 8 characters'], 400);
+        }
+        
+        if (!in_array($role, ['admin', 'mod'], true)) {
+            json_response(['error' => 'Role must be admin or mod'], 400);
+        }
+        
+        ensure_bootstrap_admin();
+        $store = read_admin_store();
+        
+        // Check for duplicate username
+        foreach ($store['admins'] ?? [] as $admin) {
+            if (strtolower($admin['username'] ?? '') === $username) {
+                json_response(['error' => 'Username already exists'], 409);
+            }
+        }
+        
+        // Create new admin record
+        $new_admin = [
+            'id' => bin2hex(random_bytes(16)),
+            'username' => $username,
+            'role' => $role,
+            'tokenHash' => password_hash($password, PASSWORD_DEFAULT),
+            'createdAt' => now_iso()
+        ];
+        
+        $store['admins'][] = $new_admin;
+        write_admin_store($store);
+        
+        track_event('admin_created', $username, 'system', ['role' => $role]);
+        
+        $output = [
+            'status' => 'ok',
+            'message' => "Staff member '$username' created successfully"
+        ];
+        break;
     
     default:
         json_response(['error' => 'Unknown action'], 404);

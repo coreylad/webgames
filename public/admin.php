@@ -538,6 +538,7 @@ $show_login     = !$needs_setup && !$show_dashboard;
             <button class="tab-btn" onclick="switchTab('payment-settings', event)">Payment Settings</button>
             <button class="tab-btn" onclick="switchTab('games', event)">Games</button>
             <button class="tab-btn" onclick="switchTab('webhooks', event)">Webhooks</button>
+            <button class="tab-btn" onclick="switchTab('staff', event)">Staff</button>
             <?php endif; ?>
         </div>
 
@@ -933,6 +934,44 @@ $show_login     = !$needs_setup && !$show_dashboard;
                         <thead><tr><th>Time</th><th>Type</th><th>Status</th><th>Retries</th><th>Event ID / Proxy</th></tr></thead>
                         <tbody id="webhookEventsTbody"><tr><td colspan="5" class="loading">Loading webhook events</td></tr></tbody>
                     </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Staff -->
+        <div class="tab-content" id="staff">
+            <div class="section">
+                <h2>Staff Management</h2>
+                <div class="settings-panel">
+                    <h3 style="margin-bottom:1rem;">Add New Staff Member</h3>
+                    <div style="display:grid; gap:1rem; margin-bottom:1.5rem;">
+                        <div>
+                            <label for="newStaffUsername" style="display:block; margin-bottom:0.5rem; opacity:0.7; font-size:0.85rem; text-transform:uppercase; letter-spacing:0.5px;">Username</label>
+                            <input type="text" id="newStaffUsername" placeholder="3-24 chars (lowercase, numbers, _, -)" style="width:100%; padding:0.75rem; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); border-radius:8px; color:#e0e6ed; font-size:0.9rem;">
+                        </div>
+                        <div>
+                            <label for="newStaffPassword" style="display:block; margin-bottom:0.5rem; opacity:0.7; font-size:0.85rem; text-transform:uppercase; letter-spacing:0.5px;">Password</label>
+                            <input type="password" id="newStaffPassword" placeholder="Min 8 characters" style="width:100%; padding:0.75rem; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); border-radius:8px; color:#e0e6ed; font-size:0.9rem;">
+                        </div>
+                        <div>
+                            <label for="newStaffRole" style="display:block; margin-bottom:0.5rem; opacity:0.7; font-size:0.85rem; text-transform:uppercase; letter-spacing:0.5px;">Role</label>
+                            <select id="newStaffRole" style="width:100%; padding:0.75rem; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); border-radius:8px; color:#e0e6ed; font-size:0.9rem;">
+                                <option value="admin">Admin (Full Access)</option>
+                                <option value="mod" selected>Mod (Overview Only)</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-primary" id="addStaffBtn" onclick="handleAddStaffMember()" style="width:100%;">Add Staff Member</button>
+                    </div>
+
+                    <div id="staffStatusMessage" style="margin-bottom:1rem; padding:0.75rem; border-radius:8px; display:none;"></div>
+
+                    <h3 style="margin-bottom:1rem; margin-top:2rem;">Current Staff</h3>
+                    <div class="table-responsive">
+                        <table>
+                            <thead><tr><th>Username</th><th>Role</th><th>Created</th></tr></thead>
+                            <tbody id="staffListTbody"><tr><td colspan="3" class="loading">Loading staff list...</td></tr></tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
@@ -2032,6 +2071,91 @@ $show_login     = !$needs_setup && !$show_dashboard;
         }
     }
 
+    // ── Staff Management ────────────────────────────────────────────────────
+    async function loadStaffList() {
+        try {
+            const data = await fetch_admin_api('list-staff');
+            const tbody = document.getElementById('staffListTbody');
+            if (!tbody) return;
+            
+            tbody.innerHTML = '';
+            const staff = data.staff || [];
+            if (!staff.length) {
+                tbody.innerHTML = '<tr><td colspan="3">No staff members (other than you)</td></tr>';
+                return;
+            }
+            
+            staff.forEach(s => {
+                const tr = tbody.insertRow();
+                const created = new Date(s.createdAt).toLocaleDateString();
+                const roleLabel = s.role === 'admin' ? 'Admin (Full)' : 'Mod (Overview)';
+                tr.innerHTML = `<td>${s.username}</td><td>${roleLabel}</td><td>${created}</td>`;
+            });
+        } catch (err) {
+            console.error('Error loading staff list:', err);
+        }
+    }
+
+    async function handleAddStaffMember() {
+        const username = document.getElementById('newStaffUsername').value.trim();
+        const password = document.getElementById('newStaffPassword').value.trim();
+        const role = document.getElementById('newStaffRole').value.trim();
+        const statusEl = document.getElementById('staffStatusMessage');
+        const btn = document.getElementById('addStaffBtn');
+
+        if (!username || !password || !role) {
+            statusEl.style.display = 'block';
+            statusEl.style.background = 'rgba(239,68,68,0.1)';
+            statusEl.style.borderLeft = '3px solid #ef4444';
+            statusEl.style.color = '#fca5a5';
+            statusEl.textContent = 'Please fill in all fields.';
+            return;
+        }
+
+        if (password.length < 8) {
+            statusEl.style.display = 'block';
+            statusEl.style.background = 'rgba(239,68,68,0.1)';
+            statusEl.style.borderLeft = '3px solid #ef4444';
+            statusEl.style.color = '#fca5a5';
+            statusEl.textContent = 'Password must be at least 8 characters.';
+            return;
+        }
+
+        btn.disabled = true;
+        try {
+            const res = await fetch(`/api/admin-analytics.php?action=add-staff&token=${encodeURIComponent(sessionToken)}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password, role })
+            });
+
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || data.status !== 'ok') {
+                throw new Error(data.error || 'Failed to add staff member');
+            }
+
+            statusEl.style.display = 'block';
+            statusEl.style.background = 'rgba(34,197,94,0.1)';
+            statusEl.style.borderLeft = '3px solid #22c55e';
+            statusEl.style.color = '#86efac';
+            statusEl.textContent = `Staff member '${username}' added successfully!`;
+
+            document.getElementById('newStaffUsername').value = '';
+            document.getElementById('newStaffPassword').value = '';
+            document.getElementById('newStaffRole').value = 'mod';
+
+            await loadStaffList();
+        } catch (err) {
+            statusEl.style.display = 'block';
+            statusEl.style.background = 'rgba(239,68,68,0.1)';
+            statusEl.style.borderLeft = '3px solid #ef4444';
+            statusEl.style.color = '#fca5a5';
+            statusEl.textContent = err.message;
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
     // ── Boot ───────────────────────────────────────────────────────────────
     // PHP already decided what to show, just load data if dashboard is visible.
     <?php if ($show_dashboard): ?>
@@ -2043,6 +2167,7 @@ $show_login     = !$needs_setup && !$show_dashboard;
     loadPaymentProcessorsConfig();
     loadStripeOneTimeConfig();
     loadRuntimeConfig();
+    loadStaffList();
     setInterval(() => { loadDashboard(); loadSuspiciousScores(); loadWebhookEvents(); }, 30000);
     <?php endif; ?>
 </script>
