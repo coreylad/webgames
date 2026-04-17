@@ -293,10 +293,31 @@ switch ($action) {
         $analytics = read_analytics_store();
         $uniquePlayers = count(array_unique(array_map(fn($s) => $s['username'], $analytics['sessions'] ?? [])));
         
+        // Format revenue breakdown by type
+        $breakdown = [];
+        foreach (($revenue['byType'] ?? []) as $type => $amountCents) {
+            $breakdown[] = [
+                'type' => $type,
+                'amountCents' => $amountCents,
+                'formatted' => format_money($amountCents, 'gbp')
+            ];
+        }
+        
+        // Format recent transactions
+        $recentTxs = [];
+        foreach (($revenue['recentTransactions'] ?? []) as $tx) {
+            $recentTxs[] = [
+                'createdAt' => $tx['timestamp'] ?? now_iso(),
+                'username' => $tx['username'] ?? 'anonymous',
+                'amountCents' => $tx['amountCents'] ?? 0,
+                'formatted' => format_money($tx['amountCents'] ?? 0, 'gbp'),
+                'type' => $tx['type'] ?? '—'
+            ];
+        }
+        
         $output = [
             'status' => 'ok',
             'metrics' => [
-                'revenue' => $revenue,
                 'webhookHealth' => $webhook,
                 'leaderboards' => [
                     'gameCount' => $totalGames,
@@ -304,12 +325,14 @@ switch ($action) {
                 ],
                 'monetization' => [
                     'totalTips' => count($paidTips),
-                    'totalRevenueCents' => array_sum(array_map(fn($t) => $t['amountCents'] ?? 0, $paidTips))
+                    'totalRevenueCents' => array_sum(array_map(fn($t) => $t['amountCents'] ?? 0, $paidTips)),
+                    'breakdown' => $breakdown
                 ],
                 'players' => [
                     'uniquePlayers' => $uniquePlayers,
                     'totalSessions' => count($analytics['sessions'] ?? [])
-                ]
+                ],
+                'recentTransactions' => $recentTxs
             ]
         ];
         break;

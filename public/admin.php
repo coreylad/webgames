@@ -1366,7 +1366,7 @@ $show_login     = !$needs_setup && !$show_dashboard;
 
             const m = data.metrics;
             document.getElementById('revenueValue').textContent =
-                '$' + ((m.monetization?.totalRevenueCents ?? 0) / 100).toFixed(2);
+                '£' + ((m.monetization?.totalRevenueCents ?? 0) / 100).toFixed(2);
             document.getElementById('revenueTxn').textContent =
                 (m.monetization?.totalTips ?? 0) + ' transactions';
 
@@ -1393,7 +1393,7 @@ $show_login     = !$needs_setup && !$show_dashboard;
             } else {
                 rev.forEach(r => {
                     const tr = revTbody.insertRow();
-                    tr.innerHTML = `<td>${r.type}</td><td class="score-high">$${(r.amountCents/100).toFixed(2)}</td><td>${r.count}</td>`;
+                    tr.innerHTML = `<td>${r.type}</td><td class="score-high">£${(r.amountCents/100).toFixed(2)}</td><td>${Object.values(m.monetization?.breakdown ?? []).filter(x => x.type === r.type).length || 1}</td>`;
                 });
             }
 
@@ -1409,7 +1409,7 @@ $show_login     = !$needs_setup && !$show_dashboard;
                     tr.innerHTML = `
                         <td>${new Date(t.createdAt).toLocaleString()}</td>
                         <td>${t.username ?? 'anonymous'}</td>
-                        <td class="score-high">$${((t.amountCents ?? 0)/100).toFixed(2)}</td>
+                        <td class="score-high">£${((t.amountCents ?? 0)/100).toFixed(2)}</td>
                         <td>${t.type ?? '—'}</td>`;
                 });
             }
