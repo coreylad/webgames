@@ -7,8 +7,8 @@ const uniqueUsersCountEl = document.getElementById("uniqueUsersCount");
 const usernamesListEl = document.getElementById("usernamesList");
 const tipsTableBody = document.getElementById("tipsTableBody");
 
-function centsToUsd(amountCents) {
-  return `$${(Number(amountCents || 0) / 100).toFixed(2)}`;
+function centsToGbp(amountCents) {
+  return `£${(Number(amountCents || 0) / 100).toFixed(2)}`;
 }
 
 function formatDate(value) {
@@ -53,7 +53,7 @@ function renderTips(rows) {
     tierTd.textContent = tip.tierName || "Tip Tier";
 
     const amountTd = document.createElement("td");
-    amountTd.textContent = centsToUsd(tip.amountCents);
+    amountTd.textContent = centsToGbp(tip.amountCents);
 
     const statusTd = document.createElement("td");
     statusTd.textContent = tip.status || "unknown";
@@ -89,7 +89,7 @@ async function loadDashboard() {
     ]);
 
     totalTipsEl.textContent = String(summaryData.totalTips);
-    paidUsdEl.textContent = centsToUsd(summaryData.totalPaidCents);
+    paidUsdEl.textContent = centsToGbp(summaryData.totalPaidCents);
     uniqueUsersCountEl.textContent = String(summaryData.uniqueUsernames.length);
     usernamesListEl.textContent =
       summaryData.uniqueUsernames.length > 0

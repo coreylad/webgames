@@ -665,7 +665,7 @@ $show_login     = !$needs_setup && !$show_dashboard;
                         </div>
                         <div class="form-group">
                             <label for="paypalCurrencyInput">PayPal Currency</label>
-                            <input type="text" id="paypalCurrencyInput" placeholder="USD" maxlength="3" />
+                            <input type="text" id="paypalCurrencyInput" placeholder="GBP" maxlength="3" />
                         </div>
                         <div class="form-group">
                             <label for="paypalTipAmountsInput">PayPal Tip Amounts</label>
@@ -728,7 +728,7 @@ $show_login     = !$needs_setup && !$show_dashboard;
                         </div>
                         <div class="form-group">
                             <label for="stripeOneTimeCurrency">Currency</label>
-                            <input type="text" id="stripeOneTimeCurrency" value="usd" maxlength="3" />
+                            <input type="text" id="stripeOneTimeCurrency" value="gbp" maxlength="3" />
                         </div>
                         <div class="form-group">
                             <label for="stripeOneTimeAmount">Unit Amount (cents)</label>
@@ -1202,7 +1202,7 @@ $show_login     = !$needs_setup && !$show_dashboard;
         document.getElementById('paypalClientIdInput').value = config?.paypal?.clientId || '';
         document.getElementById('paypalClientSecretInput').value = config?.paypal?.clientSecret || '';
         document.getElementById('paypalWebhookIdInput').value = config?.paypal?.webhookId || '';
-        document.getElementById('paypalCurrencyInput').value = config?.paypal?.currency || 'USD';
+        document.getElementById('paypalCurrencyInput').value = config?.paypal?.currency || 'GBP';
         document.getElementById('paypalTipAmountsInput').value = config?.paypal?.tipAmounts || '5,10,20';
         document.getElementById('paypalCheckoutUrlInput').value = config?.paypal?.checkoutUrl || '';
     }
@@ -1244,7 +1244,7 @@ $show_login     = !$needs_setup && !$show_dashboard;
                 clientId: document.getElementById('paypalClientIdInput').value.trim(),
                 clientSecret: document.getElementById('paypalClientSecretInput').value.trim(),
                 webhookId: document.getElementById('paypalWebhookIdInput').value.trim(),
-                currency: String(document.getElementById('paypalCurrencyInput').value || 'USD').toUpperCase(),
+                currency: String(document.getElementById('paypalCurrencyInput').value || 'GBP').toUpperCase(),
                 tipAmounts: document.getElementById('paypalTipAmountsInput').value.trim(),
                 checkoutUrl: document.getElementById('paypalCheckoutUrlInput').value.trim()
             }

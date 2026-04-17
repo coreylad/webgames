@@ -29,7 +29,7 @@ function load_env_values(): array
         'PAYPAL_CLIENT_SECRET' => '',
         'PAYPAL_WEBHOOK_ID' => '',
         'PAYPAL_ENV' => 'sandbox',
-        'PAYPAL_CURRENCY' => 'USD',
+        'PAYPAL_CURRENCY' => 'GBP',
         'PAYPAL_TIP_AMOUNTS' => '5,10,20',
         'PAYPAL_CHECKOUT_URL' => '',
         'WEBHOOK_FORWARD_URL' => '',
@@ -582,6 +582,10 @@ function format_money(int $amountCents, string $currency): string
     $value = number_format($amountCents / 100, 2);
     if (strtoupper($currency) === 'USD') {
         return '$' . $value;
+    }
+
+    if (strtoupper($currency) === 'GBP') {
+        return '£' . $value;
     }
 
     return $value . ' ' . strtoupper($currency);

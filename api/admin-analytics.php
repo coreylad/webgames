@@ -32,7 +32,7 @@ switch ($action) {
                     'clientId' => env_value('PAYPAL_CLIENT_ID', ''),
                     'clientSecret' => env_value('PAYPAL_CLIENT_SECRET', ''),
                     'webhookId' => env_value('PAYPAL_WEBHOOK_ID', ''),
-                    'currency' => env_value('PAYPAL_CURRENCY', 'USD'),
+                    'currency' => env_value('PAYPAL_CURRENCY', 'GBP'),
                     'tipAmounts' => env_value('PAYPAL_TIP_AMOUNTS', '5,10,20'),
                     'checkoutUrl' => env_value('PAYPAL_CHECKOUT_URL', '')
                 ]
@@ -65,7 +65,7 @@ switch ($action) {
             json_response(['error' => 'PayPal environment must be sandbox or live'], 400);
         }
 
-        $paypalCurrency = strtoupper(trim((string)($paypal['currency'] ?? env_value('PAYPAL_CURRENCY', 'USD'))));
+        $paypalCurrency = strtoupper(trim((string)($paypal['currency'] ?? env_value('PAYPAL_CURRENCY', 'GBP'))));
         if (!preg_match('/^[A-Z]{3}$/', $paypalCurrency)) {
             json_response(['error' => 'PayPal currency must be a 3-letter ISO code'], 400);
         }
@@ -441,7 +441,7 @@ switch ($action) {
 
         $body = read_json_input();
         $name = trim((string)($body['name'] ?? 'Example Product'));
-        $currency = strtolower(trim((string)($body['currency'] ?? 'usd')));
+        $currency = strtolower(trim((string)($body['currency'] ?? 'gbp')));
         $amountCents = (int)($body['amountCents'] ?? 2000);
 
         if ($name === '') {

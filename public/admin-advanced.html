@@ -715,7 +715,7 @@
                                 </div>
                                 <div class="form-group">
                                     <label for="advPaypalCurrency">PayPal Currency</label>
-                                    <input type="text" id="advPaypalCurrency" placeholder="USD" maxlength="3" />
+                                    <input type="text" id="advPaypalCurrency" placeholder="GBP" maxlength="3" />
                                 </div>
                                 <div class="form-group">
                                     <label for="advPaypalTipAmounts">PayPal Tip Amounts</label>
@@ -1101,7 +1101,7 @@ BASE_URL=https://yourdomain.com</pre>
             document.getElementById('advPaypalClientId').value = config?.paypal?.clientId || '';
             document.getElementById('advPaypalClientSecret').value = config?.paypal?.clientSecret || '';
             document.getElementById('advPaypalWebhookId').value = config?.paypal?.webhookId || '';
-            document.getElementById('advPaypalCurrency').value = config?.paypal?.currency || 'USD';
+            document.getElementById('advPaypalCurrency').value = config?.paypal?.currency || 'GBP';
             document.getElementById('advPaypalTipAmounts').value = config?.paypal?.tipAmounts || '5,10,20';
             document.getElementById('advPaypalCheckoutUrl').value = config?.paypal?.checkoutUrl || '';
         }
@@ -1141,7 +1141,7 @@ BASE_URL=https://yourdomain.com</pre>
                     clientId: document.getElementById('advPaypalClientId').value.trim(),
                     clientSecret: document.getElementById('advPaypalClientSecret').value.trim(),
                     webhookId: document.getElementById('advPaypalWebhookId').value.trim(),
-                    currency: String(document.getElementById('advPaypalCurrency').value || 'USD').toUpperCase(),
+                    currency: String(document.getElementById('advPaypalCurrency').value || 'GBP').toUpperCase(),
                     tipAmounts: document.getElementById('advPaypalTipAmounts').value.trim(),
                     checkoutUrl: document.getElementById('advPaypalCheckoutUrl').value.trim()
                 }

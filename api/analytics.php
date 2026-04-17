@@ -203,7 +203,7 @@ function get_revenue_analytics(string $period = 'all'): array
     return [
         'period' => $period,
         'totalCents' => $total,
-        'totalFormatted' => format_money($total, 'usd'),
+        'totalFormatted' => format_money($total, 'gbp'),
         'byType' => $byType,
         'byCurrency' => $byCurrency,
         'transactionCount' => count($transactions),
