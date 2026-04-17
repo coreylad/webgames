@@ -649,6 +649,21 @@ $show_login     = !$needs_setup && !$show_dashboard;
                             </div>
                             <div class="settings-note">Path only for reverse proxies: <strong>/api/stripe-webhook.php</strong></div>
                         </div>
+                        <div class="form-group" style="grid-column: 1 / -1; border: 1px solid rgba(102,126,234,0.35); border-radius: 10px; padding: 0.9rem; background: rgba(102,126,234,0.08);">
+                            <label style="margin-bottom:0.5rem;">How To Add This Endpoint In Stripe</label>
+                            <ol style="margin:0 0 0.9rem 1.1rem; padding:0; display:grid; gap:0.4rem;">
+                                <li>Open Stripe Dashboard &rarr; <strong>Developers</strong> &rarr; <strong>Webhooks</strong>.</li>
+                                <li>Click <strong>Add endpoint</strong> and paste the URL from <strong>Stripe Webhook Endpoint URL</strong> above.</li>
+                                <li>Click <strong>Select events</strong> and include <strong>checkout.session.completed</strong>, <strong>checkout.session.expired</strong>, and <strong>charge.refunded</strong>.</li>
+                                <li>Save endpoint, open it, then click <strong>Reveal</strong> on <strong>Signing secret</strong>.</li>
+                                <li>Paste that signing secret into <strong>Stripe Webhook Signing Secret</strong> on this page, then click <strong>Save Payment Settings</strong>.</li>
+                            </ol>
+                            <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+                                <a class="btn" href="https://dashboard.stripe.com/webhooks" target="_blank" rel="noopener noreferrer">Open Stripe Webhooks</a>
+                                <a class="btn" href="https://docs.stripe.com/webhooks" target="_blank" rel="noopener noreferrer">Stripe Webhooks Docs</a>
+                            </div>
+                            <div class="settings-note" style="margin-top:0.55rem;">Tip: configure both test mode and live mode endpoints in Stripe when you switch environments.</div>
+                        </div>
                         <div class="form-group">
                             <label for="stripeTierProductIdsInput">Stripe Tier Product IDs</label>
                             <input type="text" id="stripeTierProductIdsInput" placeholder="prod_abc,prod_xyz" />
