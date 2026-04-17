@@ -636,6 +636,19 @@ $show_login     = !$needs_setup && !$show_dashboard;
                             <input type="password" id="stripeWebhookSecretInput" placeholder="whsec_..." />
                             <div class="settings-note">Not an API key. Copy from Stripe Dashboard &rarr; Developers &rarr; Webhooks endpoint details.</div>
                         </div>
+                        <div class="form-group" style="grid-column: 1 / -1;">
+                            <label for="stripeWebhookEndpointUrlInput">Stripe Webhook Endpoint URL (use this in Stripe)</label>
+                            <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
+                                <input type="text" id="stripeWebhookEndpointUrlInput" readonly style="flex:1 1 460px;" />
+                                <button class="btn" type="button" onclick="copyStripeWebhookEndpointUrl()">Copy URL</button>
+                            </div>
+                            <div class="settings-note">Stripe Dashboard &rarr; Developers &rarr; Webhooks &rarr; Add endpoint: paste this full URL.</div>
+                            <div style="display:flex; gap:0.5rem; margin-top:0.45rem; flex-wrap:wrap; align-items:center;">
+                                <input type="text" id="stripeWebhookEndpointPathInput" readonly style="flex:1 1 460px;" />
+                                <button class="btn" type="button" onclick="copyStripeWebhookEndpointPath()">Copy Path</button>
+                            </div>
+                            <div class="settings-note">Path only for reverse proxies: <strong>/api/stripe-webhook.php</strong></div>
+                        </div>
                         <div class="form-group">
                             <label for="stripeTierProductIdsInput">Stripe Tier Product IDs</label>
                             <input type="text" id="stripeTierProductIdsInput" placeholder="prod_abc,prod_xyz" />
@@ -1328,6 +1341,53 @@ $show_login     = !$needs_setup && !$show_dashboard;
         logEl.textContent = 'No API errors yet.';
     }
 
+    function populateStripeWebhookEndpointHelper() {
+        const endpointPath = '/api/stripe-webhook.php';
+        const endpointUrl = `${location.origin}${endpointPath}`;
+
+        const endpointUrlInput = document.getElementById('stripeWebhookEndpointUrlInput');
+        const endpointPathInput = document.getElementById('stripeWebhookEndpointPathInput');
+
+        if (endpointUrlInput) {
+            endpointUrlInput.value = endpointUrl;
+        }
+        if (endpointPathInput) {
+            endpointPathInput.value = endpointPath;
+        }
+    }
+
+    async function copyEndpointValue(inputId, successMessage) {
+        const inputEl = document.getElementById(inputId);
+        const value = inputEl ? String(inputEl.value || '').trim() : '';
+        if (!value) {
+            return;
+        }
+
+        try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText(value);
+                showSaveToast(successMessage);
+                return;
+            }
+        } catch (err) {
+            // Fall back to selecting text for manual copy.
+        }
+
+        if (inputEl) {
+            inputEl.focus();
+            inputEl.select();
+        }
+        showSaveToast('Clipboard blocked. Endpoint selected, press Ctrl+C.', true);
+    }
+
+    async function copyStripeWebhookEndpointUrl() {
+        await copyEndpointValue('stripeWebhookEndpointUrlInput', 'Stripe webhook URL copied.');
+    }
+
+    async function copyStripeWebhookEndpointPath() {
+        await copyEndpointValue('stripeWebhookEndpointPathInput', 'Stripe webhook path copied.');
+    }
+
     let paymentProcessorConfigState = null;
 
     function renderPaymentProcessorsConfig(config) {
@@ -1354,6 +1414,7 @@ $show_login     = !$needs_setup && !$show_dashboard;
         const statusEl = document.getElementById('paymentProcessorsStatus');
         statusEl.className = 'settings-status';
         statusEl.textContent = 'Loading payment settings...';
+        populateStripeWebhookEndpointHelper();
 
         try {
             const data = await fetch_admin_api('payment-processors-config');
@@ -2253,6 +2314,7 @@ $show_login     = !$needs_setup && !$show_dashboard;
     loadAchievementLeaderboard();
     loadWebhookEvents();
     loadWebhookProxyConfig();
+    populateStripeWebhookEndpointHelper();
     loadPaymentProcessorsConfig();
     loadStripeOneTimeConfig();
     loadRuntimeConfig();
