@@ -88,6 +88,8 @@ ensure_env_key() {
 
 # Seed new payment settings without overwriting existing values.
 ensure_env_key "PAYMENT_PROCESSOR" "stripe"
+ensure_env_key "BASE_URL" ""
+ensure_env_key "ADMIN_DASHBOARD_TOKEN" ""
 ensure_env_key "STRIPE_SECRET_KEY" ""
 ensure_env_key "STRIPE_PUBLISHABLE_KEY" ""
 ensure_env_key "STRIPE_WEBHOOK_SECRET" ""
@@ -100,6 +102,9 @@ ensure_env_key "PAYPAL_ENV" "sandbox"
 ensure_env_key "PAYPAL_CURRENCY" "USD"
 ensure_env_key "PAYPAL_TIP_AMOUNTS" "5,10,20"
 ensure_env_key "PAYPAL_CHECKOUT_URL" ""
+ensure_env_key "WEBHOOK_FORWARD_URL" ""
+ensure_env_key "WEBHOOK_FORWARD_AUTH_HEADER" "x-webgames-proxy-token"
+ensure_env_key "WEBHOOK_FORWARD_AUTH_TOKEN" ""
 
 echo "[4/5] Verifying required served files..."
 REQUIRED_FILES=(
@@ -121,7 +126,19 @@ for f in "${REQUIRED_FILES[@]}"; do
   fi
 done
 
-echo "[5/5] Reloading nginx..."
+echo "[5/6] Refreshing PHP runtime cache..."
+PHP_FPM_SERVICE=""
+if systemctl list-unit-files | grep -qE '^php[0-9]+\.[0-9]+-fpm\.service'; then
+  PHP_FPM_SERVICE="$(systemctl list-unit-files | awk '/^php[0-9]+\.[0-9]+-fpm\.service/ {print $1}' | head -n 1)"
+fi
+
+if [ -n "${PHP_FPM_SERVICE}" ]; then
+  systemctl reload "${PHP_FPM_SERVICE}" || systemctl restart "${PHP_FPM_SERVICE}"
+else
+  echo "No php-fpm service detected; skipping php-fpm reload."
+fi
+
+echo "[6/6] Reloading nginx..."
 nginx -t && systemctl reload nginx
 
 echo ""

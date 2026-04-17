@@ -591,7 +591,11 @@ $show_login     = !$needs_setup && !$show_dashboard;
                 <h2>Payment Processors</h2>
                 <div class="settings-panel">
                     <p class="settings-note" style="margin-bottom:0.85rem;">
-                        Choose the active checkout provider, rotate Stripe credentials, and configure optional PayPal fallback settings.
+                        Choose the active checkout provider and configure Stripe credentials.
+                    </p>
+                    <p class="settings-note" style="margin-bottom:0.85rem;">
+                        Stripe API keys are managed at Developers &rarr; API keys: publishable keys start with <strong>pk_</strong>, server keys start with <strong>sk_</strong> or <strong>rk_</strong>.
+                        Webhook signing secrets start with <strong>whsec_</strong> and are managed at Developers &rarr; Webhooks for each endpoint.
                     </p>
 
                     <div class="settings-grid">
@@ -608,24 +612,29 @@ $show_login     = !$needs_setup && !$show_dashboard;
                     <h3 style="margin-top:1rem;margin-bottom:0.65rem;">Stripe Account Settings</h3>
                     <div class="settings-grid">
                         <div class="form-group">
-                            <label for="stripeSecretKeyInput">Stripe Secret Key</label>
-                            <input type="password" id="stripeSecretKeyInput" placeholder="sk_live_..." />
+                            <label for="stripeSecretKeyInput">Stripe Server API Key</label>
+                            <input type="password" id="stripeSecretKeyInput" placeholder="sk_live_... or rk_live_..." />
+                            <div class="settings-note">Use a Secret key (sk_) or Restricted key (rk_) from Stripe API keys.</div>
                         </div>
                         <div class="form-group">
                             <label for="stripePublishableKeyInput">Stripe Publishable Key</label>
                             <input type="text" id="stripePublishableKeyInput" placeholder="pk_live_..." />
+                            <div class="settings-note">Client-side key from Stripe API keys (pk_).</div>
                         </div>
                         <div class="form-group">
-                            <label for="stripeWebhookSecretInput">Stripe Webhook Secret</label>
+                            <label for="stripeWebhookSecretInput">Stripe Webhook Signing Secret</label>
                             <input type="password" id="stripeWebhookSecretInput" placeholder="whsec_..." />
+                            <div class="settings-note">Not an API key. Copy from Stripe Dashboard &rarr; Developers &rarr; Webhooks endpoint details.</div>
                         </div>
                         <div class="form-group">
                             <label for="stripeTierProductIdsInput">Stripe Tier Product IDs</label>
                             <input type="text" id="stripeTierProductIdsInput" placeholder="prod_abc,prod_xyz" />
+                            <div class="settings-note">Product IDs are optional and come from Stripe Product Catalog, not API keys.</div>
                         </div>
                         <div class="form-group">
                             <label for="stripeTierPriceIdsInput">Stripe Tier Price IDs</label>
                             <input type="text" id="stripeTierPriceIdsInput" placeholder="price_abc,price_xyz" />
+                            <div class="settings-note">Price IDs are optional and come from Stripe Product Catalog, not API keys.</div>
                         </div>
                     </div>
                     <div class="wizard-nav" style="margin-top:0.2rem;">
@@ -1244,6 +1253,37 @@ $show_login     = !$needs_setup && !$show_dashboard;
         statusEl.className = 'settings-status';
         statusEl.textContent = 'Saving payment settings...';
         saveBtn.disabled = true;
+
+        const publishableKey = payload.stripe.publishableKey;
+        const serverKey = payload.stripe.secretKey;
+        const webhookSecret = payload.stripe.webhookSecret;
+
+        if (publishableKey !== '' && !/^pk_(test|live)_[A-Za-z0-9]+$/.test(publishableKey)) {
+            const err = new Error('Stripe publishable key must start with pk_test_ or pk_live_.');
+            statusEl.className = 'settings-status error';
+            statusEl.textContent = err.message;
+            logPaymentApiError('stripe-key-validation', err, { field: 'publishableKey' });
+            saveBtn.disabled = false;
+            return;
+        }
+
+        if (serverKey !== '' && !/^(sk|rk)_(test|live)_[A-Za-z0-9]+$/.test(serverKey)) {
+            const err = new Error('Stripe server key must start with sk_test_, sk_live_, rk_test_, or rk_live_.');
+            statusEl.className = 'settings-status error';
+            statusEl.textContent = err.message;
+            logPaymentApiError('stripe-key-validation', err, { field: 'serverKey' });
+            saveBtn.disabled = false;
+            return;
+        }
+
+        if (webhookSecret !== '' && !/^whsec_[A-Za-z0-9]+$/.test(webhookSecret)) {
+            const err = new Error('Webhook signing secret must start with whsec_.');
+            statusEl.className = 'settings-status error';
+            statusEl.textContent = err.message;
+            logPaymentApiError('stripe-key-validation', err, { field: 'webhookSecret' });
+            saveBtn.disabled = false;
+            return;
+        }
 
         try {
             const res = await fetch(`/api/admin-analytics.php?action=update-payment-processors-config&token=${encodeURIComponent(sessionToken)}`, {
