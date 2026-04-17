@@ -284,12 +284,22 @@ function process_checkout_completed(array $event, string $webhookId): void
         ]);
     }
 
-    // Track revenue analytics
+    // Track revenue analytics and signal dashboard refresh on paid payments
     if ($updates['amountCents'] > 0) {
         track_revenue_event($username, 'tip', $updates['amountCents'], $updates['currency'], [
             'sessionId' => $updates['sessionId'],
             'paymentIntentId' => $updates['paymentIntentId']
         ]);
+
+        if (($updates['status'] ?? '') === 'paid') {
+            emit_admin_signal('payment_received', [
+                'username' => $username,
+                'amountCents' => (int)$updates['amountCents'],
+                'currency' => (string)$updates['currency'],
+                'sessionId' => (string)$updates['sessionId'],
+                'paymentIntentId' => (string)$updates['paymentIntentId']
+            ]);
+        }
         
         // Award supporter achievement if first tip
         require_once __DIR__ . '/achievements.php';

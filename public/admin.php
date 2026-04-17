@@ -988,6 +988,11 @@ $show_login     = !$needs_setup && !$show_dashboard;
     let sessionForcedLogout = false;
     let sessionValidationInFlight = false;
     let saveToastTimeoutId = null;
+    const OVERVIEW_POLL_ACTIVE_MS = 300000;
+    let overviewPollingTimerId = null;
+    let overviewRequestInFlight = false;
+    let adminEventsSource = null;
+    let lastAdminSignalId = 0;
 
     function showSaveToast(message, isError = false) {
         let toast = document.getElementById('saveToast');
@@ -1177,6 +1182,90 @@ $show_login     = !$needs_setup && !$show_dashboard;
         document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
         document.getElementById(tabName).classList.add('active');
         if (event) event.target.classList.add('active');
+
+        if (tabName === 'overview') {
+            refreshOverviewTick();
+        }
+    }
+
+    function isOverviewActive() {
+        const overviewTab = document.getElementById('overview');
+        return !!overviewTab && overviewTab.classList.contains('active');
+    }
+
+    async function refreshOverviewTick(force = false) {
+        if (document.hidden || overviewRequestInFlight) {
+            return;
+        }
+
+        if (!force && !isOverviewActive()) {
+            return;
+        }
+
+        overviewRequestInFlight = true;
+        try {
+            await loadDashboard();
+        } finally {
+            overviewRequestInFlight = false;
+        }
+    }
+
+    function startOverviewPolling() {
+        if (overviewPollingTimerId !== null) {
+            return;
+        }
+
+        overviewPollingTimerId = setInterval(() => {
+            refreshOverviewTick();
+        }, OVERVIEW_POLL_ACTIVE_MS);
+    }
+
+    function stopAdminEventsStream() {
+        if (adminEventsSource !== null) {
+            adminEventsSource.close();
+            adminEventsSource = null;
+        }
+    }
+
+    function startAdminEventsStream() {
+        if (!window.EventSource || adminEventsSource !== null || !sessionToken) {
+            return;
+        }
+
+        const url = new URL('/api/admin-events.php', location.origin);
+        url.searchParams.set('token', sessionToken);
+        if (lastAdminSignalId > 0) {
+            url.searchParams.set('since', String(lastAdminSignalId));
+        }
+
+        adminEventsSource = new EventSource(url.toString());
+
+        adminEventsSource.addEventListener('payment_received', async (evt) => {
+            try {
+                const payload = JSON.parse(evt.data || '{}');
+                const eventId = Number(payload.id ?? 0);
+                if (eventId > 0) {
+                    lastAdminSignalId = eventId;
+                }
+            } catch (err) {
+                console.warn('Unable to parse payment_received event payload', err);
+            }
+
+            await refreshOverviewTick(true);
+        });
+
+        adminEventsSource.addEventListener('heartbeat', () => {
+            // no-op; keeps connection healthy and reconnect loop moving
+        });
+
+        adminEventsSource.onerror = () => {
+            stopAdminEventsStream();
+            if (!document.hidden) {
+                setTimeout(() => {
+                    startAdminEventsStream();
+                }, 3000);
+            }
+        };
     }
 
     // ── API helper ─────────────────────────────────────────────────────────
@@ -2168,7 +2257,22 @@ $show_login     = !$needs_setup && !$show_dashboard;
     loadStripeOneTimeConfig();
     loadRuntimeConfig();
     loadStaffList();
-    setInterval(() => { loadDashboard(); loadSuspiciousScores(); loadWebhookEvents(); }, 30000);
+    startOverviewPolling();
+    startAdminEventsStream();
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+            refreshOverviewTick();
+            startAdminEventsStream();
+            return;
+        }
+
+        stopAdminEventsStream();
+    });
+    window.addEventListener('focus', () => {
+        refreshOverviewTick();
+        startAdminEventsStream();
+    });
+    setInterval(() => { loadSuspiciousScores(); loadWebhookEvents(); }, 30000);
     <?php endif; ?>
 </script>
 </body>

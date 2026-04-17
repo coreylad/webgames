@@ -204,6 +204,68 @@ function write_tip_store(array $store): void
     file_put_contents($file, json_encode($store, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
 }
 
+function ensure_admin_signal_store(): string
+{
+    $dir = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'data';
+    if (!is_dir($dir)) {
+        mkdir($dir, 0775, true);
+    }
+
+    $file = $dir . DIRECTORY_SEPARATOR . 'admin-signals.json';
+    if (!is_file($file)) {
+        file_put_contents($file, json_encode([
+            'lastEventId' => 0,
+            'latestEvent' => null,
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    }
+
+    return $file;
+}
+
+function read_admin_signal_store(): array
+{
+    $file = ensure_admin_signal_store();
+    $raw = file_get_contents($file);
+    if ($raw === false || $raw === '') {
+        return ['lastEventId' => 0, 'latestEvent' => null];
+    }
+
+    $decoded = json_decode($raw, true);
+    if (!is_array($decoded)) {
+        return ['lastEventId' => 0, 'latestEvent' => null];
+    }
+
+    return [
+        'lastEventId' => (int)($decoded['lastEventId'] ?? 0),
+        'latestEvent' => is_array($decoded['latestEvent'] ?? null) ? $decoded['latestEvent'] : null,
+    ];
+}
+
+function write_admin_signal_store(array $store): void
+{
+    $file = ensure_admin_signal_store();
+    file_put_contents($file, json_encode($store, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+}
+
+function emit_admin_signal(string $type, array $payload = []): array
+{
+    $store = read_admin_signal_store();
+    $nextId = (int)($store['lastEventId'] ?? 0) + 1;
+
+    $event = [
+        'id' => $nextId,
+        'type' => $type,
+        'payload' => $payload,
+        'createdAt' => now_iso(),
+    ];
+
+    $store['lastEventId'] = $nextId;
+    $store['latestEvent'] = $event;
+    write_admin_signal_store($store);
+
+    return $event;
+}
+
 function generate_id(): string
 {
     return bin2hex(random_bytes(16));
