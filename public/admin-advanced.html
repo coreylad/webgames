@@ -460,10 +460,12 @@
 
             <!-- Tabs Navigation -->
             <div class="tabs">
-                <button class="tab-btn active" onclick="switchTab('overview')">Overview</button>
-                <button class="tab-btn" onclick="switchTab('moderation')">Moderation</button>
-                <button class="tab-btn" onclick="switchTab('achievements')">Achievements</button>
-                <button class="tab-btn" onclick="switchTab('webhooks')">Webhooks</button>
+                <button class="tab-btn active" onclick="switchTab('overview', this)">Overview</button>
+                <button class="tab-btn" onclick="switchTab('transactions', this)">Transactions</button>
+                <button class="tab-btn" onclick="switchTab('moderation', this)">Moderation</button>
+                <button class="tab-btn" onclick="switchTab('achievements', this)">Achievements</button>
+                <button class="tab-btn" onclick="switchTab('webhooks', this)">Webhooks</button>
+                <button class="tab-btn" onclick="switchTab('stripe-guide', this)">Stripe Setup</button>
             </div>
 
             <!-- Overview Tab -->
@@ -488,21 +490,57 @@
 
                 <div class="section">
                     <h2>Recent Transactions</h2>
+                    <p style="opacity:0.6;font-size:0.85rem;margin-bottom:1rem;">Last 10 transactions. <button class="btn btn-sm" style="margin-left:0.5rem;" onclick="goToTransactionsTab()">View all →</button></p>
                     <div class="table-responsive">
                         <table>
                             <thead>
                                 <tr>
                                     <th>Date</th>
                                     <th>Player</th>
+                                    <th>Tier</th>
                                     <th>Amount</th>
-                                    <th>Type</th>
+                                    <th>Status</th>
                                 </tr>
                             </thead>
                             <tbody id="transactionsTbody">
-                                <tr><td colspan="4" class="loading">Loading data</td></tr>
+                                <tr><td colspan="5" class="loading">Loading data</td></tr>
                             </tbody>
                         </table>
                     </div>
+                </div>
+            </div>
+
+            <!-- Transactions Tab -->
+            <div class="tab-content" id="transactions">
+                <div class="section">
+                    <h2>All Transactions</h2>
+                    <div style="display:flex;gap:0.75rem;margin-bottom:1rem;align-items:center;flex-wrap:wrap;">
+                        <label style="opacity:0.7;font-size:0.85rem;">Filter:</label>
+                        <button class="btn btn-sm" id="filterAll" onclick="filterTransactions('all')" style="background:linear-gradient(135deg,#667eea,#764ba2);">All</button>
+                        <button class="btn btn-sm" id="filterPending" onclick="filterTransactions('pending')" style="background:rgba(251,146,60,0.3);border:1px solid rgba(251,146,60,0.5);">Pending</button>
+                        <button class="btn btn-sm" id="filterPaid" onclick="filterTransactions('paid')" style="background:rgba(52,211,153,0.3);border:1px solid rgba(52,211,153,0.5);">Paid</button>
+                        <button class="btn btn-sm" id="filterFailed" onclick="filterTransactions('failed')" style="background:rgba(239,68,68,0.3);border:1px solid rgba(239,68,68,0.5);">Failed/Expired</button>
+                        <button class="btn btn-sm" onclick="loadAllTransactions()" style="margin-left:auto;background:rgba(255,255,255,0.1);">↻ Refresh</button>
+                    </div>
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Player</th>
+                                    <th>Tier</th>
+                                    <th>Amount</th>
+                                    <th>Status</th>
+                                    <th>Processor</th>
+                                    <th>Session ID</th>
+                                </tr>
+                            </thead>
+                            <tbody id="allTransactionsTbody">
+                                <tr><td colspan="7" class="loading">Loading transactions</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="txnSummary" style="margin-top:1rem;opacity:0.7;font-size:0.85rem;"></div>
                 </div>
             </div>
 
@@ -609,6 +647,126 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Stripe Setup Guide Tab -->
+            <div class="tab-content" id="stripe-guide">
+                <div class="section">
+                    <h2>Stripe Setup Guide</h2>
+                    <div style="max-width:860px;">
+
+                        <div class="settings-panel">
+                            <h3 style="margin-bottom:1rem;color:#667eea;">Backfill Stripe Data To This Site</h3>
+                            <p style="opacity:0.82;margin-bottom:0.9rem;">Use this when older Stripe payments are missing or stuck pending in your admin data store.</p>
+                            <div style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;margin-bottom:0.75rem;">
+                                <label style="display:flex;gap:0.35rem;align-items:center;opacity:0.9;">
+                                    <input type="radio" name="backfillMode" value="full" checked />
+                                    Full history
+                                </label>
+                                <label style="display:flex;gap:0.35rem;align-items:center;opacity:0.9;">
+                                    <input type="radio" name="backfillMode" value="days" />
+                                    Last
+                                </label>
+                                <input id="backfillDays" type="number" min="1" max="3650" value="365" style="width:100px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);color:#fff;border-radius:6px;padding:0.35rem 0.5rem;" />
+                                <span style="opacity:0.8;">days</span>
+                            </div>
+                            <div style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
+                                <button class="btn" id="runStripeBackfillBtn" type="button" onclick="runStripeBackfill()">Run Stripe Backfill</button>
+                                <span style="opacity:0.75;font-size:0.85rem;">This upserts transactions by Stripe session ID and payment intent.</span>
+                            </div>
+                            <div id="stripeBackfillStatus" class="settings-status" style="margin-top:0.85rem;"></div>
+                        </div>
+
+                        <div class="settings-panel">
+                            <h3 style="margin-bottom:1rem;color:#667eea;">Step 1 — Create a Stripe Account</h3>
+                            <ol style="padding-left:1.5rem;line-height:2;">
+                                <li>Go to <strong>stripe.com</strong> and sign up or log in.</li>
+                                <li>Complete your account setup (business details, bank account for payouts).</li>
+                                <li>On the Stripe Dashboard, toggle <strong>Test mode</strong> on while developing, then switch to <strong>Live mode</strong> when ready.</li>
+                            </ol>
+                        </div>
+
+                        <div class="settings-panel">
+                            <h3 style="margin-bottom:1rem;color:#667eea;">Step 2 — Get your API Keys</h3>
+                            <ol style="padding-left:1.5rem;line-height:2;">
+                                <li>In the Stripe Dashboard, go to <strong>Developers → API Keys</strong>.</li>
+                                <li>Copy your <strong>Publishable key</strong> (starts with <code>pk_test_</code> or <code>pk_live_</code>).</li>
+                                <li>Copy your <strong>Secret key</strong> (starts with <code>sk_test_</code> or <code>sk_live_</code>). Keep this private — never expose it in frontend code.</li>
+                                <li>Add these to your server's <code>.env</code> file:<br>
+                                    <pre style="background:rgba(0,0,0,0.3);padding:0.75rem;border-radius:6px;font-size:0.85rem;overflow-x:auto;">STRIPE_PUBLISHABLE_KEY=pk_live_...
+STRIPE_SECRET_KEY=sk_live_...</pre>
+                                </li>
+                            </ol>
+                        </div>
+
+                        <div class="settings-panel">
+                            <h3 style="margin-bottom:1rem;color:#667eea;">Step 3 — Create Products & Prices</h3>
+                            <ol style="padding-left:1.5rem;line-height:2;">
+                                <li>In Stripe go to <strong>Product Catalog → Add product</strong>.</li>
+                                <li>Create one product per tip tier (e.g. "Supporter $5", "Fan $10", "Superfan $20"). Set pricing as <strong>One time</strong>.</li>
+                                <li>After saving, copy the <strong>Product ID</strong> (starts with <code>prod_</code>) and <strong>Price ID</strong> (starts with <code>price_</code>) for each tier.</li>
+                                <li>Add them to <code>.env</code> as comma-separated lists in the same order:<br>
+                                    <pre style="background:rgba(0,0,0,0.3);padding:0.75rem;border-radius:6px;font-size:0.85rem;overflow-x:auto;">STRIPE_TIER_PRODUCT_IDS=prod_aaa,prod_bbb,prod_ccc
+STRIPE_TIER_PRICE_IDS=price_aaa,price_bbb,price_ccc</pre>
+                                </li>
+                            </ol>
+                        </div>
+
+                        <div class="settings-panel">
+                            <h3 style="margin-bottom:1rem;color:#667eea;">Step 4 — Configure the Webhook</h3>
+                            <p style="margin-bottom:0.75rem;opacity:0.8;">Stripe sends a webhook event when a payment completes. This is what marks a transaction as <strong>Paid</strong> in the admin panel.</p>
+                            <ol style="padding-left:1.5rem;line-height:2;">
+                                <li>In Stripe go to <strong>Developers → Webhooks → Add endpoint</strong>.</li>
+                                <li>Set the endpoint URL to:<br>
+                                    <pre style="background:rgba(0,0,0,0.3);padding:0.75rem;border-radius:6px;font-size:0.85rem;">https://yourdomain.com/api/stripe-webhook.php</pre>
+                                </li>
+                                <li>Under <strong>Select events</strong>, add:
+                                    <ul style="margin-top:0.5rem;">
+                                        <li><code>checkout.session.completed</code></li>
+                                        <li><code>checkout.session.expired</code></li>
+                                        <li><code>charge.refunded</code></li>
+                                    </ul>
+                                </li>
+                                <li>Click <strong>Add endpoint</strong>. Then reveal the <strong>Signing secret</strong> (starts with <code>whsec_</code>) and set it in <code>.env</code>:<br>
+                                    <pre style="background:rgba(0,0,0,0.3);padding:0.75rem;border-radius:6px;font-size:0.85rem;">STRIPE_WEBHOOK_SECRET=whsec_...</pre>
+                                </li>
+                                <li><strong>Important:</strong> Without <code>STRIPE_WEBHOOK_SECRET</code>, all webhook requests will be rejected and transactions will stay in <em>Pending</em> status.</li>
+                            </ol>
+                        </div>
+
+                        <div class="settings-panel">
+                            <h3 style="margin-bottom:1rem;color:#667eea;">Step 5 — Set Active Payment Processor</h3>
+                            <p style="opacity:0.8;">In your <code>.env</code> file ensure:</p>
+                            <pre style="background:rgba(0,0,0,0.3);padding:0.75rem;border-radius:6px;font-size:0.85rem;margin-top:0.75rem;">PAYMENT_PROCESSOR=stripe</pre>
+                            <p style="margin-top:0.75rem;opacity:0.8;">You can also change this in the <strong>Settings → Payment Processors</strong> panel below.</p>
+                        </div>
+
+                        <div class="settings-panel">
+                            <h3 style="margin-bottom:1rem;color:#667eea;">Step 6 — Full .env Example</h3>
+                            <pre style="background:rgba(0,0,0,0.3);padding:1rem;border-radius:6px;font-size:0.82rem;overflow-x:auto;line-height:1.8;">PAYMENT_PROCESSOR=stripe
+STRIPE_SECRET_KEY=sk_live_...
+STRIPE_PUBLISHABLE_KEY=pk_live_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+STRIPE_TIER_PRODUCT_IDS=prod_aaa,prod_bbb,prod_ccc
+STRIPE_TIER_PRICE_IDS=price_aaa,price_bbb,price_ccc
+ADMIN_DASHBOARD_TOKEN=change-this-to-a-strong-secret
+BASE_URL=https://yourdomain.com</pre>
+                        </div>
+
+                        <div class="settings-panel">
+                            <h3 style="margin-bottom:1rem;color:#667eea;">Troubleshooting Transactions</h3>
+                            <ul style="padding-left:1.5rem;line-height:2;opacity:0.85;">
+                                <li><strong>Transaction stays Pending:</strong> The Stripe webhook has not fired or the <code>STRIPE_WEBHOOK_SECRET</code> is wrong. Check the <strong>Webhooks</strong> tab for events.</li>
+                                <li><strong>No transactions appear at all:</strong> Confirm <code>STRIPE_TIER_PRICE_IDS</code> match the prices in your Stripe Dashboard exactly.</li>
+                                <li><strong>Webhook signature invalid errors:</strong> Make sure you copied the signing secret from the correct endpoint in Stripe (test vs live mode).</li>
+                                <li><strong>Testing locally:</strong> Use the Stripe CLI: <code>stripe listen --forward-to localhost/api/stripe-webhook.php</code> — this gives you a temporary webhook secret for local testing.</li>
+                                <li><strong>After going live:</strong> Rotate all test keys to live keys and update the webhook endpoint URL and signing secret.</li>
+                            </ul>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+
         </div>
     </div>
 
@@ -667,6 +825,8 @@
             document.getElementById('adminUsername').textContent = sessionUsername;
             
             loadDashboard();
+            loadRecentTransactions();
+            loadAllTransactions();
             loadSuspiciousScores();
             loadAchievementLeaderboard();
             loadWebhookEvents();
@@ -675,6 +835,7 @@
             // Auto-refresh every 30 seconds
             setInterval(() => {
                 loadDashboard();
+                loadRecentTransactions();
                 loadSuspiciousScores();
                 loadWebhookEvents();
             }, 30000);
@@ -745,11 +906,26 @@
             }
         }
 
-        function switchTab(tabName) {
+        function switchTab(tabName, btn) {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
             document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
             document.getElementById(tabName).classList.add('active');
-            event.target.classList.add('active');
+            if (btn) {
+                btn.classList.add('active');
+            }
+
+            if (tabName === 'transactions') {
+                loadAllTransactions();
+            }
+        }
+
+        function goToTransactionsTab() {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById('transactions').classList.add('active');
+            const txnBtn = Array.from(document.querySelectorAll('.tab-btn')).find(b => b.textContent.trim() === 'Transactions');
+            if (txnBtn) txnBtn.classList.add('active');
+            loadAllTransactions();
         }
 
         async function fetch_admin_api(action, params = {}) {
@@ -961,6 +1137,174 @@
                 });
             } catch (err) {
                 console.error('Webhook events error:', err);
+            }
+        }
+
+        // ---- Transactions ----
+        let allTxnData = [];
+        let txnFilter = 'all';
+
+        function txnStatusBadge(status) {
+            const map = {
+                'paid': '<span class="status-badge status-healthy">Paid</span>',
+                'completed': '<span class="status-badge status-healthy">Paid</span>',
+                'checkout_pending': '<span class="status-badge status-degraded">Pending</span>',
+                'checkout_created': '<span class="status-badge status-degraded">Pending</span>',
+                'checkout_redirected': '<span class="status-badge status-degraded">Pending</span>',
+                'checkout_failed': '<span class="status-badge status-critical">Failed</span>',
+                'expired': '<span class="status-badge status-critical">Expired</span>',
+                'refunded': '<span class="status-badge" style="background:rgba(148,163,184,0.2);color:#94a3b8;">Refunded</span>'
+            };
+            return map[status] || `<span class="status-badge">${status}</span>`;
+        }
+
+        function renderAllTransactions(rows) {
+            const tbody = document.getElementById('allTransactionsTbody');
+            const filter = txnFilter;
+            let filtered = rows;
+            if (filter === 'pending') {
+                filtered = rows.filter(r => ['checkout_pending', 'checkout_created', 'checkout_redirected'].includes(r.status));
+            } else if (filter === 'paid') {
+                filtered = rows.filter(r => r.status === 'paid' || r.status === 'completed');
+            } else if (filter === 'failed') {
+                filtered = rows.filter(r => r.status === 'checkout_failed' || r.status === 'expired' || r.status === 'refunded');
+            }
+
+            tbody.innerHTML = '';
+            if (!filtered.length) {
+                tbody.innerHTML = `<tr><td colspan="7" style="opacity:0.6;">No transactions found for this filter.</td></tr>`;
+                document.getElementById('txnSummary').textContent = '';
+                return;
+            }
+            filtered.forEach(tip => {
+                const row = tbody.insertRow();
+                const date = tip.createdAt ? new Date(tip.createdAt).toLocaleString() : '-';
+                const sessionShort = tip.sessionId ? tip.sessionId.substring(0, 20) + '…' : '-';
+                row.innerHTML = `
+                    <td style="white-space:nowrap;">${date}</td>
+                    <td><strong>${tip.username || 'anonymous'}</strong></td>
+                    <td>${tip.tierName || '-'}</td>
+                    <td>$${((tip.amountCents || 0) / 100).toFixed(2)}</td>
+                    <td>${txnStatusBadge(tip.status)}</td>
+                    <td style="opacity:0.7">${tip.processor || 'stripe'}</td>
+                    <td><code style="font-size:0.7rem;opacity:0.8;" title="${tip.sessionId || ''}">${sessionShort}</code></td>
+                `;
+            });
+            const total = filtered.reduce((s, t) => s + (t.amountCents || 0), 0);
+            const paid = filtered.filter(r => r.status === 'paid' || r.status === 'completed');
+            const paidTotal = paid.reduce((s, t) => s + (t.amountCents || 0), 0);
+            document.getElementById('txnSummary').textContent =
+                `Showing ${filtered.length} of ${rows.length} total. Confirmed revenue: $${(paidTotal / 100).toFixed(2)}.`;
+        }
+
+        function filterTransactions(filter) {
+            txnFilter = filter;
+            renderAllTransactions(allTxnData);
+        }
+
+        async function loadAllTransactions() {
+            document.getElementById('allTransactionsTbody').innerHTML =
+                '<tr><td colspan="7" class="loading">Loading transactions</td></tr>';
+            try {
+                const response = await fetch('/api/admin-tips.php', {
+                    headers: { 'x-admin-token': sessionToken }
+                });
+
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                    throw new Error(data.error || 'Unable to load transactions');
+                }
+
+                allTxnData = data.tips || [];
+                renderAllTransactions(allTxnData);
+            } catch (err) {
+                document.getElementById('allTransactionsTbody').innerHTML =
+                    `<tr><td colspan="7" style="color:#fca5a5;">Error loading transactions: ${err.message}</td></tr>`;
+            }
+        }
+
+        async function loadRecentTransactions() {
+            try {
+                const response = await fetch('/api/admin-tips.php', {
+                    headers: { 'x-admin-token': sessionToken }
+                });
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                    throw new Error(data.error || 'Unable to load transactions');
+                }
+
+                const tips = (data.tips || []).slice(0, 10);
+                const tbody = document.getElementById('transactionsTbody');
+                tbody.innerHTML = '';
+                if (!tips.length) {
+                    tbody.innerHTML = '<tr><td colspan="5" style="opacity:0.6;">No transactions yet. Once users complete Stripe checkout, records will appear here.</td></tr>';
+                    return;
+                }
+                tips.forEach(tip => {
+                    const row = tbody.insertRow();
+                    const date = tip.createdAt ? new Date(tip.createdAt).toLocaleString() : '-';
+                    row.innerHTML = `
+                        <td style="white-space:nowrap;">${date}</td>
+                        <td>${tip.username || 'anonymous'}</td>
+                        <td>${tip.tierName || '-'}</td>
+                        <td>$${((tip.amountCents || 0) / 100).toFixed(2)}</td>
+                        <td>${txnStatusBadge(tip.status)}</td>
+                    `;
+                });
+            } catch (err) {
+                document.getElementById('transactionsTbody').innerHTML =
+                    `<tr><td colspan="5" style="color:#fca5a5;">Error: ${err.message}</td></tr>`;
+            }
+        }
+
+        async function runStripeBackfill() {
+            const statusEl = document.getElementById('stripeBackfillStatus');
+            const runBtn = document.getElementById('runStripeBackfillBtn');
+            const modeEl = document.querySelector('input[name="backfillMode"]:checked');
+            const mode = modeEl ? modeEl.value : 'full';
+            const daysInput = document.getElementById('backfillDays');
+            let days = Number(daysInput.value || 365);
+
+            if (!Number.isFinite(days) || days < 1) {
+                days = 365;
+            }
+            if (days > 3650) {
+                days = 3650;
+            }
+
+            statusEl.className = 'settings-status';
+            statusEl.textContent = 'Running Stripe backfill. This can take a minute for large histories...';
+            runBtn.disabled = true;
+
+            try {
+                const response = await fetch(`/api/admin-analytics.php?action=stripe-backfill&token=${encodeURIComponent(sessionToken)}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        mode,
+                        days,
+                        maxPages: 500
+                    })
+                });
+
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok || data.status !== 'ok') {
+                    throw new Error(data.error || 'Stripe backfill failed');
+                }
+
+                const result = data.backfill || {};
+                statusEl.className = 'settings-status success';
+                statusEl.textContent =
+                    `Backfill complete. Sessions: ${result.sessionsFetched || 0}, created: ${result.created || 0}, updated: ${result.updated || 0}, paid: ${result.paid || 0}, pending: ${result.pending || 0}, failed: ${result.failed || 0}${result.reachedPageLimit ? ' (page limit reached)' : ''}.`;
+
+                await loadDashboard();
+                await loadRecentTransactions();
+                await loadAllTransactions();
+            } catch (err) {
+                statusEl.className = 'settings-status error';
+                statusEl.textContent = err.message;
+            } finally {
+                runBtn.disabled = false;
             }
         }
 

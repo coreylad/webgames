@@ -231,6 +231,48 @@ switch ($action) {
         ];
         break;
 
+    case 'stripe-backfill':
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            json_response(['error' => 'Method not allowed'], 405);
+        }
+
+        $body = read_json_input();
+        $mode = strtolower(trim((string)($body['mode'] ?? 'full')));
+        $days = (int)($body['days'] ?? 3650);
+        $maxPages = (int)($body['maxPages'] ?? 500);
+
+        if (!in_array($mode, ['full', 'days'], true)) {
+            json_response(['error' => 'mode must be full or days'], 400);
+        }
+
+        if ($days < 1) {
+            $days = 1;
+        }
+        if ($days > 3650) {
+            $days = 3650;
+        }
+
+        $createdGte = 0;
+        if ($mode === 'days') {
+            $createdGte = time() - ($days * 86400);
+        }
+
+        $backfill = stripe_backfill_checkout_sessions($createdGte, $maxPages);
+        if (!($backfill['ok'] ?? false)) {
+            json_response([
+                'error' => (string)($backfill['error'] ?? 'Stripe backfill failed'),
+                'details' => $backfill
+            ], (int)($backfill['status'] ?? 500));
+        }
+
+        $output = [
+            'status' => 'ok',
+            'mode' => $mode,
+            'days' => $mode === 'days' ? $days : null,
+            'backfill' => $backfill
+        ];
+        break;
+
     case 'dashboard':
         // Main dashboard with key metrics
         require_once __DIR__ . '/webhook-advanced.php';

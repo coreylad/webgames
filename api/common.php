@@ -645,6 +645,265 @@ function stripe_request(string $method, string $path, array $params = []): array
     return ['ok' => true, 'status' => $statusCode, 'data' => $decoded];
 }
 
+function stripe_tip_status_from_session(array $session): string
+{
+    $status = strtolower((string)($session['status'] ?? ''));
+    $paymentStatus = strtolower((string)($session['payment_status'] ?? ''));
+
+    if ($paymentStatus === 'paid') {
+        return 'paid';
+    }
+
+    if ($status === 'expired') {
+        return 'expired';
+    }
+
+    if (in_array($paymentStatus, ['unpaid', 'no_payment_required'], true)) {
+        return 'checkout_pending';
+    }
+
+    if ($status === 'complete') {
+        return 'completed';
+    }
+
+    return 'checkout_pending';
+}
+
+function upsert_tip_record_from_stripe_session(array $session): array
+{
+    $sessionId = trim((string)($session['id'] ?? ''));
+    if ($sessionId === '') {
+        return [
+            'ok' => false,
+            'created' => false,
+            'updated' => false,
+            'status' => 'unknown',
+            'error' => 'Missing Stripe session id'
+        ];
+    }
+
+    $metadata = is_array($session['metadata'] ?? null) ? $session['metadata'] : [];
+    $tipRecordId = trim((string)($metadata['tipRecordId'] ?? ''));
+    $username = trim((string)($metadata['username'] ?? 'anonymous'));
+    if ($username === '') {
+        $username = 'anonymous';
+    }
+
+    $status = stripe_tip_status_from_session($session);
+    $createdAt = now_iso();
+    if (isset($session['created'])) {
+        $createdRaw = (string)$session['created'];
+        if (ctype_digit($createdRaw)) {
+            $createdAt = gmdate('c', (int)$createdRaw);
+        }
+    }
+
+    $paymentIntentId = trim((string)($session['payment_intent'] ?? ''));
+    $customerEmail = trim((string)($session['customer_details']['email'] ?? ''));
+    $tierName = trim((string)($metadata['tierName'] ?? 'Tip Tier'));
+    if ($tierName === '') {
+        $tierName = 'Tip Tier';
+    }
+
+    $updates = [
+        'username' => $username,
+        'processor' => 'stripe',
+        'priceId' => (string)($metadata['priceId'] ?? ''),
+        'tierName' => $tierName,
+        'amountCents' => (int)($session['amount_total'] ?? 0),
+        'currency' => strtolower((string)($session['currency'] ?? 'usd')),
+        'status' => $status,
+        'sessionId' => $sessionId,
+        'paymentIntentId' => $paymentIntentId,
+        'customerEmail' => $customerEmail
+    ];
+
+    if (in_array($status, ['paid', 'completed'], true)) {
+        $updates['paidAt'] = $createdAt;
+    }
+
+    $matcherByTipId = static fn(array $tip): bool => ($tip['id'] ?? '') === $tipRecordId;
+    $matcherBySession = static fn(array $tip): bool => ($tip['sessionId'] ?? '') === $sessionId;
+    $matcherByIntent = static fn(array $tip): bool => $paymentIntentId !== '' && ($tip['paymentIntentId'] ?? '') === $paymentIntentId;
+
+    $existing = null;
+    if ($tipRecordId !== '') {
+        $existing = find_tip_record($matcherByTipId);
+    }
+    if ($existing === null) {
+        $existing = find_tip_record($matcherBySession);
+    }
+    if ($existing === null && $paymentIntentId !== '') {
+        $existing = find_tip_record($matcherByIntent);
+    }
+
+    if ($existing !== null) {
+        if ($tipRecordId !== '' && ($existing['id'] ?? '') === $tipRecordId) {
+            update_tip_record($matcherByTipId, $updates);
+        } elseif (($existing['sessionId'] ?? '') === $sessionId) {
+            update_tip_record($matcherBySession, $updates);
+        } else {
+            update_tip_record($matcherByIntent, $updates);
+        }
+
+        return [
+            'ok' => true,
+            'created' => false,
+            'updated' => true,
+            'status' => $status,
+            'sessionId' => $sessionId,
+            'tipId' => (string)($existing['id'] ?? '')
+        ];
+    }
+
+    $newTip = [
+        'id' => $tipRecordId !== '' ? $tipRecordId : generate_id(),
+        'username' => $username,
+        'processor' => 'stripe',
+        'priceId' => (string)($metadata['priceId'] ?? ''),
+        'tierName' => $tierName,
+        'amountCents' => (int)($session['amount_total'] ?? 0),
+        'currency' => strtolower((string)($session['currency'] ?? 'usd')),
+        'status' => $status,
+        'sessionId' => $sessionId,
+        'paymentIntentId' => $paymentIntentId,
+        'customerEmail' => $customerEmail,
+        'createdAt' => $createdAt,
+        'updatedAt' => now_iso()
+    ];
+
+    if (in_array($status, ['paid', 'completed'], true)) {
+        $newTip['paidAt'] = $createdAt;
+    }
+
+    add_tip_record($newTip);
+
+    return [
+        'ok' => true,
+        'created' => true,
+        'updated' => false,
+        'status' => $status,
+        'sessionId' => $sessionId,
+        'tipId' => (string)$newTip['id']
+    ];
+}
+
+function stripe_backfill_checkout_sessions(int $createdGte = 0, int $maxPages = 200): array
+{
+    if ($maxPages < 1) {
+        $maxPages = 1;
+    }
+    if ($maxPages > 1000) {
+        $maxPages = 1000;
+    }
+
+    $startingAfter = '';
+    $pagesFetched = 0;
+    $sessionsFetched = 0;
+    $createdCount = 0;
+    $updatedCount = 0;
+    $paidCount = 0;
+    $pendingCount = 0;
+    $failedCount = 0;
+    $errors = [];
+    $reachedPageLimit = false;
+
+    while (true) {
+        $params = [
+            'limit' => '100'
+        ];
+
+        if ($startingAfter !== '') {
+            $params['starting_after'] = $startingAfter;
+        }
+
+        if ($createdGte > 0) {
+            $params['created[gte]'] = (string)$createdGte;
+        }
+
+        $response = stripe_request('GET', 'checkout/sessions', $params);
+        if (!($response['ok'] ?? false)) {
+            return [
+                'ok' => false,
+                'error' => (string)($response['error'] ?? 'Unable to fetch checkout sessions from Stripe'),
+                'status' => (int)($response['status'] ?? 500),
+                'pagesFetched' => $pagesFetched,
+                'sessionsFetched' => $sessionsFetched,
+                'created' => $createdCount,
+                'updated' => $updatedCount,
+                'paid' => $paidCount,
+                'pending' => $pendingCount,
+                'failed' => $failedCount,
+                'errors' => $errors
+            ];
+        }
+
+        $data = is_array($response['data'] ?? null) ? $response['data'] : [];
+        $sessions = is_array($data['data'] ?? null) ? $data['data'] : [];
+        $hasMore = (bool)($data['has_more'] ?? false);
+        $pagesFetched++;
+
+        if (empty($sessions)) {
+            break;
+        }
+
+        foreach ($sessions as $session) {
+            if (!is_array($session)) {
+                continue;
+            }
+
+            $sessionsFetched++;
+            $result = upsert_tip_record_from_stripe_session($session);
+            if (!($result['ok'] ?? false)) {
+                $errors[] = (string)($result['error'] ?? 'Unknown upsert error');
+                continue;
+            }
+
+            if (($result['created'] ?? false) === true) {
+                $createdCount++;
+            }
+
+            if (($result['updated'] ?? false) === true) {
+                $updatedCount++;
+            }
+
+            $tipStatus = (string)($result['status'] ?? '');
+            if (in_array($tipStatus, ['paid', 'completed'], true)) {
+                $paidCount++;
+            } elseif ($tipStatus === 'expired' || $tipStatus === 'checkout_failed') {
+                $failedCount++;
+            } else {
+                $pendingCount++;
+            }
+        }
+
+        $lastSession = end($sessions);
+        $startingAfter = is_array($lastSession) ? (string)($lastSession['id'] ?? '') : '';
+
+        if (!$hasMore || $startingAfter === '') {
+            break;
+        }
+
+        if ($pagesFetched >= $maxPages) {
+            $reachedPageLimit = true;
+            break;
+        }
+    }
+
+    return [
+        'ok' => true,
+        'pagesFetched' => $pagesFetched,
+        'sessionsFetched' => $sessionsFetched,
+        'created' => $createdCount,
+        'updated' => $updatedCount,
+        'paid' => $paidCount,
+        'pending' => $pendingCount,
+        'failed' => $failedCount,
+        'reachedPageLimit' => $reachedPageLimit,
+        'errors' => array_slice($errors, 0, 25)
+    ];
+}
+
 function stripe_verify_signature(string $payload, string $signatureHeader, string $secret): bool
 {
     if ($secret === '') {
