@@ -75,6 +75,14 @@ function parseBool(raw) {
   return ["1", "true", "yes", "on"].includes(value);
 }
 
+function nearlyEqual(a, b, epsilon = 0.00000001) {
+  return Math.abs(Number(a) - Number(b)) <= epsilon;
+}
+
+function toCoinAmount(amountCents) {
+  return Number(amountCents || 0) / 100;
+}
+
 function requestJson(urlString, method = "GET", body = null, headers = {}) {
   return new Promise((resolve) => {
     let url;
@@ -281,13 +289,97 @@ app.post("/api/derive-addresses", requireAuth, (req, res) => {
   });
 });
 
+app.post("/api/verify-tx", requireAuth, async (req, res) => {
+  const txHash = String(req.body?.txHash || "").trim();
+  const asset = String(req.body?.asset || "").trim().toUpperCase();
+  const receiveAddress = String(req.body?.receiveAddress || "").trim();
+  const expectedAmount = toCoinAmount(req.body?.amountCents || 0);
+  const expectedDestinationTag = String(req.body?.expectedDestinationTag || "").trim();
+
+  if (!txHash) {
+    return res.status(400).json({ error: "txHash is required" });
+  }
+  if (!asset) {
+    return res.status(400).json({ error: "asset is required" });
+  }
+
+  try {
+    if (asset === "XRP") {
+      const xrplRes = await requestJson(`https://api.xrpscan.com/api/v1/tx/${encodeURIComponent(txHash)}`);
+      if (!xrplRes.ok || !xrplRes.json) {
+        return res.json({ confirmed: false, matchesAddress: false, confirmations: 0, reason: "xrp_tx_not_found" });
+      }
+
+      const tx = xrplRes.json;
+      const destination = String(tx.Destination || tx.destination || "").trim();
+      const tagRaw = tx.DestinationTag ?? tx.destination_tag ?? "";
+      const destinationTag = tagRaw === "" ? "" : String(tagRaw).trim();
+      const amountDrops = Number(tx.Amount || tx.delivered_amount || 0);
+      const amountXrp = Number.isFinite(amountDrops) ? amountDrops / 1000000 : 0;
+      const confirmations = Number(tx.confirmations || (tx.ledger_index ? 1 : 0) || 0);
+      const validated = Boolean(tx.validated || confirmations > 0);
+
+      const matchesAddress = receiveAddress ? destination === receiveAddress : true;
+      const tagMatches = expectedDestinationTag ? destinationTag === expectedDestinationTag : true;
+      const amountMatches = expectedAmount > 0 ? nearlyEqual(amountXrp, expectedAmount, 0.000001) : true;
+
+      return res.json({
+        confirmed: validated,
+        matchesAddress: matchesAddress && tagMatches,
+        confirmations,
+        amount: amountXrp,
+        amountMatches,
+        destination,
+        destinationTag
+      });
+    }
+
+    // Fallback for non-XRP: quick tx existence check via Blockchair public API.
+    const networkMap = {
+      BTC: "bitcoin",
+      LTC: "litecoin",
+      DOGE: "dogecoin",
+      BCH: "bitcoin-cash",
+      ETH: "ethereum"
+    };
+    const network = networkMap[asset];
+    if (!network) {
+      return res.json({ confirmed: false, matchesAddress: false, confirmations: 0, reason: "unsupported_asset" });
+    }
+
+    const blockchairUrl = `https://api.blockchair.com/${network}/dashboards/transaction/${encodeURIComponent(txHash)}`;
+    const chainRes = await requestJson(blockchairUrl);
+    if (!chainRes.ok || !chainRes.json || !chainRes.json.data) {
+      return res.json({ confirmed: false, matchesAddress: false, confirmations: 0, reason: "tx_not_found" });
+    }
+
+    const row = chainRes.json.data[txHash]?.transaction || null;
+    if (!row) {
+      return res.json({ confirmed: false, matchesAddress: false, confirmations: 0, reason: "tx_missing" });
+    }
+
+    const confirmations = Number(row.block_id || row.block_number ? 1 : 0);
+    return res.json({
+      confirmed: confirmations > 0,
+      matchesAddress: true,
+      confirmations,
+      network,
+      warning: "Address-level verification for non-XRP requires provider-specific parsing and should use an external verifier URL for production assurance."
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err?.message || "verify_failed" });
+  }
+});
+
 async function runAutoVerifyCycle() {
   if (!AUTO_VERIFY_ENABLED) {
     return;
   }
-  if (!AUTO_VERIFY_PROVIDER_URL || !ADMIN_TOKEN || !APP_INTERNAL_BASE_URL) {
+  if (!ADMIN_TOKEN || !APP_INTERNAL_BASE_URL) {
     return;
   }
+
+  const effectiveProviderUrl = AUTO_VERIFY_PROVIDER_URL || `http://127.0.0.1:${PORT}/api/verify-tx`;
 
   workerLastRunAt = new Date().toISOString();
   workerLastError = "";
@@ -329,6 +421,7 @@ async function runAutoVerifyCycle() {
         txHash: String(tip.txHash || ""),
         asset: String(tip.cryptoAsset || "").toUpperCase(),
         receiveAddress: String(tip.receiveAddress || ""),
+        expectedDestinationTag: String(tip.receiveAddressMeta?.[String(tip.cryptoAsset || "").toUpperCase()]?.destinationTag || ""),
         amountCents: Number(tip.amountCents || 0),
         currency: String(tip.currency || "USD").toUpperCase(),
         username: String(tip.username || "anonymous"),
@@ -336,7 +429,7 @@ async function runAutoVerifyCycle() {
         requestedAt: new Date().toISOString()
       };
 
-      const verifyRes = await requestJson(AUTO_VERIFY_PROVIDER_URL, "POST", verifyPayload, verifyHeaders);
+      const verifyRes = await requestJson(effectiveProviderUrl, "POST", verifyPayload, verifyHeaders);
       if (!verifyRes.ok || !verifyRes.json) {
         continue;
       }

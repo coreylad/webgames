@@ -28,12 +28,12 @@ function load_env_values(): array
         'COINBASE_COMMERCE_API_KEY' => '',
         'COINBASE_COMMERCE_WEBHOOK_SECRET' => '',
         'COINBASE_TIP_AMOUNTS' => '5,10,20',
-        'COINBASE_CURRENCY' => 'USD',
+        'COINBASE_CURRENCY' => 'GBP',
         'COINBASE_SUPPORTED_COINS' => 'BTC,ETH,LTC,BCH,DOGE,USDC,USDT,XRP',
         'CRYPTO_RECEIVE_ADDRESSES_JSON' => '{}',
         'COINBASE_DESTINATION_ADDRESSES_JSON' => '{}',
         'CRYPTO_DERIVATION_ENABLED' => '0',
-        'CRYPTO_DERIVATION_URL' => '',
+        'CRYPTO_DERIVATION_URL' => 'http://127.0.0.1:8787/api/derive-addresses',
         'CRYPTO_DERIVATION_AUTH_HEADER' => 'x-webgames-wallet-token',
         'CRYPTO_DERIVATION_AUTH_TOKEN' => '',
         'WALLET_SERVICE_PORT' => '8787',
@@ -41,7 +41,7 @@ function load_env_values(): array
         'WALLET_TAGGED_COINS' => 'XRP',
         'WALLET_DERIVATION_SECRET' => '',
         'CRYPTO_AUTO_VERIFY_ENABLED' => '0',
-        'CRYPTO_AUTO_VERIFY_PROVIDER_URL' => '',
+        'CRYPTO_AUTO_VERIFY_PROVIDER_URL' => 'http://127.0.0.1:8787/api/verify-tx',
         'CRYPTO_AUTO_VERIFY_AUTH_HEADER' => 'x-webgames-verify-token',
         'CRYPTO_AUTO_VERIFY_AUTH_TOKEN' => '',
         'CRYPTO_AUTO_VERIFY_MIN_CONFIRMATIONS' => '1',
@@ -589,10 +589,10 @@ function active_payment_processor(): string
 function coinbase_tip_tiers(): array
 {
     $amountTokens = parse_csv_env('COINBASE_TIP_AMOUNTS');
-    $currency = strtoupper(trim(env_value('COINBASE_CURRENCY', 'USD')));
+    $currency = strtoupper(trim(env_value('COINBASE_CURRENCY', 'GBP')));
 
     if (!preg_match('/^[A-Z]{3}$/', $currency)) {
-        $currency = 'USD';
+        $currency = 'GBP';
     }
 
     $tiers = [];
@@ -663,6 +663,9 @@ function crypto_receive_addresses(): array
 {
     $coins = crypto_supported_coins();
     $legacyAddress = trim(env_value('CRYPTO_RECEIVE_ADDRESS', ''));
+    $walletBaseRawJson = trim(env_value('WALLET_BASE_ADDRESSES_JSON', '{}'));
+    $walletBaseDecoded = json_decode($walletBaseRawJson, true);
+    $walletBaseByCoin = is_array($walletBaseDecoded) ? $walletBaseDecoded : [];
 
     $rawJson = trim(env_value('CRYPTO_RECEIVE_ADDRESSES_JSON', '{}'));
     $decoded = json_decode($rawJson, true);
@@ -677,6 +680,15 @@ function crypto_receive_addresses(): array
 
         if ($value === '' && isset($byCoin[strtolower($coin)]) && is_string($byCoin[strtolower($coin)])) {
             $value = trim($byCoin[strtolower($coin)]);
+        }
+
+        // Local wallet-service base addresses are the primary fallback on launch.
+        if ($value === '' && isset($walletBaseByCoin[$coin]) && is_string($walletBaseByCoin[$coin])) {
+            $value = trim($walletBaseByCoin[$coin]);
+        }
+
+        if ($value === '' && isset($walletBaseByCoin[strtolower($coin)]) && is_string($walletBaseByCoin[strtolower($coin)])) {
+            $value = trim($walletBaseByCoin[strtolower($coin)]);
         }
 
         if ($value === '' && $legacyAddress !== '') {

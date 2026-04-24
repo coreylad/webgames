@@ -688,7 +688,7 @@ $show_login     = !$needs_setup && !$show_dashboard;
                         </div>
                         <div class="form-group">
                             <label for="coinbaseCurrencyInput">Local Currency</label>
-                            <input type="text" id="coinbaseCurrencyInput" placeholder="USD" maxlength="3" />
+                            <input type="text" id="coinbaseCurrencyInput" placeholder="GBP" maxlength="3" />
                         </div>
                         <div class="form-group">
                             <label for="coinbaseSupportedCoinsInput">Supported Coins</label>
@@ -1559,7 +1559,7 @@ $show_login     = !$needs_setup && !$show_dashboard;
         document.getElementById('stripeTierPriceIdsInput').value = config?.stripe?.tierPriceIds || '';
 
         document.getElementById('coinbaseTipAmountsInput').value = config?.coinbase?.tipAmounts || '5,10,20';
-        document.getElementById('coinbaseCurrencyInput').value = config?.coinbase?.currency || 'USD';
+        document.getElementById('coinbaseCurrencyInput').value = config?.coinbase?.currency || 'GBP';
         document.getElementById('coinbaseSupportedCoinsInput').value = config?.coinbase?.supportedCoins || 'BTC,ETH,LTC,BCH,DOGE,USDC,USDT,XRP';
         document.getElementById('cryptoAssetInput').value = config?.coinbase?.cryptoAsset || 'USDC';
         document.getElementById('cryptoReceiveAddressInput').value = config?.coinbase?.receiveAddress || '';
@@ -1580,6 +1580,7 @@ $show_login     = !$needs_setup && !$show_dashboard;
 
         buildCoinAddressRows('cryptoReceiveAddressRows', receiveData, 'Your');
         buildCoinAddressRows('cryptoDestinationAddressRows', destinationData, 'Coinbase');
+        autofillReceiveAddressRows();
         document.getElementById('coinbaseTransferRequestUrlInput').value = config?.coinbase?.transferRequestUrl || '';
         document.getElementById('coinbaseTransferAuthHeaderInput').value = config?.coinbase?.transferAuthHeader || 'x-coinbase-transfer-token';
         document.getElementById('coinbaseTransferAuthTokenInput').value = config?.coinbase?.transferAuthToken || '';
@@ -1636,7 +1637,7 @@ $show_login     = !$needs_setup && !$show_dashboard;
             },
             coinbase: {
                 tipAmounts: document.getElementById('coinbaseTipAmountsInput').value.trim(),
-                currency: String(document.getElementById('coinbaseCurrencyInput').value || 'USD').toUpperCase(),
+                currency: String(document.getElementById('coinbaseCurrencyInput').value || 'GBP').toUpperCase(),
                 supportedCoins: String(document.getElementById('coinbaseSupportedCoinsInput').value || 'BTC,ETH,LTC,BCH,DOGE,USDC,USDT,XRP').toUpperCase(),
                 receiveAddressesJson: collectCoinAddressJson('cryptoReceiveAddressRows'),
                 cryptoAsset: String(document.getElementById('cryptoAssetInput').value || 'USDC').toUpperCase(),
@@ -1755,7 +1756,11 @@ $show_login     = !$needs_setup && !$show_dashboard;
 
     function getCoinList() {
         const raw = String(document.getElementById('coinbaseSupportedCoinsInput')?.value || 'BTC,ETH,LTC,BCH,DOGE,USDC,USDT,XRP');
-        return raw.split(',').map(s => s.trim().toUpperCase()).filter(s => s.length >= 2);
+        const coins = raw.split(',').map(s => s.trim().toUpperCase()).filter(s => s.length >= 2);
+        if (!coins.includes('XRP')) {
+            coins.push('XRP');
+        }
+        return [...new Set(coins)];
     }
 
     const COIN_COLORS = {

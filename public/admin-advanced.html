@@ -696,7 +696,7 @@
                             <div class="settings-grid">
                                 <div class="form-group">
                                     <label for="advCoinbaseCurrency">Local Currency</label>
-                                    <input type="text" id="advCoinbaseCurrency" placeholder="USD" maxlength="3" />
+                                    <input type="text" id="advCoinbaseCurrency" placeholder="GBP" maxlength="3" />
                                 </div>
                                 <div class="form-group">
                                     <label for="advCoinbaseTipAmounts">Tip Amounts</label>
@@ -704,7 +704,7 @@
                                 </div>
                                 <div class="form-group">
                                     <label for="advCoinbaseSupportedCoins">Supported Coins</label>
-                                    <input type="text" id="advCoinbaseSupportedCoins" placeholder="BTC,ETH,LTC,BCH,DOGE,USDC,USDT" />
+                                    <input type="text" id="advCoinbaseSupportedCoins" placeholder="BTC,ETH,LTC,BCH,DOGE,USDC,USDT,XRP" />
                                 </div>
                                 <div class="form-group">
                                     <label for="advCryptoAsset">Default Crypto Asset</label>
@@ -1114,9 +1114,9 @@ BASE_URL=https://yourdomain.com</pre>
             document.getElementById('advStripeTierProductIds').value = config?.stripe?.tierProductIds || '';
             document.getElementById('advStripeTierPriceIds').value = config?.stripe?.tierPriceIds || '';
 
-            document.getElementById('advCoinbaseCurrency').value = config?.coinbase?.currency || 'USD';
+            document.getElementById('advCoinbaseCurrency').value = config?.coinbase?.currency || 'GBP';
             document.getElementById('advCoinbaseTipAmounts').value = config?.coinbase?.tipAmounts || '5,10,20';
-            document.getElementById('advCoinbaseSupportedCoins').value = config?.coinbase?.supportedCoins || 'BTC,ETH,LTC,BCH,DOGE,USDC,USDT';
+            document.getElementById('advCoinbaseSupportedCoins').value = config?.coinbase?.supportedCoins || 'BTC,ETH,LTC,BCH,DOGE,USDC,USDT,XRP';
             document.getElementById('advCryptoAsset').value = config?.coinbase?.cryptoAsset || 'USDC';
             document.getElementById('advCoinbaseApiKey').value = config?.coinbase?.apiKey || '';
             document.getElementById('advCoinbaseWebhookSecret').value = config?.coinbase?.webhookSecret || '';
@@ -1159,9 +1159,9 @@ BASE_URL=https://yourdomain.com</pre>
                     tierPriceIds: document.getElementById('advStripeTierPriceIds').value.trim()
                 },
                 coinbase: {
-                    currency: String(document.getElementById('advCoinbaseCurrency').value || 'USD').toUpperCase(),
+                    currency: String(document.getElementById('advCoinbaseCurrency').value || 'GBP').toUpperCase(),
                     tipAmounts: document.getElementById('advCoinbaseTipAmounts').value.trim(),
-                    supportedCoins: String(document.getElementById('advCoinbaseSupportedCoins').value || 'BTC,ETH,LTC,BCH,DOGE,USDC,USDT').toUpperCase(),
+                    supportedCoins: String(document.getElementById('advCoinbaseSupportedCoins').value || 'BTC,ETH,LTC,BCH,DOGE,USDC,USDT,XRP').toUpperCase(),
                     cryptoAsset: String(document.getElementById('advCryptoAsset').value || 'USDC').toUpperCase(),
                     apiKey: document.getElementById('advCoinbaseApiKey').value.trim(),
                     webhookSecret: document.getElementById('advCoinbaseWebhookSecret').value.trim(),

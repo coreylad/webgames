@@ -111,7 +111,7 @@ switch ($action) {
                     'apiKey' => env_value('COINBASE_COMMERCE_API_KEY', ''),
                     'webhookSecret' => env_value('COINBASE_COMMERCE_WEBHOOK_SECRET', ''),
                     'tipAmounts' => env_value('COINBASE_TIP_AMOUNTS', '5,10,20'),
-                    'currency' => env_value('COINBASE_CURRENCY', 'USD'),
+                    'currency' => env_value('COINBASE_CURRENCY', 'GBP'),
                     'supportedCoins' => env_value('COINBASE_SUPPORTED_COINS', 'BTC,ETH,LTC,BCH,DOGE,USDC,USDT,XRP'),
                     'receiveAddressesJson' => env_value('CRYPTO_RECEIVE_ADDRESSES_JSON', '{}'),
                     'receiveAddresses' => crypto_receive_addresses(),
@@ -162,7 +162,7 @@ switch ($action) {
         $stripeTierProductIds = trim((string)($stripe['tierProductIds'] ?? env_value('STRIPE_TIER_PRODUCT_IDS', '')));
         $stripeTierPriceIds = trim((string)($stripe['tierPriceIds'] ?? env_value('STRIPE_TIER_PRICE_IDS', '')));
 
-        $coinbaseCurrency = strtoupper(trim((string)($coinbase['currency'] ?? env_value('COINBASE_CURRENCY', 'USD'))));
+        $coinbaseCurrency = strtoupper(trim((string)($coinbase['currency'] ?? env_value('COINBASE_CURRENCY', 'GBP'))));
         if (!preg_match('/^[A-Z]{3}$/', $coinbaseCurrency)) {
             json_response(['error' => 'Coinbase local currency must be a 3-letter ISO code'], 400);
         }

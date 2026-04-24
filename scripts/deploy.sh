@@ -133,7 +133,7 @@ ensure_env_key "STRIPE_TIER_PRICE_IDS" ""
 ensure_env_key "COINBASE_COMMERCE_API_KEY" ""
 ensure_env_key "COINBASE_COMMERCE_WEBHOOK_SECRET" ""
 ensure_env_key "COINBASE_TIP_AMOUNTS" "5,10,20"
-ensure_env_key "COINBASE_CURRENCY" "USD"
+ensure_env_key "COINBASE_CURRENCY" "GBP"
 ensure_env_key "COINBASE_SUPPORTED_COINS" "BTC,ETH,LTC,BCH,DOGE,USDC,USDT,XRP"
 ensure_env_key "CRYPTO_RECEIVE_ADDRESSES_JSON" "{}"
 ensure_env_key "COINBASE_DESTINATION_ADDRESSES_JSON" "{}"
@@ -165,6 +165,10 @@ if command -v openssl >/dev/null 2>&1; then
   set_env_if_empty "CRYPTO_DERIVATION_AUTH_TOKEN" "$(openssl rand -hex 32)"
   set_env_if_empty "WALLET_DERIVATION_SECRET" "$(openssl rand -hex 32)"
   set_env_if_empty "CRYPTO_AUTO_VERIFY_AUTH_TOKEN" "$(openssl rand -hex 32)"
+fi
+
+if grep -qE '^CRYPTO_AUTO_VERIFY_PROVIDER_URL=$' "${APP_DIR}/.env"; then
+  sed -i 's|^CRYPTO_AUTO_VERIFY_PROVIDER_URL=$|CRYPTO_AUTO_VERIFY_PROVIDER_URL=http://127.0.0.1:8787/api/verify-tx|' "${APP_DIR}/.env"
 fi
 
 echo "[5/8] Verifying required served files..."

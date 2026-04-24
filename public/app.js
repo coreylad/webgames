@@ -8,6 +8,20 @@ let activeTipProcessor = "stripe";
 const processorTierMap = new Map();
 const processorErrors = new Map();
 
+async function fetchWithTimeout(url, options = {}, timeoutMs = 10000) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 function processorLabel(processor) {
   if (processor === "coinbase") {
     return "Crypto (BTCPay-style)";
@@ -49,7 +63,13 @@ function renderProcessorTiers(processor) {
 }
 
 async function loadTiersForProcessor(processor) {
-  const response = await fetch(`/api/tip-tiers.php?processor=${encodeURIComponent(processor)}`);
+  let response;
+  try {
+    response = await fetchWithTimeout(`/api/tip-tiers.php?processor=${encodeURIComponent(processor)}`, {}, 10000);
+  } catch (error) {
+    throw new Error(`Timed out loading ${processorLabel(processor)} tiers.`);
+  }
+
   const payload = await response.json().catch(() => ({}));
 
   if (!response.ok) {
@@ -122,8 +142,9 @@ async function loadTipTiers() {
   } catch (error) {
     paymentProcessorSelect.innerHTML = '<option value="">Unavailable</option>';
     priceIdSelect.innerHTML = '<option value="">Tier loading failed</option>';
-    tipMessage.textContent = error.message;
+    tipMessage.textContent = `${error.message} Refresh to retry or check payment settings in admin.`;
     tipMessage.className = "status error";
+    tipSubmit.disabled = true;
   }
 }
 
