@@ -31,9 +31,22 @@ if [ -z "${APP_REAL}" ]; then
   APP_REAL="$(normalize_path "${APP_DIR}")"
 fi
 
+if [ -z "${DEPLOY_SCRIPT_REEXEC:-}" ] && command -v git >/dev/null 2>&1; then
+  if git -C "${REPO_DIR}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    echo "[0/8] Syncing deploy script from git..."
+    git -C "${REPO_DIR}" pull --ff-only
+    exec env DEPLOY_SCRIPT_REEXEC=1 bash "${REPO_DIR}/scripts/deploy.sh" "$@"
+  fi
+fi
+
 echo "[1/8] Installing deployment requirements..."
 if command -v apt-get >/dev/null 2>&1; then
   export DEBIAN_FRONTEND=noninteractive
+  # Clear distro npm selection before any install transaction when NodeSource
+  # nodejs is present (or will be selected).
+  apt-mark unhold nodejs npm >/dev/null 2>&1 || true
+  apt-get purge -y npm >/dev/null 2>&1 || true
+
   apt-get update -y
 
   # Install core system packages first; Node.js/npm are handled separately
@@ -59,8 +72,6 @@ if command -v apt-get >/dev/null 2>&1; then
   # Ensure Node.js + npm are installed from a single package source.
   # Never run a blind --fix-broken here because it can re-select apt npm,
   # which conflicts with NodeSource nodejs packages.
-  apt-mark unhold nodejs npm >/dev/null 2>&1 || true
-
   NODEJS_POLICY="$(apt-cache policy nodejs 2>/dev/null || true)"
   NODEJS_VERSION="$(dpkg-query -W -f='${Version}' nodejs 2>/dev/null || true)"
   if printf '%s\n%s' "${NODEJS_POLICY}" "${NODEJS_VERSION}" | grep -Eqi 'nodesource|deb\.nodesource\.com|nodistro'; then
