@@ -112,7 +112,7 @@ switch ($action) {
                     'webhookSecret' => env_value('COINBASE_COMMERCE_WEBHOOK_SECRET', ''),
                     'tipAmounts' => env_value('COINBASE_TIP_AMOUNTS', '5,10,20'),
                     'currency' => env_value('COINBASE_CURRENCY', 'USD'),
-                    'supportedCoins' => env_value('COINBASE_SUPPORTED_COINS', 'BTC,ETH,LTC,BCH,DOGE,USDC,USDT'),
+                    'supportedCoins' => env_value('COINBASE_SUPPORTED_COINS', 'BTC,ETH,LTC,BCH,DOGE,USDC,USDT,XRP'),
                     'receiveAddressesJson' => env_value('CRYPTO_RECEIVE_ADDRESSES_JSON', '{}'),
                     'destinationAddressesJson' => env_value('COINBASE_DESTINATION_ADDRESSES_JSON', '{}'),
                     'cryptoAsset' => env_value('CRYPTO_ASSET', 'USDC'),
@@ -189,7 +189,7 @@ switch ($action) {
         $coinbaseTransferAuthToken = trim((string)($coinbase['transferAuthToken'] ?? env_value('COINBASE_TRANSFER_AUTH_TOKEN', '')));
         $coinbaseApiKey = trim((string)($coinbase['apiKey'] ?? env_value('COINBASE_COMMERCE_API_KEY', '')));
         $coinbaseWebhookSecret = trim((string)($coinbase['webhookSecret'] ?? env_value('COINBASE_COMMERCE_WEBHOOK_SECRET', '')));
-        $coinbaseSupportedCoins = strtoupper(trim((string)($coinbase['supportedCoins'] ?? env_value('COINBASE_SUPPORTED_COINS', 'BTC,ETH,LTC,BCH,DOGE,USDC,USDT'))));
+        $coinbaseSupportedCoins = strtoupper(trim((string)($coinbase['supportedCoins'] ?? env_value('COINBASE_SUPPORTED_COINS', 'BTC,ETH,LTC,BCH,DOGE,USDC,USDT,XRP'))));
         $coinbaseReceiveAddressesJson = trim((string)($coinbase['receiveAddressesJson'] ?? env_value('CRYPTO_RECEIVE_ADDRESSES_JSON', '{}')));
         $coinbaseDestinationAddressesJson = trim((string)($coinbase['destinationAddressesJson'] ?? env_value('COINBASE_DESTINATION_ADDRESSES_JSON', '{}')));
 

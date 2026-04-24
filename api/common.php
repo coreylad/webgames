@@ -29,7 +29,7 @@ function load_env_values(): array
         'COINBASE_COMMERCE_WEBHOOK_SECRET' => '',
         'COINBASE_TIP_AMOUNTS' => '5,10,20',
         'COINBASE_CURRENCY' => 'USD',
-        'COINBASE_SUPPORTED_COINS' => 'BTC,ETH,LTC,BCH,DOGE,USDC,USDT',
+        'COINBASE_SUPPORTED_COINS' => 'BTC,ETH,LTC,BCH,DOGE,USDC,USDT,XRP',
         'CRYPTO_RECEIVE_ADDRESSES_JSON' => '{}',
         'COINBASE_DESTINATION_ADDRESSES_JSON' => '{}',
         'CRYPTO_ASSET' => 'USDC',
@@ -623,7 +623,7 @@ function coinbase_tip_tiers(): array
 
 function crypto_supported_coins(): array
 {
-    $defaults = ['BTC', 'ETH', 'LTC', 'BCH', 'DOGE', 'USDC', 'USDT'];
+    $defaults = ['BTC', 'ETH', 'LTC', 'BCH', 'DOGE', 'USDC', 'USDT', 'XRP'];
     $raw = parse_csv_env('COINBASE_SUPPORTED_COINS');
     $tokens = !empty($raw) ? $raw : $defaults;
 

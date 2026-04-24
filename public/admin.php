@@ -692,27 +692,34 @@ $show_login     = !$needs_setup && !$show_dashboard;
                         </div>
                         <div class="form-group">
                             <label for="coinbaseSupportedCoinsInput">Supported Coins</label>
-                            <input type="text" id="coinbaseSupportedCoinsInput" placeholder="BTC,ETH,LTC,BCH,DOGE,USDC,USDT" />
-                            <div class="settings-note">Comma-separated symbols shown to users in crypto checkout.</div>
+                            <input type="text" id="coinbaseSupportedCoinsInput" placeholder="BTC,ETH,LTC,BCH,DOGE,USDC,USDT,XRP" onblur="rebuildCoinAddressRows()" />
+                            <div class="settings-note">Comma-separated symbols. Changing this rebuilds the address fields below.</div>
                         </div>
                         <div class="form-group">
-                            <label for="cryptoAssetInput">Crypto Asset</label>
+                            <label for="cryptoAssetInput">Default Coin</label>
                             <input type="text" id="cryptoAssetInput" placeholder="USDC" maxlength="12" />
                         </div>
+
                         <div class="form-group" style="grid-column: 1 / -1;">
-                            <label for="cryptoReceiveAddressesJsonInput">Per-Coin Receive Addresses (JSON)</label>
-                            <textarea id="cryptoReceiveAddressesJsonInput" rows="6" placeholder='{"BTC":"bc1...","ETH":"0x...","USDT":"0x..."}'></textarea>
-                            <div class="settings-note">BTCPay-style wallet mapping. Keys are coin symbols, values are receive addresses.</div>
+                            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.6rem;">
+                                <strong style="color:#2ae8c7;">Receive Addresses</strong>
+                                <span style="font-size:0.78rem;opacity:0.65;">Where users send their tips — your on-site wallets</span>
+                            </div>
+                            <div id="cryptoReceiveAddressRows" style="display:grid;gap:0.45rem;"></div>
                         </div>
+
                         <div class="form-group" style="grid-column: 1 / -1;">
-                            <label for="cryptoReceiveAddressInput">Local Receive Address</label>
-                            <input type="text" id="cryptoReceiveAddressInput" placeholder="Crypto wallet address controlled by this site" />
-                            <div class="settings-note">Fallback address for any coin without an explicit address in the JSON map above.</div>
+                            <label for="cryptoReceiveAddressInput">Fallback Receive Address</label>
+                            <input type="text" id="cryptoReceiveAddressInput" placeholder="Used for any coin not listed above" />
+                            <div class="settings-note">Optional. Used when a coin has no specific address set above.</div>
                         </div>
+
                         <div class="form-group" style="grid-column: 1 / -1;">
-                            <label for="coinbaseDestinationAddressesJsonInput">Per-Coin Coinbase Destination Addresses (JSON)</label>
-                            <textarea id="coinbaseDestinationAddressesJsonInput" rows="6" placeholder='{"BTC":"coinbase-btc-deposit-addr","ETH":"coinbase-eth-deposit-addr","USDT":"coinbase-usdt-deposit-addr"}'></textarea>
-                            <div class="settings-note">Your Coinbase receive addresses per coin. Funds are withdrawn here when you trigger "Withdraw to Coinbase".</div>
+                            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.6rem;">
+                                <strong style="color:#4b7fff;">Coinbase Destination Addresses</strong>
+                                <span style="font-size:0.78rem;opacity:0.65;">Your Coinbase deposit addresses — where you withdraw to</span>
+                            </div>
+                            <div id="cryptoDestinationAddressRows" style="display:grid;gap:0.45rem;"></div>
                         </div>
                         <div class="form-group">
                             <label for="coinbaseDestinationAccountInput">Coinbase Destination (legacy fallback)</label>
@@ -1485,12 +1492,15 @@ $show_login     = !$needs_setup && !$show_dashboard;
 
         document.getElementById('coinbaseTipAmountsInput').value = config?.coinbase?.tipAmounts || '5,10,20';
         document.getElementById('coinbaseCurrencyInput').value = config?.coinbase?.currency || 'USD';
-        document.getElementById('coinbaseSupportedCoinsInput').value = config?.coinbase?.supportedCoins || 'BTC,ETH,LTC,BCH,DOGE,USDC,USDT';
-        document.getElementById('cryptoReceiveAddressesJsonInput').value = config?.coinbase?.receiveAddressesJson || '{}';
+        document.getElementById('coinbaseSupportedCoinsInput').value = config?.coinbase?.supportedCoins || 'BTC,ETH,LTC,BCH,DOGE,USDC,USDT,XRP';
         document.getElementById('cryptoAssetInput').value = config?.coinbase?.cryptoAsset || 'USDC';
         document.getElementById('cryptoReceiveAddressInput').value = config?.coinbase?.receiveAddress || '';
-        document.getElementById('coinbaseDestinationAddressesJsonInput').value = config?.coinbase?.destinationAddressesJson || '{}';
+        document.getElementById('coinbaseDestinationAddressesJsonInput') && (document.getElementById('coinbaseDestinationAddressesJsonInput').value = config?.coinbase?.destinationAddressesJson || '{}');
         document.getElementById('coinbaseDestinationAccountInput').value = config?.coinbase?.destinationAccount || '';
+
+        // Build per-coin address rows from config
+        buildCoinAddressRows('cryptoReceiveAddressRows', tryParseJson(config?.coinbase?.receiveAddressesJson || '{}'), 'Your');
+        buildCoinAddressRows('cryptoDestinationAddressRows', tryParseJson(config?.coinbase?.destinationAddressesJson || '{}'), 'Coinbase');
         document.getElementById('coinbaseTransferRequestUrlInput').value = config?.coinbase?.transferRequestUrl || '';
         document.getElementById('coinbaseTransferAuthHeaderInput').value = config?.coinbase?.transferAuthHeader || 'x-coinbase-transfer-token';
         document.getElementById('coinbaseTransferAuthTokenInput').value = config?.coinbase?.transferAuthToken || '';
@@ -1534,11 +1544,11 @@ $show_login     = !$needs_setup && !$show_dashboard;
             coinbase: {
                 tipAmounts: document.getElementById('coinbaseTipAmountsInput').value.trim(),
                 currency: String(document.getElementById('coinbaseCurrencyInput').value || 'USD').toUpperCase(),
-                supportedCoins: String(document.getElementById('coinbaseSupportedCoinsInput').value || 'BTC,ETH,LTC,BCH,DOGE,USDC,USDT').toUpperCase(),
-                receiveAddressesJson: document.getElementById('cryptoReceiveAddressesJsonInput').value.trim(),
+                supportedCoins: String(document.getElementById('coinbaseSupportedCoinsInput').value || 'BTC,ETH,LTC,BCH,DOGE,USDC,USDT,XRP').toUpperCase(),
+                receiveAddressesJson: collectCoinAddressJson('cryptoReceiveAddressRows'),
                 cryptoAsset: String(document.getElementById('cryptoAssetInput').value || 'USDC').toUpperCase(),
                 receiveAddress: document.getElementById('cryptoReceiveAddressInput').value.trim(),
-                destinationAddressesJson: document.getElementById('coinbaseDestinationAddressesJsonInput').value.trim(),
+                destinationAddressesJson: collectCoinAddressJson('cryptoDestinationAddressRows'),
                 destinationAccount: document.getElementById('coinbaseDestinationAccountInput').value.trim(),
                 transferRequestUrl: document.getElementById('coinbaseTransferRequestUrlInput').value.trim(),
                 transferAuthHeader: document.getElementById('coinbaseTransferAuthHeaderInput').value.trim(),
@@ -1629,6 +1639,76 @@ $show_login     = !$needs_setup && !$show_dashboard;
             .replaceAll('"', '&quot;')
             .replaceAll("'", '&#39;');
     }
+
+    // ── Coin address row builders ──────────────────────────────────────────────
+
+    function tryParseJson(raw) {
+        try { return JSON.parse(raw || '{}') || {}; } catch { return {}; }
+    }
+
+    function getCoinList() {
+        const raw = String(document.getElementById('coinbaseSupportedCoinsInput')?.value || 'BTC,ETH,LTC,BCH,DOGE,USDC,USDT,XRP');
+        return raw.split(',').map(s => s.trim().toUpperCase()).filter(s => s.length >= 2);
+    }
+
+    const COIN_COLORS = {
+        BTC: '#f7931a', ETH: '#627eea', LTC: '#bfbbbb', BCH: '#8dc351',
+        DOGE: '#c2a633', USDC: '#2775ca', USDT: '#26a17b', XRP: '#346aa9'
+    };
+
+    function buildCoinAddressRows(containerId, currentData, placeholderPrefix) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+
+        // Preserve existing values before rebuild
+        const existing = {};
+        container.querySelectorAll('input[data-coin]').forEach(inp => {
+            const v = inp.value.trim();
+            if (v) existing[inp.dataset.coin] = v;
+        });
+
+        const coins = getCoinList();
+        container.innerHTML = '';
+
+        coins.forEach(coin => {
+            const val = existing[coin] || currentData[coin] || currentData[coin.toLowerCase()] || '';
+            const color = COIN_COLORS[coin] || '#2ae8c7';
+
+            const row = document.createElement('div');
+            row.style.cssText = 'display:grid;grid-template-columns:72px 1fr;align-items:center;gap:0.5rem;';
+            row.innerHTML = `
+                <label style="margin:0;padding:0.28rem 0.5rem;border-radius:6px;background:${escapeHtml(color)}22;border:1px solid ${escapeHtml(color)}55;color:${escapeHtml(color)};font-weight:700;font-size:0.82rem;text-align:center;letter-spacing:0.04em;">${escapeHtml(coin)}</label>
+                <input type="text"
+                    id="${escapeHtml(containerId)}_${escapeHtml(coin)}"
+                    data-coin="${escapeHtml(coin)}"
+                    placeholder="${escapeHtml(placeholderPrefix)} ${escapeHtml(coin)} address"
+                    value="${escapeHtml(val)}"
+                    style="font-family:monospace;font-size:0.83rem;" />
+            `;
+            container.appendChild(row);
+        });
+    }
+
+    function collectCoinAddressJson(containerId) {
+        const container = document.getElementById(containerId);
+        if (!container) return '{}';
+        const result = {};
+        container.querySelectorAll('input[data-coin]').forEach(inp => {
+            const val = inp.value.trim();
+            if (val) result[inp.dataset.coin] = val;
+        });
+        return JSON.stringify(result);
+    }
+
+    function rebuildCoinAddressRows() {
+        // Preserve current values during rebuild
+        const receiveData = tryParseJson(collectCoinAddressJson('cryptoReceiveAddressRows'));
+        const destData = tryParseJson(collectCoinAddressJson('cryptoDestinationAddressRows'));
+        buildCoinAddressRows('cryptoReceiveAddressRows', receiveData, 'Your');
+        buildCoinAddressRows('cryptoDestinationAddressRows', destData, 'Coinbase');
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
 
     async function loadWalletOverview() {
         const grid = document.getElementById('walletOverviewGrid');

@@ -79,11 +79,12 @@ if ($cryptoAmountRounded === '') {
 }
 
 $schemeMap = [
-    'BTC' => 'bitcoin',
-    'LTC' => 'litecoin',
-    'BCH' => 'bitcoincash',
+    'BTC'  => 'bitcoin',
+    'LTC'  => 'litecoin',
+    'BCH'  => 'bitcoincash',
     'DOGE' => 'dogecoin',
-    'ETH' => 'ethereum'
+    'ETH'  => 'ethereum',
+    'XRP'  => 'ripple'
 ];
 $scheme = $schemeMap[$asset] ?? strtolower($asset);
 $paymentUri = $scheme . ':' . $address . '?amount=' . rawurlencode($cryptoAmountRounded);
