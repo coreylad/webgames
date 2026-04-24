@@ -35,6 +35,9 @@ echo "[1/8] Installing deployment requirements..."
 if command -v apt-get >/dev/null 2>&1; then
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -y
+
+  # Install core system packages first; Node.js/npm are handled separately
+  # to avoid NodeSource vs distro npm conflicts.
   apt-get install -y \
     nginx \
     rsync \
@@ -42,8 +45,6 @@ if command -v apt-get >/dev/null 2>&1; then
     curl \
     jq \
     openssl \
-    nodejs \
-    npm \
     php \
     php-cli \
     php-fpm \
@@ -54,6 +55,20 @@ if command -v apt-get >/dev/null 2>&1; then
     php-zip \
     php-bcmath \
     php-gmp
+
+  # Ensure Node.js + npm are installed from a single package source.
+  apt-mark unhold nodejs npm >/dev/null 2>&1 || true
+  apt-get install -y --fix-broken || true
+
+  NODEJS_POLICY="$(apt-cache policy nodejs 2>/dev/null || true)"
+  if printf '%s' "${NODEJS_POLICY}" | grep -qi 'nodesource'; then
+    # NodeSource nodejs already bundles npm and conflicts with apt npm.
+    apt-get purge -y npm >/dev/null 2>&1 || true
+    apt-get install -y nodejs
+  else
+    # Distro packages typically split nodejs and npm.
+    apt-get install -y nodejs npm
+  fi
 else
   echo "apt-get not found; skipping automatic package installation."
 fi
