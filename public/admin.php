@@ -610,13 +610,12 @@ $show_login     = !$needs_setup && !$show_dashboard;
 
                     <div class="settings-grid">
                         <div class="form-group">
-                            <label for="activePaymentProcessor">Active Processor</label>
+                            <label for="activePaymentProcessor">Default Processor Fallback</label>
                             <select id="activePaymentProcessor">
                                 <option value="stripe">Stripe</option>
-                                <option value="paypal">PayPal</option>
-                                <option value="coinbase">Local Crypto + Coinbase Transfer</option>
+                                <option value="coinbase">Crypto</option>
                             </select>
-                            <div class="settings-note">This controls which processor is used by the public tip flow.</div>
+                            <div class="settings-note">Users can choose Stripe or Crypto on the tip page. This fallback is used only when a processor is not explicitly provided.</div>
                         </div>
                     </div>
 
@@ -681,42 +680,6 @@ $show_login     = !$needs_setup && !$show_dashboard;
                         <button class="btn btn-reject" type="button" id="resetStripeAccountBtn" onclick="resetStripeAccountConfig()">Reset Stripe Account</button>
                     </div>
 
-                    <h3 style="margin-top:1.1rem;margin-bottom:0.65rem;">PayPal Advanced Settings</h3>
-                    <div class="settings-grid">
-                        <div class="form-group">
-                            <label for="paypalEnvironmentInput">PayPal Environment</label>
-                            <select id="paypalEnvironmentInput">
-                                <option value="sandbox">sandbox</option>
-                                <option value="live">live</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="paypalClientIdInput">PayPal Client ID</label>
-                            <input type="text" id="paypalClientIdInput" placeholder="PayPal app client id" />
-                        </div>
-                        <div class="form-group">
-                            <label for="paypalClientSecretInput">PayPal Client Secret</label>
-                            <input type="password" id="paypalClientSecretInput" placeholder="PayPal app client secret" />
-                        </div>
-                        <div class="form-group">
-                            <label for="paypalWebhookIdInput">PayPal Webhook ID</label>
-                            <input type="text" id="paypalWebhookIdInput" placeholder="Webhook ID (optional)" />
-                        </div>
-                        <div class="form-group">
-                            <label for="paypalCurrencyInput">PayPal Currency</label>
-                            <input type="text" id="paypalCurrencyInput" placeholder="GBP" maxlength="3" />
-                        </div>
-                        <div class="form-group">
-                            <label for="paypalTipAmountsInput">PayPal Tip Amounts</label>
-                            <input type="text" id="paypalTipAmountsInput" placeholder="5,10,20" />
-                        </div>
-                        <div class="form-group" style="grid-column: 1 / -1;">
-                            <label for="paypalCheckoutUrlInput">PayPal Checkout URL</label>
-                            <input type="url" id="paypalCheckoutUrlInput" placeholder="https://your-paypal-checkout-endpoint.example/checkout" />
-                            <div class="settings-note">When active processor is PayPal, tip flow redirects to this URL.</div>
-                        </div>
-                    </div>
-
                     <h3 style="margin-top:1.1rem;margin-bottom:0.65rem;">Local Crypto + Coinbase Transfer Settings</h3>
                     <div class="settings-grid">
                         <div class="form-group">
@@ -728,16 +691,31 @@ $show_login     = !$needs_setup && !$show_dashboard;
                             <input type="text" id="coinbaseCurrencyInput" placeholder="USD" maxlength="3" />
                         </div>
                         <div class="form-group">
+                            <label for="coinbaseSupportedCoinsInput">Supported Coins</label>
+                            <input type="text" id="coinbaseSupportedCoinsInput" placeholder="BTC,ETH,LTC,BCH,DOGE,USDC,USDT" />
+                            <div class="settings-note">Comma-separated symbols shown to users in crypto checkout.</div>
+                        </div>
+                        <div class="form-group">
                             <label for="cryptoAssetInput">Crypto Asset</label>
                             <input type="text" id="cryptoAssetInput" placeholder="USDC" maxlength="12" />
                         </div>
                         <div class="form-group" style="grid-column: 1 / -1;">
+                            <label for="cryptoReceiveAddressesJsonInput">Per-Coin Receive Addresses (JSON)</label>
+                            <textarea id="cryptoReceiveAddressesJsonInput" rows="6" placeholder='{"BTC":"bc1...","ETH":"0x...","USDT":"0x..."}'></textarea>
+                            <div class="settings-note">BTCPay-style wallet mapping. Keys are coin symbols, values are receive addresses.</div>
+                        </div>
+                        <div class="form-group" style="grid-column: 1 / -1;">
                             <label for="cryptoReceiveAddressInput">Local Receive Address</label>
                             <input type="text" id="cryptoReceiveAddressInput" placeholder="Crypto wallet address controlled by this site" />
-                            <div class="settings-note">Users send funds here first. This is on-site payment intake.</div>
+                            <div class="settings-note">Fallback address for any coin without an explicit address in the JSON map above.</div>
+                        </div>
+                        <div class="form-group" style="grid-column: 1 / -1;">
+                            <label for="coinbaseDestinationAddressesJsonInput">Per-Coin Coinbase Destination Addresses (JSON)</label>
+                            <textarea id="coinbaseDestinationAddressesJsonInput" rows="6" placeholder='{"BTC":"coinbase-btc-deposit-addr","ETH":"coinbase-eth-deposit-addr","USDT":"coinbase-usdt-deposit-addr"}'></textarea>
+                            <div class="settings-note">Your Coinbase receive addresses per coin. Funds are withdrawn here when you trigger "Withdraw to Coinbase".</div>
                         </div>
                         <div class="form-group">
-                            <label for="coinbaseDestinationAccountInput">Coinbase Destination</label>
+                            <label for="coinbaseDestinationAccountInput">Coinbase Destination (legacy fallback)</label>
                             <input type="text" id="coinbaseDestinationAccountInput" placeholder="Coinbase account email or deposit address" />
                         </div>
                         <div class="form-group" style="grid-column: 1 / -1;">
@@ -764,6 +742,20 @@ $show_login     = !$needs_setup && !$show_dashboard;
                     </div>
 
                     <div class="settings-status" id="paymentProcessorsStatus"></div>
+                </div>
+
+                <h2>Crypto Wallets</h2>
+                <div class="settings-panel">
+                    <p class="settings-note" style="margin-bottom:0.85rem;">
+                        Overview of each configured coin wallet. Receive address is where users send tips. Coinbase destination is where you withdraw to. Confirmed balance is based on on-site confirmed tips.
+                    </p>
+                    <div class="wizard-nav" style="margin-top:0.2rem;margin-bottom:0.65rem;">
+                        <button class="btn" type="button" onclick="loadWalletOverview()">Reload Wallets</button>
+                    </div>
+                    <div id="walletOverviewGrid" style="display:grid;gap:0.85rem;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));margin-top:0.5rem;">
+                        <p style="opacity:0.7">No wallet data loaded yet.</p>
+                    </div>
+                    <div class="settings-status" id="walletOverviewStatus"></div>
                 </div>
 
                 <h2>Crypto Transfer Queue</h2>
@@ -1491,18 +1483,13 @@ $show_login     = !$needs_setup && !$show_dashboard;
         document.getElementById('stripeTierProductIdsInput').value = config?.stripe?.tierProductIds || '';
         document.getElementById('stripeTierPriceIdsInput').value = config?.stripe?.tierPriceIds || '';
 
-        document.getElementById('paypalEnvironmentInput').value = config?.paypal?.environment || 'sandbox';
-        document.getElementById('paypalClientIdInput').value = config?.paypal?.clientId || '';
-        document.getElementById('paypalClientSecretInput').value = config?.paypal?.clientSecret || '';
-        document.getElementById('paypalWebhookIdInput').value = config?.paypal?.webhookId || '';
-        document.getElementById('paypalCurrencyInput').value = config?.paypal?.currency || 'GBP';
-        document.getElementById('paypalTipAmountsInput').value = config?.paypal?.tipAmounts || '5,10,20';
-        document.getElementById('paypalCheckoutUrlInput').value = config?.paypal?.checkoutUrl || '';
-
         document.getElementById('coinbaseTipAmountsInput').value = config?.coinbase?.tipAmounts || '5,10,20';
         document.getElementById('coinbaseCurrencyInput').value = config?.coinbase?.currency || 'USD';
+        document.getElementById('coinbaseSupportedCoinsInput').value = config?.coinbase?.supportedCoins || 'BTC,ETH,LTC,BCH,DOGE,USDC,USDT';
+        document.getElementById('cryptoReceiveAddressesJsonInput').value = config?.coinbase?.receiveAddressesJson || '{}';
         document.getElementById('cryptoAssetInput').value = config?.coinbase?.cryptoAsset || 'USDC';
         document.getElementById('cryptoReceiveAddressInput').value = config?.coinbase?.receiveAddress || '';
+        document.getElementById('coinbaseDestinationAddressesJsonInput').value = config?.coinbase?.destinationAddressesJson || '{}';
         document.getElementById('coinbaseDestinationAccountInput').value = config?.coinbase?.destinationAccount || '';
         document.getElementById('coinbaseTransferRequestUrlInput').value = config?.coinbase?.transferRequestUrl || '';
         document.getElementById('coinbaseTransferAuthHeaderInput').value = config?.coinbase?.transferAuthHeader || 'x-coinbase-transfer-token';
@@ -1544,20 +1531,14 @@ $show_login     = !$needs_setup && !$show_dashboard;
                 tierProductIds: document.getElementById('stripeTierProductIdsInput').value.trim(),
                 tierPriceIds: document.getElementById('stripeTierPriceIdsInput').value.trim()
             },
-            paypal: {
-                environment: String(document.getElementById('paypalEnvironmentInput').value || 'sandbox').toLowerCase(),
-                clientId: document.getElementById('paypalClientIdInput').value.trim(),
-                clientSecret: document.getElementById('paypalClientSecretInput').value.trim(),
-                webhookId: document.getElementById('paypalWebhookIdInput').value.trim(),
-                currency: String(document.getElementById('paypalCurrencyInput').value || 'GBP').toUpperCase(),
-                tipAmounts: document.getElementById('paypalTipAmountsInput').value.trim(),
-                checkoutUrl: document.getElementById('paypalCheckoutUrlInput').value.trim()
-            },
             coinbase: {
                 tipAmounts: document.getElementById('coinbaseTipAmountsInput').value.trim(),
                 currency: String(document.getElementById('coinbaseCurrencyInput').value || 'USD').toUpperCase(),
+                supportedCoins: String(document.getElementById('coinbaseSupportedCoinsInput').value || 'BTC,ETH,LTC,BCH,DOGE,USDC,USDT').toUpperCase(),
+                receiveAddressesJson: document.getElementById('cryptoReceiveAddressesJsonInput').value.trim(),
                 cryptoAsset: String(document.getElementById('cryptoAssetInput').value || 'USDC').toUpperCase(),
                 receiveAddress: document.getElementById('cryptoReceiveAddressInput').value.trim(),
+                destinationAddressesJson: document.getElementById('coinbaseDestinationAddressesJsonInput').value.trim(),
                 destinationAccount: document.getElementById('coinbaseDestinationAccountInput').value.trim(),
                 transferRequestUrl: document.getElementById('coinbaseTransferRequestUrlInput').value.trim(),
                 transferAuthHeader: document.getElementById('coinbaseTransferAuthHeaderInput').value.trim(),
@@ -1647,6 +1628,113 @@ $show_login     = !$needs_setup && !$show_dashboard;
             .replaceAll('>', '&gt;')
             .replaceAll('"', '&quot;')
             .replaceAll("'", '&#39;');
+    }
+
+    async function loadWalletOverview() {
+        const grid = document.getElementById('walletOverviewGrid');
+        const statusEl = document.getElementById('walletOverviewStatus');
+        if (!grid || !statusEl) {
+            return;
+        }
+
+        statusEl.className = 'settings-status';
+        statusEl.textContent = 'Loading wallet overview...';
+
+        try {
+            const data = await fetch_admin_api('wallet-overview');
+            const wallets = Array.isArray(data.wallets) ? data.wallets : [];
+            grid.innerHTML = '';
+
+            if (wallets.length === 0) {
+                grid.innerHTML = '<p style="opacity:0.7">No supported coins configured.</p>';
+                statusEl.textContent = '';
+                return;
+            }
+
+            wallets.forEach((w) => {
+                const coin = String(w.coin || '').toUpperCase();
+                const receiveAddr = String(w.receiveAddress || '');
+                const destAddr = String(w.coinbaseDestination || '');
+                const confirmedCents = Number(w.confirmedReceived?.amountCents || 0);
+                const confirmedCount = Number(w.confirmedReceived?.count || 0);
+                const transferredCents = Number(w.transferred?.amountCents || 0);
+                const pendingCount = Number(w.pending?.count || 0);
+                const confirmedFiat = (confirmedCents / 100).toFixed(2);
+                const transferredFiat = (transferredCents / 100).toFixed(2);
+                const hasReceive = !!receiveAddr;
+                const hasDest = !!destAddr;
+
+                const card = document.createElement('div');
+                card.className = 'settings-panel';
+                card.style.cssText = 'padding:0.85rem;border:1px solid rgba(42,232,199,0.28);';
+                card.innerHTML = `
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;">
+                        <strong style="font-size:1.15rem;color:#2ae8c7;">${escapeHtml(coin)}</strong>
+                        <span style="font-size:0.75rem;opacity:0.7;">${pendingCount > 0 ? `⏳ ${pendingCount} pending` : ''}</span>
+                    </div>
+                    <div style="font-size:0.8rem;margin-bottom:0.35rem;">
+                        <span style="opacity:0.75;">Receive address:</span><br>
+                        <code style="font-size:0.75rem;word-break:break-all;">${hasReceive ? escapeHtml(receiveAddr) : '<em style="opacity:0.5">Not configured</em>'}</code>
+                    </div>
+                    <div style="font-size:0.8rem;margin-bottom:0.35rem;">
+                        <span style="opacity:0.75;">Coinbase destination:</span><br>
+                        <code style="font-size:0.75rem;word-break:break-all;">${hasDest ? escapeHtml(destAddr) : '<em style="opacity:0.5">Not configured</em>'}</code>
+                    </div>
+                    <div style="display:flex;gap:0.75rem;font-size:0.78rem;margin-bottom:0.65rem;flex-wrap:wrap;">
+                        <span>✅ Confirmed: <strong>${escapeHtml(confirmedFiat)} (${confirmedCount})</strong></span>
+                        <span>🔁 Transferred: <strong>${escapeHtml(transferredFiat)}</strong></span>
+                    </div>
+                    <button class="btn btn-sm" type="button"
+                        ${confirmedCount > 0 && hasDest ? '' : 'disabled'}
+                        onclick="withdrawToCoinbase('${escapeHtml(coin)}')">
+                        Withdraw ${escapeHtml(coin)} → Coinbase
+                    </button>
+                    ${!hasDest ? '<div style="font-size:0.72rem;opacity:0.6;margin-top:0.35rem;">Set a Coinbase destination address in settings to enable withdrawal.</div>' : ''}
+                `;
+                grid.appendChild(card);
+            });
+
+            statusEl.className = 'settings-status success';
+            statusEl.textContent = `Loaded ${wallets.length} wallet(s).`;
+        } catch (err) {
+            statusEl.className = 'settings-status error';
+            statusEl.textContent = err.message || 'Unable to load wallet overview.';
+        }
+    }
+
+    async function withdrawToCoinbase(coin) {
+        const statusEl = document.getElementById('walletOverviewStatus');
+        if (!coin || !statusEl) {
+            return;
+        }
+
+        if (!confirm(`Withdraw all confirmed ${coin} tips to your Coinbase destination address?\n\nThis will mark those tips as "transfer requested". Make sure your destination address is correct in settings.`)) {
+            return;
+        }
+
+        statusEl.className = 'settings-status';
+        statusEl.textContent = `Requesting ${coin} withdrawal to Coinbase...`;
+
+        try {
+            const response = await fetch(`/api/admin-analytics.php?action=withdraw-to-coinbase&token=${encodeURIComponent(sessionToken)}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Admin-Token': sessionToken },
+                body: JSON.stringify({ coin, note: `${coin} tip jar withdrawal` })
+            });
+
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok || data.status !== 'ok') {
+                throw new Error(data.error || `Unable to withdraw ${coin}`);
+            }
+
+            statusEl.className = 'settings-status success';
+            const fiatTotal = (Number(data.amountCents || 0) / 100).toFixed(2);
+            statusEl.textContent = `${data.tipsProcessed} ${coin} tip(s) totalling ${fiatTotal} ${data.fiatCurrency} queued for withdrawal. Status: ${data.withdrawStatus}.`;
+            await loadWalletOverview();
+        } catch (err) {
+            statusEl.className = 'settings-status error';
+            statusEl.textContent = err.message;
+        }
     }
 
     async function loadCryptoTransferQueue() {

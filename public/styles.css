@@ -5,9 +5,9 @@
   --panel:        rgba(8, 14, 26, 0.88);
   --ink:          #c8e4ff;
   --ink-soft:     #3d5e7a;
-  --cyan:         #00e5ff;
-  --purple:       #b44dff;
-  --green:        #00ff88;
+  --cyan:         #2ae8c7;
+  --purple:       #4b7fff;
+  --green:        #7CFC00;
   --pink:         #ff2060;
   --yellow:       #ffe600;
   --border:       rgba(0, 229, 255, 0.16);
@@ -213,7 +213,7 @@ select option { background: var(--bg2); }
   max-width: 640px;
   margin: 1.25rem auto 0;
   padding: 1.2rem;
-  border-color: rgba(0, 229, 255, 0.1);
+  border-color: rgba(42, 232, 199, 0.2);
   box-shadow: none;
 }
 
@@ -228,6 +228,47 @@ select option { background: var(--bg2); }
 
 .tip-panel-compact .tip-form {
   max-width: 100%;
+}
+
+.tip-methods-note {
+  display: grid;
+  gap: 0.55rem;
+  margin-bottom: 1rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: 10px;
+  border: 1px solid rgba(42, 232, 199, 0.35);
+  background: linear-gradient(135deg, rgba(42, 232, 199, 0.12), rgba(75, 127, 255, 0.12));
+  font-size: 0.9rem;
+  color: #d6f5ff;
+}
+
+.tip-methods-note strong {
+  color: #9dffe8;
+  letter-spacing: 0.02em;
+}
+
+.crypto-checkout-box {
+  border: 1px solid rgba(124, 252, 0, 0.35);
+  background: linear-gradient(160deg, rgba(22, 34, 24, 0.85), rgba(7, 12, 20, 0.92));
+  border-radius: 12px;
+  padding: 0.85rem;
+}
+
+.crypto-quote-details {
+  margin-top: 0.3rem;
+  font-size: 0.92rem;
+  color: #e7fff6;
+}
+
+.crypto-quote-details code {
+  display: inline-block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-size: 0.8rem;
+  color: #b6ffe8;
+  background: rgba(42, 232, 199, 0.1);
+  padding: 0.2rem 0.35rem;
+  border-radius: 6px;
 }
 
 .tip-panel-compact #tipSubmit {

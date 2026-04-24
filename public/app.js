@@ -9,18 +9,13 @@ const processorTierMap = new Map();
 
 function processorLabel(processor) {
   if (processor === "coinbase") {
-    return "Crypto";
-  }
-  if (processor === "paypal") {
-    return "PayPal";
+    return "Crypto (BTCPay-style)";
   }
   return "Stripe";
 }
 
 function updateSubmitLabel(processor) {
-  if (processor === "paypal") {
-    tipSubmit.textContent = "Continue to PayPal";
-  } else if (processor === "coinbase") {
+  if (processor === "coinbase") {
     tipSubmit.textContent = "Continue with Crypto";
   } else {
     tipSubmit.textContent = "Continue to Stripe";
@@ -149,9 +144,7 @@ if (tipForm) {
     const priceId = String(formData.get("priceId") || "").trim();
 
     tipMessage.className = "status";
-    if (processor === "paypal") {
-      tipMessage.textContent = "Redirecting to PayPal checkout...";
-    } else if (processor === "coinbase") {
+    if (processor === "coinbase") {
       tipMessage.textContent = "Preparing local crypto payment instructions...";
     } else {
       tipMessage.textContent = "Creating secure Stripe checkout...";

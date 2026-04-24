@@ -12,7 +12,7 @@ $body = read_json_input();
 $username = trim((string)($body['username'] ?? ''));
 $priceId = trim((string)($body['priceId'] ?? ''));
 $requestedProcessor = strtolower(trim((string)($body['processor'] ?? '')));
-$allowedProcessors = ['stripe', 'coinbase', 'paypal'];
+$allowedProcessors = ['stripe', 'coinbase'];
 $processor = $requestedProcessor !== '' ? $requestedProcessor : active_payment_processor();
 
 if (!in_array($processor, $allowedProcessors, true)) {
@@ -31,9 +31,6 @@ $tiers = [];
 if ($processor === 'coinbase') {
     $coinbase = coinbase_tip_tiers();
     $tiers = $coinbase['tiers'];
-} elseif ($processor === 'paypal') {
-    $paypal = paypal_tip_tiers();
-    $tiers = $paypal['tiers'];
 } else {
     if ($processor === 'stripe' && preg_match('/^price_[a-zA-Z0-9]+$/', $priceId) !== 1) {
         json_response(['error' => 'Please select a valid Stripe tip tier.'], 400);
@@ -71,15 +68,31 @@ $tipRecord = add_tip_record([
 
 if ($processor === 'coinbase') {
     $baseUrl = rtrim(env_value('BASE_URL', detect_base_url()), '/');
-    $receiveAddress = trim(env_value('CRYPTO_RECEIVE_ADDRESS', ''));
+    $coinOptions = crypto_supported_coins();
+    $addresses = crypto_receive_addresses();
     $cryptoAsset = strtoupper(trim(env_value('CRYPTO_ASSET', 'USDC')));
+    if (!in_array($cryptoAsset, $coinOptions, true)) {
+        $cryptoAsset = $coinOptions[0] ?? 'BTC';
+    }
+    $receiveAddress = trim((string)($addresses[$cryptoAsset] ?? ''));
+
+    if ($receiveAddress === '') {
+        foreach ($coinOptions as $coin) {
+            $candidate = trim((string)($addresses[$coin] ?? ''));
+            if ($candidate !== '') {
+                $cryptoAsset = $coin;
+                $receiveAddress = $candidate;
+                break;
+            }
+        }
+    }
 
     if ($receiveAddress === '') {
         update_tip_record(
             static fn(array $tip): bool => ($tip['id'] ?? '') === $tipRecord['id'],
             ['status' => 'checkout_failed']
         );
-        json_response(['error' => 'Crypto receive address is not configured. Set CRYPTO_RECEIVE_ADDRESS in payment settings.'], 500);
+        json_response(['error' => 'Crypto receive addresses are not configured. Set CRYPTO_RECEIVE_ADDRESSES_JSON in payment settings.'], 500);
     }
 
     update_tip_record(
@@ -90,6 +103,8 @@ if ($processor === 'coinbase') {
             'paymentIntentId' => '',
             'receiveAddress' => $receiveAddress,
             'cryptoAsset' => $cryptoAsset,
+            'supportedAssets' => $coinOptions,
+            'receiveAddresses' => $addresses,
             'coinbaseTransferStatus' => 'not_requested'
         ]
     );
@@ -98,40 +113,6 @@ if ($processor === 'coinbase') {
         'processor' => 'coinbase',
         'checkoutUrl' => $baseUrl . '/public/success.html?session_id=' . rawurlencode((string)$tipRecord['id']),
         'sessionId' => (string)$tipRecord['id']
-    ]);
-}
-
-if ($processor === 'paypal') {
-    $paypal = paypal_tip_tiers();
-    $checkoutUrl = trim((string)($paypal['checkoutUrl'] ?? ''));
-
-    if ($checkoutUrl === '') {
-        update_tip_record(
-            static fn(array $tip): bool => ($tip['id'] ?? '') === $tipRecord['id'],
-            ['status' => 'checkout_failed']
-        );
-        json_response(['error' => 'PayPal checkout URL is not configured.'], 500);
-    }
-
-    $separator = str_contains($checkoutUrl, '?') ? '&' : '?';
-    $redirectUrl = $checkoutUrl
-        . $separator . 'username=' . rawurlencode($username)
-        . '&amount=' . rawurlencode((string)($selectedTier['amount'] ?? ((int)$selectedTier['amountCents'] / 100)))
-        . '&currency=' . rawurlencode((string)($selectedTier['currency'] ?? 'USD'))
-        . '&tipRecordId=' . rawurlencode((string)$tipRecord['id']);
-
-    update_tip_record(
-        static fn(array $tip): bool => ($tip['id'] ?? '') === $tipRecord['id'],
-        [
-            'status' => 'checkout_redirected',
-            'sessionId' => 'paypal_' . generate_id()
-        ]
-    );
-
-    json_response([
-        'processor' => 'paypal',
-        'checkoutUrl' => $redirectUrl,
-        'sessionId' => 'paypal_redirect'
     ]);
 }
 

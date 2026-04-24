@@ -27,6 +27,8 @@ json_response([
     'processor' => (string)($tip['processor'] ?? 'stripe'),
     'cryptoAsset' => (string)($tip['cryptoAsset'] ?? ''),
     'receiveAddress' => (string)($tip['receiveAddress'] ?? ''),
+    'supportedAssets' => is_array($tip['supportedAssets'] ?? null) ? $tip['supportedAssets'] : [],
+    'receiveAddresses' => is_array($tip['receiveAddresses'] ?? null) ? $tip['receiveAddresses'] : [],
     'txHash' => (string)($tip['txHash'] ?? ''),
     'coinbaseTransferStatus' => (string)($tip['coinbaseTransferStatus'] ?? 'not_requested')
 ]);

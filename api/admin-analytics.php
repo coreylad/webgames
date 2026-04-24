@@ -107,23 +107,18 @@ switch ($action) {
                     'tierProductIds' => env_value('STRIPE_TIER_PRODUCT_IDS', ''),
                     'tierPriceIds' => env_value('STRIPE_TIER_PRICE_IDS', '')
                 ],
-                'paypal' => [
-                    'environment' => env_value('PAYPAL_ENV', 'sandbox'),
-                    'clientId' => env_value('PAYPAL_CLIENT_ID', ''),
-                    'clientSecret' => env_value('PAYPAL_CLIENT_SECRET', ''),
-                    'webhookId' => env_value('PAYPAL_WEBHOOK_ID', ''),
-                    'currency' => env_value('PAYPAL_CURRENCY', 'GBP'),
-                    'tipAmounts' => env_value('PAYPAL_TIP_AMOUNTS', '5,10,20'),
-                    'checkoutUrl' => env_value('PAYPAL_CHECKOUT_URL', '')
-                ],
                 'coinbase' => [
                     'apiKey' => env_value('COINBASE_COMMERCE_API_KEY', ''),
                     'webhookSecret' => env_value('COINBASE_COMMERCE_WEBHOOK_SECRET', ''),
                     'tipAmounts' => env_value('COINBASE_TIP_AMOUNTS', '5,10,20'),
                     'currency' => env_value('COINBASE_CURRENCY', 'USD'),
+                    'supportedCoins' => env_value('COINBASE_SUPPORTED_COINS', 'BTC,ETH,LTC,BCH,DOGE,USDC,USDT'),
+                    'receiveAddressesJson' => env_value('CRYPTO_RECEIVE_ADDRESSES_JSON', '{}'),
+                    'destinationAddressesJson' => env_value('COINBASE_DESTINATION_ADDRESSES_JSON', '{}'),
                     'cryptoAsset' => env_value('CRYPTO_ASSET', 'USDC'),
                     'receiveAddress' => env_value('CRYPTO_RECEIVE_ADDRESS', ''),
                     'destinationAccount' => env_value('COINBASE_DESTINATION_ACCOUNT', ''),
+                    'destinationAddresses' => crypto_coinbase_destinations(),
                     'transferRequestUrl' => env_value('COINBASE_TRANSFER_REQUEST_URL', ''),
                     'transferAuthHeader' => env_value('COINBASE_TRANSFER_AUTH_HEADER', 'x-coinbase-transfer-token'),
                     'transferAuthToken' => env_value('COINBASE_TRANSFER_AUTH_TOKEN', '')
@@ -139,12 +134,11 @@ switch ($action) {
 
         $body = read_json_input();
         $activeProcessor = strtolower(trim((string)($body['activeProcessor'] ?? 'stripe')));
-        if (!in_array($activeProcessor, ['stripe', 'paypal', 'coinbase'], true)) {
-            json_response(['error' => 'Active processor must be stripe, paypal, or coinbase'], 400);
+        if (!in_array($activeProcessor, ['stripe', 'coinbase'], true)) {
+            json_response(['error' => 'Active processor must be stripe or coinbase'], 400);
         }
 
         $stripe = is_array($body['stripe'] ?? null) ? $body['stripe'] : [];
-        $paypal = is_array($body['paypal'] ?? null) ? $body['paypal'] : [];
         $coinbase = is_array($body['coinbase'] ?? null) ? $body['coinbase'] : [];
 
         $stripeSecretKey = trim((string)($stripe['secretKey'] ?? env_value('STRIPE_SECRET_KEY', '')));
@@ -152,39 +146,6 @@ switch ($action) {
         $stripeWebhookSecret = trim((string)($stripe['webhookSecret'] ?? env_value('STRIPE_WEBHOOK_SECRET', '')));
         $stripeTierProductIds = trim((string)($stripe['tierProductIds'] ?? env_value('STRIPE_TIER_PRODUCT_IDS', '')));
         $stripeTierPriceIds = trim((string)($stripe['tierPriceIds'] ?? env_value('STRIPE_TIER_PRICE_IDS', '')));
-
-        $paypalEnvironment = strtolower(trim((string)($paypal['environment'] ?? env_value('PAYPAL_ENV', 'sandbox'))));
-        if (!in_array($paypalEnvironment, ['sandbox', 'live'], true)) {
-            json_response(['error' => 'PayPal environment must be sandbox or live'], 400);
-        }
-
-        $paypalCurrency = strtoupper(trim((string)($paypal['currency'] ?? env_value('PAYPAL_CURRENCY', 'GBP'))));
-        if (!preg_match('/^[A-Z]{3}$/', $paypalCurrency)) {
-            json_response(['error' => 'PayPal currency must be a 3-letter ISO code'], 400);
-        }
-
-        $paypalTipAmounts = trim((string)($paypal['tipAmounts'] ?? env_value('PAYPAL_TIP_AMOUNTS', '5,10,20')));
-        if ($paypalTipAmounts !== '') {
-            foreach (explode(',', $paypalTipAmounts) as $rawAmount) {
-                $value = trim($rawAmount);
-                if ($value === '') {
-                    continue;
-                }
-
-                if (!is_numeric($value) || (float)$value <= 0) {
-                    json_response(['error' => 'PayPal tip amounts must be positive numbers separated by commas'], 400);
-                }
-            }
-        }
-
-        $paypalCheckoutUrl = trim((string)($paypal['checkoutUrl'] ?? env_value('PAYPAL_CHECKOUT_URL', '')));
-        if ($paypalCheckoutUrl !== '' && filter_var($paypalCheckoutUrl, FILTER_VALIDATE_URL) === false) {
-            json_response(['error' => 'PayPal checkout URL must be a valid URL'], 400);
-        }
-
-        $paypalClientId = trim((string)($paypal['clientId'] ?? env_value('PAYPAL_CLIENT_ID', '')));
-        $paypalClientSecret = trim((string)($paypal['clientSecret'] ?? env_value('PAYPAL_CLIENT_SECRET', '')));
-        $paypalWebhookId = trim((string)($paypal['webhookId'] ?? env_value('PAYPAL_WEBHOOK_ID', '')));
 
         $coinbaseCurrency = strtoupper(trim((string)($coinbase['currency'] ?? env_value('COINBASE_CURRENCY', 'USD'))));
         if (!preg_match('/^[A-Z]{3}$/', $coinbaseCurrency)) {
@@ -228,6 +189,29 @@ switch ($action) {
         $coinbaseTransferAuthToken = trim((string)($coinbase['transferAuthToken'] ?? env_value('COINBASE_TRANSFER_AUTH_TOKEN', '')));
         $coinbaseApiKey = trim((string)($coinbase['apiKey'] ?? env_value('COINBASE_COMMERCE_API_KEY', '')));
         $coinbaseWebhookSecret = trim((string)($coinbase['webhookSecret'] ?? env_value('COINBASE_COMMERCE_WEBHOOK_SECRET', '')));
+        $coinbaseSupportedCoins = strtoupper(trim((string)($coinbase['supportedCoins'] ?? env_value('COINBASE_SUPPORTED_COINS', 'BTC,ETH,LTC,BCH,DOGE,USDC,USDT'))));
+        $coinbaseReceiveAddressesJson = trim((string)($coinbase['receiveAddressesJson'] ?? env_value('CRYPTO_RECEIVE_ADDRESSES_JSON', '{}')));
+        $coinbaseDestinationAddressesJson = trim((string)($coinbase['destinationAddressesJson'] ?? env_value('COINBASE_DESTINATION_ADDRESSES_JSON', '{}')));
+
+        $coinTokens = array_filter(array_map('trim', explode(',', $coinbaseSupportedCoins)), static fn(string $t): bool => $t !== '');
+        if (empty($coinTokens)) {
+            json_response(['error' => 'Supported coins must include at least one symbol'], 400);
+        }
+        foreach ($coinTokens as $symbol) {
+            if (preg_match('/^[A-Z0-9]{2,12}$/', $symbol) !== 1) {
+                json_response(['error' => 'Supported coin symbols must be 2-12 uppercase letters or digits'], 400);
+            }
+        }
+
+        $addressesDecoded = json_decode($coinbaseReceiveAddressesJson, true);
+        if (!is_array($addressesDecoded)) {
+            json_response(['error' => 'Receive addresses JSON must be a valid object'], 400);
+        }
+
+        $destinationsDecoded = json_decode($coinbaseDestinationAddressesJson, true);
+        if (!is_array($destinationsDecoded)) {
+            json_response(['error' => 'Destination addresses JSON must be a valid object'], 400);
+        }
 
         $saved = write_env_values([
             'PAYMENT_PROCESSOR' => $activeProcessor,
@@ -236,17 +220,13 @@ switch ($action) {
             'STRIPE_WEBHOOK_SECRET' => $stripeWebhookSecret,
             'STRIPE_TIER_PRODUCT_IDS' => $stripeTierProductIds,
             'STRIPE_TIER_PRICE_IDS' => $stripeTierPriceIds,
-            'PAYPAL_ENV' => $paypalEnvironment,
-            'PAYPAL_CLIENT_ID' => $paypalClientId,
-            'PAYPAL_CLIENT_SECRET' => $paypalClientSecret,
-            'PAYPAL_WEBHOOK_ID' => $paypalWebhookId,
-            'PAYPAL_CURRENCY' => $paypalCurrency,
-            'PAYPAL_TIP_AMOUNTS' => $paypalTipAmounts,
-            'PAYPAL_CHECKOUT_URL' => $paypalCheckoutUrl,
             'COINBASE_COMMERCE_API_KEY' => $coinbaseApiKey,
             'COINBASE_COMMERCE_WEBHOOK_SECRET' => $coinbaseWebhookSecret,
             'COINBASE_TIP_AMOUNTS' => $coinbaseTipAmounts,
             'COINBASE_CURRENCY' => $coinbaseCurrency,
+            'COINBASE_SUPPORTED_COINS' => $coinbaseSupportedCoins,
+            'CRYPTO_RECEIVE_ADDRESSES_JSON' => $coinbaseReceiveAddressesJson,
+            'COINBASE_DESTINATION_ADDRESSES_JSON' => $coinbaseDestinationAddressesJson,
             'CRYPTO_ASSET' => $cryptoAsset,
             'CRYPTO_RECEIVE_ADDRESS' => $cryptoReceiveAddress,
             'COINBASE_DESTINATION_ACCOUNT' => $coinbaseDestinationAccount,
@@ -278,23 +258,18 @@ switch ($action) {
                     'tierProductIds' => $stripeTierProductIds,
                     'tierPriceIds' => $stripeTierPriceIds
                 ],
-                'paypal' => [
-                    'environment' => $paypalEnvironment,
-                    'clientId' => $paypalClientId,
-                    'clientSecret' => $paypalClientSecret,
-                    'webhookId' => $paypalWebhookId,
-                    'currency' => $paypalCurrency,
-                    'tipAmounts' => $paypalTipAmounts,
-                    'checkoutUrl' => $paypalCheckoutUrl
-                ],
                 'coinbase' => [
                     'apiKey' => $coinbaseApiKey,
                     'webhookSecret' => $coinbaseWebhookSecret,
                     'tipAmounts' => $coinbaseTipAmounts,
                     'currency' => $coinbaseCurrency,
+                    'supportedCoins' => $coinbaseSupportedCoins,
+                    'receiveAddressesJson' => $coinbaseReceiveAddressesJson,
+                    'destinationAddressesJson' => $coinbaseDestinationAddressesJson,
                     'cryptoAsset' => $cryptoAsset,
                     'receiveAddress' => $cryptoReceiveAddress,
                     'destinationAccount' => $coinbaseDestinationAccount,
+                    'destinationAddresses' => crypto_coinbase_destinations(),
                     'transferRequestUrl' => $coinbaseTransferRequestUrl,
                     'transferAuthHeader' => $coinbaseTransferAuthHeader,
                     'transferAuthToken' => $coinbaseTransferAuthToken
@@ -320,7 +295,204 @@ switch ($action) {
         ];
         break;
 
-    case 'confirm-crypto-payment':
+    case 'wallet-overview':
+        $coins = crypto_supported_coins();
+        $receiveAddresses = crypto_receive_addresses();
+        $coinbaseDestinations = crypto_coinbase_destinations();
+
+        $store = read_tip_store();
+        $allTips = $store['tips'] ?? [];
+
+        $wallets = [];
+        foreach ($coins as $coin) {
+            $receiveAddr = (string)($receiveAddresses[$coin] ?? '');
+            $destAddr = (string)($coinbaseDestinations[$coin] ?? '');
+
+            // Sum confirmed received tips for this coin
+            $confirmedCents = 0;
+            $confirmedCount = 0;
+            $transferredCents = 0;
+            $transferredCount = 0;
+            $pendingCents = 0;
+            $pendingCount = 0;
+
+            foreach ($allTips as $tip) {
+                if (($tip['processor'] ?? '') !== 'coinbase') {
+                    continue;
+                }
+                if (strtoupper((string)($tip['cryptoAsset'] ?? '')) !== $coin) {
+                    continue;
+                }
+                $amtCents = (int)($tip['amountCents'] ?? 0);
+                $tipStatus = (string)($tip['status'] ?? '');
+
+                if ($tipStatus === 'paid') {
+                    $confirmedCents += $amtCents;
+                    $confirmedCount++;
+                } elseif ($tipStatus === 'coinbase_transfer_requested') {
+                    $transferredCents += $amtCents;
+                    $transferredCount++;
+                } elseif (in_array($tipStatus, ['awaiting_crypto_payment', 'payment_submitted'], true)) {
+                    $pendingCents += $amtCents;
+                    $pendingCount++;
+                }
+            }
+
+            $wallets[] = [
+                'coin' => $coin,
+                'receiveAddress' => $receiveAddr,
+                'coinbaseDestination' => $destAddr,
+                'confirmedReceived' => [
+                    'amountCents' => $confirmedCents,
+                    'count' => $confirmedCount
+                ],
+                'transferred' => [
+                    'amountCents' => $transferredCents,
+                    'count' => $transferredCount
+                ],
+                'pending' => [
+                    'amountCents' => $pendingCents,
+                    'count' => $pendingCount
+                ],
+                'hasReceiveAddress' => $receiveAddr !== '',
+                'hasDestination' => $destAddr !== ''
+            ];
+        }
+
+        $output = [
+            'status' => 'ok',
+            'wallets' => $wallets
+        ];
+        break;
+
+    case 'withdraw-to-coinbase':
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            json_response(['error' => 'Method not allowed'], 405);
+        }
+
+        $body = read_json_input();
+        $withdrawCoin = strtoupper(trim((string)($body['coin'] ?? '')));
+        $withdrawNote = trim((string)($body['note'] ?? 'Webgames tip jar withdrawal'));
+
+        if ($withdrawCoin === '') {
+            json_response(['error' => 'coin is required'], 400);
+        }
+
+        $supportedCoins = crypto_supported_coins();
+        if (!in_array($withdrawCoin, $supportedCoins, true)) {
+            json_response(['error' => 'Unsupported coin: ' . $withdrawCoin], 400);
+        }
+
+        $receiveAddresses = crypto_receive_addresses();
+        $coinbaseDestinations = crypto_coinbase_destinations();
+        $destAddr = trim((string)($coinbaseDestinations[$withdrawCoin] ?? ''));
+        $srcAddr = trim((string)($receiveAddresses[$withdrawCoin] ?? ''));
+
+        if ($destAddr === '') {
+            json_response(['error' => 'No Coinbase destination address configured for ' . $withdrawCoin . '. Set it in payment settings.'], 400);
+        }
+
+        // Collect confirmed-but-not-yet-transferred tip IDs for this coin
+        $store = read_tip_store();
+        $eligibleTips = array_values(array_filter($store['tips'], static function (array $tip) use ($withdrawCoin): bool {
+            return ($tip['processor'] ?? '') === 'coinbase'
+                && strtoupper((string)($tip['cryptoAsset'] ?? '')) === $withdrawCoin
+                && ($tip['status'] ?? '') === 'paid';
+        }));
+
+        if (empty($eligibleTips)) {
+            json_response(['error' => 'No confirmed, untransferred ' . $withdrawCoin . ' tips to withdraw'], 400);
+        }
+
+        $totalCents = array_sum(array_map(static fn(array $tip): int => (int)($tip['amountCents'] ?? 0), $eligibleTips));
+        $fiatCurrency = strtoupper((string)($eligibleTips[0]['currency'] ?? 'USD'));
+        $tipIds = array_map(static fn(array $tip): string => (string)($tip['id'] ?? ''), $eligibleTips);
+
+        // Attempt relay if configured
+        $relayUrl = trim(env_value('COINBASE_TRANSFER_REQUEST_URL', ''));
+        $relayAttempted = false;
+        $relaySuccess = false;
+        $relayError = '';
+
+        if ($relayUrl !== '' && function_exists('curl_init')) {
+            $authHeader = trim(env_value('COINBASE_TRANSFER_AUTH_HEADER', 'x-coinbase-transfer-token'));
+            if ($authHeader === '') {
+                $authHeader = 'x-coinbase-transfer-token';
+            }
+            $authToken = trim(env_value('COINBASE_TRANSFER_AUTH_TOKEN', ''));
+
+            $headers = [
+                'Content-Type: application/json',
+                'User-Agent: webgames-coinbase-wallet-withdraw/1.0'
+            ];
+            if ($authToken !== '') {
+                $headers[] = $authHeader . ': ' . $authToken;
+            }
+
+            $payload = [
+                'action' => 'withdraw',
+                'coin' => $withdrawCoin,
+                'sourceAddress' => $srcAddr,
+                'destinationAddress' => $destAddr,
+                'amountCents' => $totalCents,
+                'fiatCurrency' => $fiatCurrency,
+                'tipIds' => $tipIds,
+                'note' => $withdrawNote,
+                'requestedAt' => now_iso()
+            ];
+
+            $ch = curl_init($relayUrl);
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_POST => true,
+                CURLOPT_POSTFIELDS => json_encode($payload),
+                CURLOPT_HTTPHEADER => $headers,
+                CURLOPT_TIMEOUT => 15
+            ]);
+            $relayBody = curl_exec($ch);
+            $relayStatus = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+            curl_close($ch);
+
+            $relayAttempted = true;
+            $relaySuccess = ($relayBody !== false && $relayStatus >= 200 && $relayStatus < 300);
+            if (!$relaySuccess) {
+                $relayError = $relayBody !== false ? substr($relayBody, 0, 256) : 'curl error';
+            }
+        }
+
+        $withdrawStatus = $relayAttempted
+            ? ($relaySuccess ? 'relay_accepted' : 'relay_failed')
+            : 'manual_pending';
+
+        // Mark all eligible tips as transfer_requested
+        foreach ($tipIds as $tipId) {
+            update_tip_record(
+                static fn(array $item): bool => ($item['id'] ?? '') === $tipId,
+                [
+                    'status' => 'coinbase_transfer_requested',
+                    'coinbaseTransferStatus' => $withdrawStatus,
+                    'coinbaseTransferRequestedAt' => now_iso(),
+                    'coinbaseTransferDestination' => $destAddr,
+                    'coinbaseTransferError' => $relayError
+                ]
+            );
+        }
+
+        $output = [
+            'status' => 'ok',
+            'coin' => $withdrawCoin,
+            'destinationAddress' => $destAddr,
+            'amountCents' => $totalCents,
+            'fiatCurrency' => $fiatCurrency,
+            'tipsProcessed' => count($tipIds),
+            'withdrawStatus' => $withdrawStatus,
+            'relayAttempted' => $relayAttempted,
+            'relaySuccess' => $relaySuccess,
+            'message' => $relayAttempted
+                ? ($relaySuccess ? 'Withdrawal request sent to relay.' : 'Relay failed; tips marked as pending manual transfer.')
+                : 'No relay configured. Tips marked as pending manual transfer to Coinbase.'
+        ];
+        break;
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             json_response(['error' => 'Method not allowed'], 405);
         }
@@ -854,7 +1026,7 @@ switch ($action) {
         $normalized = [
             'platform' => [
                 'BASE_URL' => trim((string)($platform['BASE_URL'] ?? $defaults['platform']['BASE_URL'])),
-                'PAYMENT_PROCESSOR' => in_array(strtolower(trim((string)($platform['PAYMENT_PROCESSOR'] ?? $defaults['platform']['PAYMENT_PROCESSOR']))), ['stripe', 'paypal'], true)
+                'PAYMENT_PROCESSOR' => in_array(strtolower(trim((string)($platform['PAYMENT_PROCESSOR'] ?? $defaults['platform']['PAYMENT_PROCESSOR']))), ['stripe', 'coinbase'], true)
                     ? strtolower(trim((string)($platform['PAYMENT_PROCESSOR'] ?? $defaults['platform']['PAYMENT_PROCESSOR'])))
                     : 'stripe',
                 'STRIPE_TIER_PRODUCT_IDS' => trim((string)($platform['STRIPE_TIER_PRODUCT_IDS'] ?? $defaults['platform']['STRIPE_TIER_PRODUCT_IDS'])),

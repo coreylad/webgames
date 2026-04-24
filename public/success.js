@@ -9,15 +9,30 @@ function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
+function formatMoney(amountCents, currency) {
+  const value = (Number(amountCents || 0) / 100).toFixed(2);
+  return `${value} ${String(currency || "USD").toUpperCase()}`;
+}
+
+async function loadCryptoQuote(sessionId, asset) {
+  const response = await fetch(`/api/crypto-quote.php?session_id=${encodeURIComponent(sessionId)}&asset=${encodeURIComponent(asset)}`);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || data.status !== "ok") {
+    throw new Error(data.error || "Unable to load quote for selected coin.");
+  }
+  return data;
+}
+
 function setCryptoActions(sessionId, data) {
-  const amount = ((data.amountCents || 0) / 100).toFixed(2);
-  const asset = data.cryptoAsset || "USDC";
-  const address = data.receiveAddress || "(not configured)";
+  const amountLabel = formatMoney(data.amountCents, data.currency);
+  const supportedAssets = Array.isArray(data.supportedAssets) && data.supportedAssets.length > 0
+    ? data.supportedAssets
+    : [data.cryptoAsset || "BTC"];
+  const defaultAsset = supportedAssets.includes(data.cryptoAsset) ? data.cryptoAsset : supportedAssets[0];
   const txHash = data.txHash || "";
 
   successMessage.innerHTML =
-    `Send <strong>${escapeHtml(amount)} ${escapeHtml(asset)}</strong> to:<br><code>${escapeHtml(address)}</code><br>` +
-    `Then submit your transaction hash below for admin confirmation.`;
+    `BTCPay-inspired crypto checkout: send <strong>${escapeHtml(amountLabel)}</strong> using your preferred coin, then submit your tx hash for confirmation.`;
 
   const host = document.querySelector(".success-card");
   if (!host || document.getElementById("cryptoTxForm")) {
@@ -26,6 +41,14 @@ function setCryptoActions(sessionId, data) {
 
   const wrapper = document.createElement("div");
   wrapper.innerHTML = `
+    <div class="crypto-checkout-box" style="margin-top:1rem;">
+      <label for="cryptoAssetSelect">Choose coin</label>
+      <select id="cryptoAssetSelect" name="cryptoAssetSelect">
+        ${supportedAssets.map((asset) => `<option value="${escapeHtml(asset)}">${escapeHtml(asset)}</option>`).join("")}
+      </select>
+      <p id="cryptoQuoteStatus" class="status" aria-live="polite"></p>
+      <div id="cryptoQuoteDetails" class="crypto-quote-details"></div>
+    </div>
     <form id="cryptoTxForm" class="tip-form" style="margin-top:1rem;">
       <label for="cryptoTxHash">Transaction hash</label>
       <input id="cryptoTxHash" name="cryptoTxHash" type="text" placeholder="0x... or txid" value="${escapeHtml(txHash)}" required />
@@ -38,6 +61,70 @@ function setCryptoActions(sessionId, data) {
   const form = document.getElementById("cryptoTxForm");
   const txStatus = document.getElementById("cryptoTxStatus");
   const txInput = document.getElementById("cryptoTxHash");
+  const assetSelect = document.getElementById("cryptoAssetSelect");
+  const quoteStatus = document.getElementById("cryptoQuoteStatus");
+  const quoteDetails = document.getElementById("cryptoQuoteDetails");
+
+  const renderQuote = async (asset) => {
+    quoteStatus.className = "status";
+    quoteStatus.textContent = `Loading ${asset} quote...`;
+
+    try {
+      const quote = await loadCryptoQuote(sessionId, asset);
+      quoteStatus.className = "status success";
+      quoteStatus.textContent = `Send ${quote.cryptoAmount} ${quote.asset} to the address below.`;
+      quoteDetails.innerHTML = `
+        <div style="display:grid;gap:0.45rem;margin-top:0.35rem;">
+          <div><strong>Quote:</strong> ${escapeHtml(quote.cryptoAmount)} ${escapeHtml(quote.asset)} for ${escapeHtml(formatMoney(data.amountCents, data.currency))}</div>
+          <div><strong>Address:</strong> <code>${escapeHtml(quote.address)}</code></div>
+          <div><strong>Payment URI:</strong> <code>${escapeHtml(quote.paymentUri)}</code></div>
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
+            <button type="button" class="btn" id="copyAddressBtn">Copy Address</button>
+            <button type="button" class="btn" id="copyUriBtn">Copy URI</button>
+          </div>
+          <div>
+            <img src="${escapeHtml(quote.qrUrl)}" alt="Crypto payment QR code" style="width:180px;height:180px;border-radius:10px;border:1px solid rgba(0,229,255,0.28);" />
+          </div>
+        </div>
+      `;
+
+      const copyAddressBtn = document.getElementById("copyAddressBtn");
+      const copyUriBtn = document.getElementById("copyUriBtn");
+
+      copyAddressBtn?.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(quote.address);
+          quoteStatus.className = "status success";
+          quoteStatus.textContent = "Address copied.";
+        } catch {
+          quoteStatus.className = "status error";
+          quoteStatus.textContent = "Clipboard unavailable. Copy the address manually.";
+        }
+      });
+
+      copyUriBtn?.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(quote.paymentUri);
+          quoteStatus.className = "status success";
+          quoteStatus.textContent = "Payment URI copied.";
+        } catch {
+          quoteStatus.className = "status error";
+          quoteStatus.textContent = "Clipboard unavailable. Copy the URI manually.";
+        }
+      });
+    } catch (error) {
+      quoteStatus.className = "status error";
+      quoteStatus.textContent = error.message;
+      quoteDetails.innerHTML = "";
+    }
+  };
+
+  assetSelect.value = defaultAsset;
+  renderQuote(defaultAsset);
+  assetSelect.addEventListener("change", () => {
+    renderQuote(String(assetSelect.value || defaultAsset));
+  });
+
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const submittedTxHash = String(txInput.value || "").trim();
@@ -56,7 +143,8 @@ function setCryptoActions(sessionId, data) {
         },
         body: JSON.stringify({
           session_id: sessionId,
-          txHash: submittedTxHash
+          txHash: submittedTxHash,
+          asset: String(assetSelect?.value || defaultAsset)
         })
       });
 

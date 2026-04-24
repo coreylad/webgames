@@ -9,7 +9,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
 }
 
 $requestedProcessor = strtolower(trim((string)($_GET['processor'] ?? '')));
-$allowedProcessors = ['stripe', 'coinbase', 'paypal'];
+$allowedProcessors = ['stripe', 'coinbase'];
 $processor = $requestedProcessor !== '' ? $requestedProcessor : active_payment_processor();
 
 if (!in_array($processor, $allowedProcessors, true)) {
@@ -31,26 +31,6 @@ if ($processor === 'coinbase') {
     json_response([
         'processor' => 'coinbase',
         'currency' => $coinbase['currency'] ?? 'USD',
-        'tiers' => $tiers
-    ]);
-}
-
-if ($processor === 'paypal') {
-    $paypal = paypal_tip_tiers();
-    $tiers = $paypal['tiers'];
-
-    if (empty($tiers)) {
-        json_response([
-            'processor' => 'paypal',
-            'tiers' => [],
-            'error' => 'No PayPal tip amounts configured. Set PAYPAL_TIP_AMOUNTS in .env or admin settings.'
-        ], 500);
-    }
-
-    json_response([
-        'processor' => 'paypal',
-        'checkoutUrl' => $paypal['checkoutUrl'] ?? '',
-        'currency' => $paypal['currency'] ?? 'USD',
         'tiers' => $tiers
     ]);
 }

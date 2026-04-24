@@ -29,13 +29,15 @@ function load_env_values(): array
         'COINBASE_COMMERCE_WEBHOOK_SECRET' => '',
         'COINBASE_TIP_AMOUNTS' => '5,10,20',
         'COINBASE_CURRENCY' => 'USD',
-        'PAYPAL_CLIENT_ID' => '',
-        'PAYPAL_CLIENT_SECRET' => '',
-        'PAYPAL_WEBHOOK_ID' => '',
-        'PAYPAL_ENV' => 'sandbox',
-        'PAYPAL_CURRENCY' => 'GBP',
-        'PAYPAL_TIP_AMOUNTS' => '5,10,20',
-        'PAYPAL_CHECKOUT_URL' => '',
+        'COINBASE_SUPPORTED_COINS' => 'BTC,ETH,LTC,BCH,DOGE,USDC,USDT',
+        'CRYPTO_RECEIVE_ADDRESSES_JSON' => '{}',
+        'COINBASE_DESTINATION_ADDRESSES_JSON' => '{}',
+        'CRYPTO_ASSET' => 'USDC',
+        'CRYPTO_RECEIVE_ADDRESS' => '',
+        'COINBASE_DESTINATION_ACCOUNT' => '',
+        'COINBASE_TRANSFER_REQUEST_URL' => '',
+        'COINBASE_TRANSFER_AUTH_HEADER' => 'x-coinbase-transfer-token',
+        'COINBASE_TRANSFER_AUTH_TOKEN' => '',
         'WEBHOOK_FORWARD_URL' => '',
         'WEBHOOK_FORWARD_AUTH_HEADER' => 'x-webgames-proxy-token',
         'WEBHOOK_FORWARD_AUTH_TOKEN' => '',
@@ -563,7 +565,7 @@ function parse_csv_env(string $key): array
 function active_payment_processor(): string
 {
     $processor = strtolower(trim(env_value('PAYMENT_PROCESSOR', 'stripe')));
-    if (!in_array($processor, ['stripe', 'paypal', 'coinbase'], true)) {
+    if (!in_array($processor, ['stripe', 'coinbase'], true)) {
         return 'stripe';
     }
 
@@ -619,55 +621,87 @@ function coinbase_tip_tiers(): array
     ];
 }
 
-function paypal_tip_tiers(): array
+function crypto_supported_coins(): array
 {
-    $amountTokens = parse_csv_env('PAYPAL_TIP_AMOUNTS');
-    $currency = strtoupper(trim(env_value('PAYPAL_CURRENCY', 'USD')));
-    $checkoutUrl = trim(env_value('PAYPAL_CHECKOUT_URL', ''));
+    $defaults = ['BTC', 'ETH', 'LTC', 'BCH', 'DOGE', 'USDC', 'USDT'];
+    $raw = parse_csv_env('COINBASE_SUPPORTED_COINS');
+    $tokens = !empty($raw) ? $raw : $defaults;
 
-    if (!preg_match('/^[A-Z]{3}$/', $currency)) {
-        $currency = 'USD';
+    $coins = [];
+    foreach ($tokens as $token) {
+        $symbol = strtoupper(trim((string)$token));
+        if ($symbol === '' || preg_match('/^[A-Z0-9]{2,12}$/', $symbol) !== 1) {
+            continue;
+        }
+        if (!in_array($symbol, $coins, true)) {
+            $coins[] = $symbol;
+        }
     }
 
-    $tiers = [];
-    $seen = [];
-
-    foreach ($amountTokens as $token) {
-        if (!is_numeric($token)) {
-            continue;
-        }
-
-        $amount = (float)$token;
-        if ($amount <= 0) {
-            continue;
-        }
-
-        $amount = round($amount, 2);
-        $tierKey = number_format($amount, 2, '.', '');
-        if (isset($seen[$tierKey])) {
-            continue;
-        }
-
-        $seen[$tierKey] = true;
-        $amountCents = (int)round($amount * 100);
-        $tiers[] = [
-            'id' => 'paypal_' . str_replace('.', '_', $tierKey),
-            'provider' => 'paypal',
-            'amount' => $amount,
-            'amountCents' => $amountCents,
-            'currency' => $currency,
-            'productName' => 'PayPal Tip',
-            'label' => format_money($amountCents, $currency)
-        ];
+    if (empty($coins)) {
+        return $defaults;
     }
 
-    usort($tiers, static fn(array $a, array $b): int => ($a['amountCents'] ?? 0) <=> ($b['amountCents'] ?? 0));
+    return $coins;
+}
 
-    return [
-        'tiers' => $tiers,
-        'checkoutUrl' => $checkoutUrl,
-        'currency' => $currency
-    ];
+function crypto_receive_addresses(): array
+{
+    $coins = crypto_supported_coins();
+    $legacyAddress = trim(env_value('CRYPTO_RECEIVE_ADDRESS', ''));
+
+    $rawJson = trim(env_value('CRYPTO_RECEIVE_ADDRESSES_JSON', '{}'));
+    $decoded = json_decode($rawJson, true);
+    $byCoin = is_array($decoded) ? $decoded : [];
+
+    $addresses = [];
+    foreach ($coins as $coin) {
+        $value = '';
+        if (isset($byCoin[$coin]) && is_string($byCoin[$coin])) {
+            $value = trim($byCoin[$coin]);
+        }
+
+        if ($value === '' && isset($byCoin[strtolower($coin)]) && is_string($byCoin[strtolower($coin)])) {
+            $value = trim($byCoin[strtolower($coin)]);
+        }
+
+        if ($value === '' && $legacyAddress !== '') {
+            $value = $legacyAddress;
+        }
+
+        $addresses[$coin] = $value;
+    }
+
+    return $addresses;
+}
+
+function crypto_coinbase_destinations(): array
+{
+    $coins = crypto_supported_coins();
+
+    $rawJson = trim(env_value('COINBASE_DESTINATION_ADDRESSES_JSON', '{}'));
+    $decoded = json_decode($rawJson, true);
+    $byCoin = is_array($decoded) ? $decoded : [];
+
+    // Legacy fallback: single destination account
+    $legacyDestination = trim(env_value('COINBASE_DESTINATION_ACCOUNT', ''));
+
+    $destinations = [];
+    foreach ($coins as $coin) {
+        $value = '';
+        if (isset($byCoin[$coin]) && is_string($byCoin[$coin])) {
+            $value = trim($byCoin[$coin]);
+        }
+        if ($value === '' && isset($byCoin[strtolower($coin)]) && is_string($byCoin[strtolower($coin)])) {
+            $value = trim($byCoin[strtolower($coin)]);
+        }
+        if ($value === '' && $legacyDestination !== '') {
+            $value = $legacyDestination;
+        }
+        $destinations[$coin] = $value;
+    }
+
+    return $destinations;
 }
 
 function reset_stripe_configuration(): void

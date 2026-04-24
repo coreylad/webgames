@@ -656,14 +656,14 @@
 
                         <div class="settings-panel">
                             <h3 style="margin-bottom:1rem;color:#667eea;">Payment Processor Settings</h3>
-                            <p style="opacity:0.82;margin-bottom:0.9rem;">Update Stripe and PayPal keys directly from this page. Changes are saved to server .env and used by checkout/webhooks.</p>
+                            <p style="opacity:0.82;margin-bottom:0.9rem;">Update Stripe and Crypto settings directly from this page. Changes are saved to server .env and used by checkout/webhooks.</p>
 
                             <div class="settings-grid">
                                 <div class="form-group">
                                     <label for="advActiveProcessor">Active Processor</label>
                                     <select id="advActiveProcessor">
                                         <option value="stripe">Stripe</option>
-                                        <option value="paypal">PayPal</option>
+                                        <option value="coinbase">Crypto</option>
                                     </select>
                                 </div>
                             </div>
@@ -692,38 +692,55 @@
                                 </div>
                             </div>
 
-                            <h3 style="margin-top:1.1rem;margin-bottom:0.65rem;">PayPal Advanced Settings</h3>
+                            <h3 style="margin-top:1.1rem;margin-bottom:0.65rem;">Crypto + Coinbase Transfer Settings</h3>
                             <div class="settings-grid">
                                 <div class="form-group">
-                                    <label for="advPaypalEnvironment">PayPal Environment</label>
-                                    <select id="advPaypalEnvironment">
-                                        <option value="sandbox">sandbox</option>
-                                        <option value="live">live</option>
-                                    </select>
+                                    <label for="advCoinbaseCurrency">Local Currency</label>
+                                    <input type="text" id="advCoinbaseCurrency" placeholder="USD" maxlength="3" />
                                 </div>
                                 <div class="form-group">
-                                    <label for="advPaypalClientId">PayPal Client ID</label>
-                                    <input type="text" id="advPaypalClientId" placeholder="PayPal app client id" />
+                                    <label for="advCoinbaseTipAmounts">Tip Amounts</label>
+                                    <input type="text" id="advCoinbaseTipAmounts" placeholder="5,10,20" />
                                 </div>
                                 <div class="form-group">
-                                    <label for="advPaypalClientSecret">PayPal Client Secret</label>
-                                    <input type="password" id="advPaypalClientSecret" placeholder="PayPal app client secret" />
+                                    <label for="advCoinbaseSupportedCoins">Supported Coins</label>
+                                    <input type="text" id="advCoinbaseSupportedCoins" placeholder="BTC,ETH,LTC,BCH,DOGE,USDC,USDT" />
                                 </div>
                                 <div class="form-group">
-                                    <label for="advPaypalWebhookId">PayPal Webhook ID</label>
-                                    <input type="text" id="advPaypalWebhookId" placeholder="Webhook ID (optional)" />
+                                    <label for="advCryptoAsset">Default Crypto Asset</label>
+                                    <input type="text" id="advCryptoAsset" placeholder="USDC" maxlength="12" />
                                 </div>
                                 <div class="form-group">
-                                    <label for="advPaypalCurrency">PayPal Currency</label>
-                                    <input type="text" id="advPaypalCurrency" placeholder="GBP" maxlength="3" />
+                                    <label for="advCoinbaseApiKey">Coinbase API Key (optional)</label>
+                                    <input type="password" id="advCoinbaseApiKey" placeholder="Coinbase API key" />
                                 </div>
                                 <div class="form-group">
-                                    <label for="advPaypalTipAmounts">PayPal Tip Amounts</label>
-                                    <input type="text" id="advPaypalTipAmounts" placeholder="5,10,20" />
+                                    <label for="advCoinbaseWebhookSecret">Coinbase Webhook Secret (optional)</label>
+                                    <input type="password" id="advCoinbaseWebhookSecret" placeholder="Webhook secret" />
                                 </div>
                                 <div class="form-group" style="grid-column: 1 / -1;">
-                                    <label for="advPaypalCheckoutUrl">PayPal Checkout URL</label>
-                                    <input type="url" id="advPaypalCheckoutUrl" placeholder="https://your-paypal-checkout-endpoint.example/checkout" />
+                                    <label for="advCryptoReceiveAddress">Fallback Receive Address</label>
+                                    <input type="text" id="advCryptoReceiveAddress" placeholder="fallback wallet address" />
+                                </div>
+                                <div class="form-group" style="grid-column: 1 / -1;">
+                                    <label for="advCryptoReceiveAddressesJson">Per-Coin Receive Addresses JSON</label>
+                                    <textarea id="advCryptoReceiveAddressesJson" rows="6" placeholder='{"BTC":"bc1...","ETH":"0x...","USDT":"0x..."}'></textarea>
+                                </div>
+                                <div class="form-group">
+                                    <label for="advCoinbaseDestinationAccount">Coinbase Destination</label>
+                                    <input type="text" id="advCoinbaseDestinationAccount" placeholder="Coinbase account or destination" />
+                                </div>
+                                <div class="form-group" style="grid-column: 1 / -1;">
+                                    <label for="advCoinbaseTransferRequestUrl">Transfer Relay URL</label>
+                                    <input type="url" id="advCoinbaseTransferRequestUrl" placeholder="https://relay.example/coinbase-transfer" />
+                                </div>
+                                <div class="form-group">
+                                    <label for="advCoinbaseTransferAuthHeader">Transfer Relay Auth Header</label>
+                                    <input type="text" id="advCoinbaseTransferAuthHeader" placeholder="x-coinbase-transfer-token" />
+                                </div>
+                                <div class="form-group">
+                                    <label for="advCoinbaseTransferAuthToken">Transfer Relay Auth Token</label>
+                                    <input type="password" id="advCoinbaseTransferAuthToken" placeholder="shared-secret" />
                                 </div>
                             </div>
 
@@ -1097,13 +1114,18 @@ BASE_URL=https://yourdomain.com</pre>
             document.getElementById('advStripeTierProductIds').value = config?.stripe?.tierProductIds || '';
             document.getElementById('advStripeTierPriceIds').value = config?.stripe?.tierPriceIds || '';
 
-            document.getElementById('advPaypalEnvironment').value = config?.paypal?.environment || 'sandbox';
-            document.getElementById('advPaypalClientId').value = config?.paypal?.clientId || '';
-            document.getElementById('advPaypalClientSecret').value = config?.paypal?.clientSecret || '';
-            document.getElementById('advPaypalWebhookId').value = config?.paypal?.webhookId || '';
-            document.getElementById('advPaypalCurrency').value = config?.paypal?.currency || 'GBP';
-            document.getElementById('advPaypalTipAmounts').value = config?.paypal?.tipAmounts || '5,10,20';
-            document.getElementById('advPaypalCheckoutUrl').value = config?.paypal?.checkoutUrl || '';
+            document.getElementById('advCoinbaseCurrency').value = config?.coinbase?.currency || 'USD';
+            document.getElementById('advCoinbaseTipAmounts').value = config?.coinbase?.tipAmounts || '5,10,20';
+            document.getElementById('advCoinbaseSupportedCoins').value = config?.coinbase?.supportedCoins || 'BTC,ETH,LTC,BCH,DOGE,USDC,USDT';
+            document.getElementById('advCryptoAsset').value = config?.coinbase?.cryptoAsset || 'USDC';
+            document.getElementById('advCoinbaseApiKey').value = config?.coinbase?.apiKey || '';
+            document.getElementById('advCoinbaseWebhookSecret').value = config?.coinbase?.webhookSecret || '';
+            document.getElementById('advCryptoReceiveAddress').value = config?.coinbase?.receiveAddress || '';
+            document.getElementById('advCryptoReceiveAddressesJson').value = config?.coinbase?.receiveAddressesJson || '{}';
+            document.getElementById('advCoinbaseDestinationAccount').value = config?.coinbase?.destinationAccount || '';
+            document.getElementById('advCoinbaseTransferRequestUrl').value = config?.coinbase?.transferRequestUrl || '';
+            document.getElementById('advCoinbaseTransferAuthHeader').value = config?.coinbase?.transferAuthHeader || 'x-coinbase-transfer-token';
+            document.getElementById('advCoinbaseTransferAuthToken').value = config?.coinbase?.transferAuthToken || '';
         }
 
         async function loadAdvancedPaymentSettings() {
@@ -1136,14 +1158,19 @@ BASE_URL=https://yourdomain.com</pre>
                     tierProductIds: document.getElementById('advStripeTierProductIds').value.trim(),
                     tierPriceIds: document.getElementById('advStripeTierPriceIds').value.trim()
                 },
-                paypal: {
-                    environment: String(document.getElementById('advPaypalEnvironment').value || 'sandbox').toLowerCase(),
-                    clientId: document.getElementById('advPaypalClientId').value.trim(),
-                    clientSecret: document.getElementById('advPaypalClientSecret').value.trim(),
-                    webhookId: document.getElementById('advPaypalWebhookId').value.trim(),
-                    currency: String(document.getElementById('advPaypalCurrency').value || 'GBP').toUpperCase(),
-                    tipAmounts: document.getElementById('advPaypalTipAmounts').value.trim(),
-                    checkoutUrl: document.getElementById('advPaypalCheckoutUrl').value.trim()
+                coinbase: {
+                    currency: String(document.getElementById('advCoinbaseCurrency').value || 'USD').toUpperCase(),
+                    tipAmounts: document.getElementById('advCoinbaseTipAmounts').value.trim(),
+                    supportedCoins: String(document.getElementById('advCoinbaseSupportedCoins').value || 'BTC,ETH,LTC,BCH,DOGE,USDC,USDT').toUpperCase(),
+                    cryptoAsset: String(document.getElementById('advCryptoAsset').value || 'USDC').toUpperCase(),
+                    apiKey: document.getElementById('advCoinbaseApiKey').value.trim(),
+                    webhookSecret: document.getElementById('advCoinbaseWebhookSecret').value.trim(),
+                    receiveAddress: document.getElementById('advCryptoReceiveAddress').value.trim(),
+                    receiveAddressesJson: document.getElementById('advCryptoReceiveAddressesJson').value.trim(),
+                    destinationAccount: document.getElementById('advCoinbaseDestinationAccount').value.trim(),
+                    transferRequestUrl: document.getElementById('advCoinbaseTransferRequestUrl').value.trim(),
+                    transferAuthHeader: document.getElementById('advCoinbaseTransferAuthHeader').value.trim(),
+                    transferAuthToken: document.getElementById('advCoinbaseTransferAuthToken').value.trim()
                 }
             };
 
