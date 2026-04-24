@@ -57,11 +57,13 @@ if command -v apt-get >/dev/null 2>&1; then
     php-gmp
 
   # Ensure Node.js + npm are installed from a single package source.
+  # Never run a blind --fix-broken here because it can re-select apt npm,
+  # which conflicts with NodeSource nodejs packages.
   apt-mark unhold nodejs npm >/dev/null 2>&1 || true
-  apt-get install -y --fix-broken || true
 
   NODEJS_POLICY="$(apt-cache policy nodejs 2>/dev/null || true)"
-  if printf '%s' "${NODEJS_POLICY}" | grep -qi 'nodesource'; then
+  NODEJS_VERSION="$(dpkg-query -W -f='${Version}' nodejs 2>/dev/null || true)"
+  if printf '%s\n%s' "${NODEJS_POLICY}" "${NODEJS_VERSION}" | grep -Eqi 'nodesource|deb\.nodesource\.com|nodistro'; then
     # NodeSource nodejs already bundles npm and conflicts with apt npm.
     apt-get purge -y npm >/dev/null 2>&1 || true
     apt-get install -y nodejs
