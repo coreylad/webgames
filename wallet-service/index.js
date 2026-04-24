@@ -1,6 +1,7 @@
 "use strict";
 
 const crypto = require("crypto");
+const fs = require("fs");
 const path = require("path");
 const express = require("express");
 const helmet = require("helmet");
@@ -16,7 +17,6 @@ const PORT = Number(process.env.WALLET_SERVICE_PORT || 8787);
 
 const AUTH_HEADER = String(process.env.CRYPTO_DERIVATION_AUTH_HEADER || "x-webgames-wallet-token").trim().toLowerCase();
 const AUTH_TOKEN = String(process.env.CRYPTO_DERIVATION_AUTH_TOKEN || "").trim();
-const BASE_ADDRESSES = resolveBaseAddresses();
 const TAGGED_COINS = parseCoinSet(process.env.WALLET_TAGGED_COINS || "XRP");
 const DERIVATION_SECRET = String(process.env.WALLET_DERIVATION_SECRET || "").trim();
 const AUTO_VERIFY_ENABLED = parseBool(process.env.CRYPTO_AUTO_VERIFY_ENABLED || "0");
@@ -62,16 +62,48 @@ function parseAddressMap(raw) {
   }
 }
 
-function resolveBaseAddresses() {
-  const configuredBase = parseAddressMap(process.env.WALLET_BASE_ADDRESSES_JSON || "{}");
+function loadRuntimeEnv() {
+  const envPath = path.resolve(__dirname, "../.env");
+  try {
+    const parsed = dotenv.parse(fs.readFileSync(envPath, "utf8"));
+    return { ...process.env, ...parsed };
+  } catch {
+    return { ...process.env };
+  }
+}
+
+function resolveBaseAddresses(envValues = process.env) {
+  const configuredBase = parseAddressMap(envValues.WALLET_BASE_ADDRESSES_JSON || "{}");
   if (Object.keys(configuredBase).length > 0) {
     return configuredBase;
   }
 
   // Backward-compatible fallback: use receive addresses when explicit wallet
   // base addresses are not configured yet.
-  const receiveMap = parseAddressMap(process.env.CRYPTO_RECEIVE_ADDRESSES_JSON || "{}");
-  return receiveMap;
+  const receiveMap = parseAddressMap(envValues.CRYPTO_RECEIVE_ADDRESSES_JSON || "{}");
+  if (Object.keys(receiveMap).length > 0) {
+    return receiveMap;
+  }
+
+  // Last-resort fallback: if only a single legacy receive address is set,
+  // map it across configured coins so derivation can proceed.
+  const singleReceive = String(envValues.CRYPTO_RECEIVE_ADDRESS || "").trim();
+  if (!singleReceive) {
+    return {};
+  }
+
+  const coinsRaw = String(envValues.COINBASE_SUPPORTED_COINS || "BTC,ETH,LTC,BCH,DOGE,USDC,USDT,XRP");
+  const coins = coinsRaw
+    .split(",")
+    .map((x) => x.trim().toUpperCase())
+    .filter((x) => /^[A-Z0-9]{2,12}$/.test(x));
+
+  const out = {};
+  for (const coin of new Set(coins)) {
+    out[coin] = singleReceive;
+  }
+
+  return out;
 }
 
 function parseCoinSet(raw) {
@@ -240,12 +272,16 @@ function deriveDestinationTag(secret, tipId, coin) {
 }
 
 app.get("/api/health", (_req, res) => {
+  const runtimeEnv = loadRuntimeEnv();
+  const runtimeBaseAddresses = resolveBaseAddresses(runtimeEnv);
+  const runtimeDerivationSecret = String(runtimeEnv.WALLET_DERIVATION_SECRET || "").trim();
+
   res.json({
     ok: true,
     service: "webgames-wallet-service",
     hasAuthToken: AUTH_TOKEN !== "",
-    hasDerivationSecret: DERIVATION_SECRET !== "",
-    configuredCoins: Object.keys(BASE_ADDRESSES),
+    hasDerivationSecret: runtimeDerivationSecret !== "",
+    configuredCoins: Object.keys(runtimeBaseAddresses),
     autoVerify: {
       enabled: AUTO_VERIFY_ENABLED,
       providerConfigured: AUTO_VERIFY_PROVIDER_URL !== "",
@@ -257,7 +293,12 @@ app.get("/api/health", (_req, res) => {
 });
 
 app.post("/api/derive-addresses", requireAuth, (req, res) => {
-  if (!DERIVATION_SECRET) {
+  const runtimeEnv = loadRuntimeEnv();
+  const runtimeDerivationSecret = String(runtimeEnv.WALLET_DERIVATION_SECRET || "").trim();
+  const runtimeBaseAddresses = resolveBaseAddresses(runtimeEnv);
+  const runtimeTaggedCoins = parseCoinSet(runtimeEnv.WALLET_TAGGED_COINS || "XRP");
+
+  if (!runtimeDerivationSecret) {
     return res.status(503).json({ error: "WALLET_DERIVATION_SECRET is not configured" });
   }
 
@@ -271,16 +312,16 @@ app.post("/api/derive-addresses", requireAuth, (req, res) => {
   const meta = {};
 
   for (const coin of input.coins) {
-    const baseAddress = String(BASE_ADDRESSES[coin] || "").trim();
+    const baseAddress = String(runtimeBaseAddresses[coin] || "").trim();
     if (!baseAddress) {
       continue;
     }
 
     addresses[coin] = baseAddress;
 
-    if (TAGGED_COINS.has(coin)) {
+    if (runtimeTaggedCoins.has(coin)) {
       meta[coin] = {
-        destinationTag: deriveDestinationTag(DERIVATION_SECRET, input.tipId, coin)
+        destinationTag: deriveDestinationTag(runtimeDerivationSecret, input.tipId, coin)
       };
     }
   }
@@ -289,7 +330,7 @@ app.post("/api/derive-addresses", requireAuth, (req, res) => {
     return res.status(400).json({
       error: "No wallet base addresses configured for requested coins",
       requestedCoins: input.coins,
-      configuredCoins: Object.keys(BASE_ADDRESSES)
+      configuredCoins: Object.keys(runtimeBaseAddresses)
     });
   }
 

@@ -9,28 +9,32 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
 }
 
 $requestedProcessor = strtolower(trim((string)($_GET['processor'] ?? '')));
-$allowedProcessors = ['stripe', 'coinbase'];
+$allowedProcessors = ['stripe', 'btcpay', 'coinbase'];
 $processor = $requestedProcessor !== '' ? $requestedProcessor : active_payment_processor();
+
+if ($processor === 'coinbase') {
+    $processor = 'btcpay';
+}
 
 if (!in_array($processor, $allowedProcessors, true)) {
     json_response(['error' => 'Unsupported payment processor'], 400);
 }
 
-if ($processor === 'coinbase') {
-    $coinbase = coinbase_tip_tiers();
-    $tiers = $coinbase['tiers'];
+if ($processor === 'btcpay') {
+    $btcpay = btcpay_tip_tiers();
+    $tiers = $btcpay['tiers'];
 
     if (empty($tiers)) {
         json_response([
-            'processor' => 'coinbase',
+            'processor' => 'btcpay',
             'tiers' => [],
-            'error' => 'No Coinbase tip amounts configured. Set COINBASE_TIP_AMOUNTS in .env or admin settings.'
+            'error' => 'No crypto tip amounts configured. Set COINBASE_TIP_AMOUNTS in .env or admin settings.'
         ], 500);
     }
 
     json_response([
-        'processor' => 'coinbase',
-        'currency' => $coinbase['currency'] ?? 'USD',
+        'processor' => 'btcpay',
+        'currency' => $btcpay['currency'] ?? 'USD',
         'tiers' => $tiers
     ]);
 }

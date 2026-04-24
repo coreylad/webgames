@@ -25,6 +25,10 @@ function load_env_values(): array
         'STRIPE_SECRET_KEY' => '',
         'STRIPE_PUBLISHABLE_KEY' => '',
         'STRIPE_WEBHOOK_SECRET' => '',
+        'BTCPAY_SERVER_URL' => '',
+        'BTCPAY_API_KEY' => '',
+        'BTCPAY_STORE_ID' => '',
+        'BTCPAY_WEBHOOK_SECRET' => '',
         'COINBASE_COMMERCE_API_KEY' => '',
         'COINBASE_COMMERCE_WEBHOOK_SECRET' => '',
         'COINBASE_TIP_AMOUNTS' => '5,10,20',
@@ -579,14 +583,18 @@ function parse_csv_env(string $key): array
 function active_payment_processor(): string
 {
     $processor = strtolower(trim(env_value('PAYMENT_PROCESSOR', 'stripe')));
-    if (!in_array($processor, ['stripe', 'coinbase'], true)) {
+    if ($processor === 'coinbase') {
+        return 'btcpay';
+    }
+
+    if (!in_array($processor, ['stripe', 'btcpay'], true)) {
         return 'stripe';
     }
 
     return $processor;
 }
 
-function coinbase_tip_tiers(): array
+function btcpay_tip_tiers(): array
 {
     $amountTokens = parse_csv_env('COINBASE_TIP_AMOUNTS');
     $currency = strtoupper(trim(env_value('COINBASE_CURRENCY', 'GBP')));
@@ -617,8 +625,8 @@ function coinbase_tip_tiers(): array
         $seen[$tierKey] = true;
         $amountCents = (int)round($amount * 100);
         $tiers[] = [
-            'id' => 'coinbase_' . str_replace('.', '_', $tierKey),
-            'provider' => 'coinbase',
+            'id' => 'btcpay_' . str_replace('.', '_', $tierKey),
+            'provider' => 'btcpay',
             'amount' => $amount,
             'amountCents' => $amountCents,
             'currency' => $currency,
@@ -633,6 +641,11 @@ function coinbase_tip_tiers(): array
         'tiers' => $tiers,
         'currency' => $currency
     ];
+}
+
+function coinbase_tip_tiers(): array
+{
+    return btcpay_tip_tiers();
 }
 
 function crypto_supported_coins(): array

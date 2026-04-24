@@ -16,7 +16,7 @@ if ($sessionId === '') {
 }
 
 $tip = find_tip_record(static fn(array $item): bool => ($item['sessionId'] ?? '') === $sessionId);
-if ($tip === null || ($tip['processor'] ?? '') !== 'coinbase') {
+if ($tip === null || !in_array((string)($tip['processor'] ?? ''), ['btcpay', 'coinbase'], true)) {
     json_response(['error' => 'Crypto tip session not found'], 404);
 }
 

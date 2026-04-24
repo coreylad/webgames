@@ -54,8 +54,8 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 10000) {
 }
 
 function processorLabel(processor) {
-  if (processor === "coinbase") {
-    return "Crypto (BTCPay-style)";
+  if (processor === "btcpay" || processor === "coinbase") {
+    return "Crypto (BTCPay)";
   }
   return "Stripe";
 }
@@ -71,16 +71,16 @@ function updateSubmitLabel(processor) {
 
 function setProcessorAvailability() {
   const stripeAvailable = processorTierMap.has("stripe");
-  const coinbaseAvailable = processorTierMap.has("coinbase");
+  const btcpayAvailable = processorTierMap.has("btcpay");
 
   if (tipSubmit) {
     tipSubmit.disabled = !stripeAvailable;
   }
   if (tipCryptoSubmit) {
-    tipCryptoSubmit.disabled = !coinbaseAvailable;
+    tipCryptoSubmit.disabled = !btcpayAvailable;
   }
 
-  return { stripeAvailable, coinbaseAvailable };
+  return { stripeAvailable, btcpayAvailable };
 }
 
 function renderProcessorTiers(processor) {
@@ -144,7 +144,7 @@ async function loadTipTiers() {
   processorErrors.clear();
 
   let stripeAvailable = false;
-  let coinbaseAvailable = false;
+  let btcpayAvailable = false;
 
   // Stripe is the hard fallback path: render it first so a slow/broken crypto
   // setup never leaves the payment selector stuck in a loading state.
@@ -160,23 +160,23 @@ async function loadTipTiers() {
   }
 
   try {
-    await loadTiersForProcessor("coinbase");
-    coinbaseAvailable = true;
+    await loadTiersForProcessor("btcpay");
+    btcpayAvailable = true;
   } catch (error) {
-    const message = error instanceof Error ? error.message : `Unable to load ${processorLabel("coinbase")} tiers.`;
-    processorErrors.set("coinbase", message);
+    const message = error instanceof Error ? error.message : `Unable to load ${processorLabel("btcpay")} tiers.`;
+    processorErrors.set("btcpay", message);
   }
 
-  if (stripeAvailable || coinbaseAvailable) {
+  if (stripeAvailable || btcpayAvailable) {
     if (stripeAvailable) {
       renderProcessorTiers("stripe");
     } else {
-      renderProcessorTiers("coinbase");
+      renderProcessorTiers("btcpay");
     }
 
     setProcessorAvailability();
 
-    if (!coinbaseAvailable && stripeAvailable) {
+    if (!btcpayAvailable && stripeAvailable) {
       tipMessage.className = "status";
       tipMessage.textContent = "Crypto is currently unavailable. Stripe checkout is ready.";
     } else {
@@ -216,13 +216,13 @@ if (tipForm) {
 
   if (tipCryptoSubmit) {
     tipCryptoSubmit.addEventListener("click", () => {
-      if (!processorTierMap.has("coinbase")) {
+      if (!processorTierMap.has("btcpay")) {
         tipMessage.className = "status error";
-        tipMessage.textContent = processorErrors.get("coinbase") || "Crypto is currently unavailable.";
+        tipMessage.textContent = processorErrors.get("btcpay") || "Crypto is currently unavailable.";
         return;
       }
 
-      renderProcessorTiers("coinbase");
+      renderProcessorTiers("btcpay");
       tipForm.requestSubmit();
     });
   }
@@ -244,8 +244,8 @@ if (tipForm) {
     const priceId = String(formData.get("priceId") || "").trim();
 
     tipMessage.className = "status";
-    if (processor === "coinbase") {
-      tipMessage.textContent = "Preparing local crypto payment instructions...";
+    if (processor === "btcpay") {
+      tipMessage.textContent = "Preparing BTCPay invoice...";
     } else {
       tipMessage.textContent = "Creating secure Stripe checkout...";
     }

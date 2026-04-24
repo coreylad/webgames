@@ -26,7 +26,7 @@ if ($tip === null) {
     json_response(['error' => 'Tip session not found'], 404);
 }
 
-if (($tip['processor'] ?? '') !== 'coinbase') {
+if (!in_array((string)($tip['processor'] ?? ''), ['btcpay', 'coinbase'], true)) {
     json_response(['error' => 'This endpoint only accepts local crypto sessions'], 400);
 }
 

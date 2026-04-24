@@ -663,7 +663,7 @@
                                     <label for="advActiveProcessor">Active Processor</label>
                                     <select id="advActiveProcessor">
                                         <option value="stripe">Stripe</option>
-                                        <option value="coinbase">Crypto</option>
+                                        <option value="btcpay">BTCPay (Crypto)</option>
                                     </select>
                                 </div>
                             </div>
@@ -692,7 +692,7 @@
                                 </div>
                             </div>
 
-                            <h3 style="margin-top:1.1rem;margin-bottom:0.65rem;">Crypto + Coinbase Transfer Settings</h3>
+                            <h3 style="margin-top:1.1rem;margin-bottom:0.65rem;">BTCPay + Transfer Settings</h3>
                             <div class="settings-grid">
                                 <div class="form-group">
                                     <label for="advCoinbaseCurrency">Local Currency</label>
@@ -1106,7 +1106,9 @@ BASE_URL=https://yourdomain.com</pre>
         }
 
         function renderAdvancedPaymentSettings(config) {
-            document.getElementById('advActiveProcessor').value = config?.activeProcessor || 'stripe';
+            const activeProcessor = (config?.activeProcessor === 'coinbase') ? 'btcpay' : (config?.activeProcessor || 'stripe');
+            const btcpayConfig = config?.btcpay || config?.coinbase || {};
+            document.getElementById('advActiveProcessor').value = activeProcessor;
 
             document.getElementById('advStripeSecretKey').value = config?.stripe?.secretKey || '';
             document.getElementById('advStripePublishableKey').value = config?.stripe?.publishableKey || '';
@@ -1114,18 +1116,18 @@ BASE_URL=https://yourdomain.com</pre>
             document.getElementById('advStripeTierProductIds').value = config?.stripe?.tierProductIds || '';
             document.getElementById('advStripeTierPriceIds').value = config?.stripe?.tierPriceIds || '';
 
-            document.getElementById('advCoinbaseCurrency').value = config?.coinbase?.currency || 'GBP';
-            document.getElementById('advCoinbaseTipAmounts').value = config?.coinbase?.tipAmounts || '5,10,20';
-            document.getElementById('advCoinbaseSupportedCoins').value = config?.coinbase?.supportedCoins || 'BTC,ETH,LTC,BCH,DOGE,USDC,USDT,XRP';
-            document.getElementById('advCryptoAsset').value = config?.coinbase?.cryptoAsset || 'USDC';
-            document.getElementById('advCoinbaseApiKey').value = config?.coinbase?.apiKey || '';
-            document.getElementById('advCoinbaseWebhookSecret').value = config?.coinbase?.webhookSecret || '';
-            document.getElementById('advCryptoReceiveAddress').value = config?.coinbase?.receiveAddress || '';
-            document.getElementById('advCryptoReceiveAddressesJson').value = config?.coinbase?.receiveAddressesJson || '{}';
-            document.getElementById('advCoinbaseDestinationAccount').value = config?.coinbase?.destinationAccount || '';
-            document.getElementById('advCoinbaseTransferRequestUrl').value = config?.coinbase?.transferRequestUrl || '';
-            document.getElementById('advCoinbaseTransferAuthHeader').value = config?.coinbase?.transferAuthHeader || 'x-coinbase-transfer-token';
-            document.getElementById('advCoinbaseTransferAuthToken').value = config?.coinbase?.transferAuthToken || '';
+            document.getElementById('advCoinbaseCurrency').value = btcpayConfig?.currency || 'GBP';
+            document.getElementById('advCoinbaseTipAmounts').value = btcpayConfig?.tipAmounts || '5,10,20';
+            document.getElementById('advCoinbaseSupportedCoins').value = btcpayConfig?.supportedCoins || 'BTC,ETH,LTC,BCH,DOGE,USDC,USDT,XRP';
+            document.getElementById('advCryptoAsset').value = btcpayConfig?.cryptoAsset || 'USDC';
+            document.getElementById('advCoinbaseApiKey').value = btcpayConfig?.apiKey || '';
+            document.getElementById('advCoinbaseWebhookSecret').value = btcpayConfig?.webhookSecret || '';
+            document.getElementById('advCryptoReceiveAddress').value = btcpayConfig?.receiveAddress || '';
+            document.getElementById('advCryptoReceiveAddressesJson').value = btcpayConfig?.receiveAddressesJson || '{}';
+            document.getElementById('advCoinbaseDestinationAccount').value = btcpayConfig?.destinationAccount || '';
+            document.getElementById('advCoinbaseTransferRequestUrl').value = btcpayConfig?.transferRequestUrl || '';
+            document.getElementById('advCoinbaseTransferAuthHeader').value = btcpayConfig?.transferAuthHeader || 'x-coinbase-transfer-token';
+            document.getElementById('advCoinbaseTransferAuthToken').value = btcpayConfig?.transferAuthToken || '';
         }
 
         async function loadAdvancedPaymentSettings() {
@@ -1158,7 +1160,7 @@ BASE_URL=https://yourdomain.com</pre>
                     tierProductIds: document.getElementById('advStripeTierProductIds').value.trim(),
                     tierPriceIds: document.getElementById('advStripeTierPriceIds').value.trim()
                 },
-                coinbase: {
+                btcpay: {
                     currency: String(document.getElementById('advCoinbaseCurrency').value || 'GBP').toUpperCase(),
                     tipAmounts: document.getElementById('advCoinbaseTipAmounts').value.trim(),
                     supportedCoins: String(document.getElementById('advCoinbaseSupportedCoins').value || 'BTC,ETH,LTC,BCH,DOGE,USDC,USDT,XRP').toUpperCase(),

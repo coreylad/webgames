@@ -107,7 +107,46 @@ switch ($action) {
                     'tierProductIds' => env_value('STRIPE_TIER_PRODUCT_IDS', ''),
                     'tierPriceIds' => env_value('STRIPE_TIER_PRICE_IDS', '')
                 ],
+                'btcpay' => [
+                    'btcpayServerUrl' => env_value('BTCPAY_SERVER_URL', ''),
+                    'btcpayApiKey' => env_value('BTCPAY_API_KEY', ''),
+                    'btcpayStoreId' => env_value('BTCPAY_STORE_ID', ''),
+                    'btcpayWebhookSecret' => env_value('BTCPAY_WEBHOOK_SECRET', ''),
+                    'apiKey' => env_value('COINBASE_COMMERCE_API_KEY', ''),
+                    'webhookSecret' => env_value('COINBASE_COMMERCE_WEBHOOK_SECRET', ''),
+                    'tipAmounts' => env_value('COINBASE_TIP_AMOUNTS', '5,10,20'),
+                    'currency' => env_value('COINBASE_CURRENCY', 'GBP'),
+                    'supportedCoins' => env_value('COINBASE_SUPPORTED_COINS', 'BTC,ETH,LTC,BCH,DOGE,USDC,USDT,XRP'),
+                    'receiveAddressesJson' => env_value('CRYPTO_RECEIVE_ADDRESSES_JSON', '{}'),
+                    'receiveAddresses' => crypto_receive_addresses(),
+                    'destinationAddressesJson' => env_value('COINBASE_DESTINATION_ADDRESSES_JSON', '{}'),
+                    'cryptoAsset' => env_value('CRYPTO_ASSET', 'USDC'),
+                    'receiveAddress' => env_value('CRYPTO_RECEIVE_ADDRESS', ''),
+                    'destinationAccount' => env_value('COINBASE_DESTINATION_ACCOUNT', ''),
+                    'destinationAddresses' => crypto_coinbase_destinations(),
+                    'transferRequestUrl' => env_value('COINBASE_TRANSFER_REQUEST_URL', ''),
+                    'transferAuthHeader' => env_value('COINBASE_TRANSFER_AUTH_HEADER', 'x-coinbase-transfer-token'),
+                    'transferAuthToken' => env_value('COINBASE_TRANSFER_AUTH_TOKEN', ''),
+                    'addressDerivationEnabled' => crypto_address_derivation_enabled(),
+                    'addressDerivationUrl' => env_value('CRYPTO_DERIVATION_URL', ''),
+                    'addressDerivationAuthHeader' => env_value('CRYPTO_DERIVATION_AUTH_HEADER', 'x-webgames-wallet-token'),
+                    'addressDerivationAuthToken' => env_value('CRYPTO_DERIVATION_AUTH_TOKEN', ''),
+                    'walletServicePort' => env_value('WALLET_SERVICE_PORT', '8787'),
+                    'walletBaseAddressesJson' => env_value('WALLET_BASE_ADDRESSES_JSON', '{}'),
+                    'walletTaggedCoins' => env_value('WALLET_TAGGED_COINS', 'XRP'),
+                    'walletDerivationSecret' => env_value('WALLET_DERIVATION_SECRET', ''),
+                    'autoVerifyEnabled' => in_array(strtolower(trim(env_value('CRYPTO_AUTO_VERIFY_ENABLED', '0'))), ['1', 'true', 'yes', 'on'], true),
+                    'autoVerifyProviderUrl' => env_value('CRYPTO_AUTO_VERIFY_PROVIDER_URL', ''),
+                    'autoVerifyAuthHeader' => env_value('CRYPTO_AUTO_VERIFY_AUTH_HEADER', 'x-webgames-verify-token'),
+                    'autoVerifyAuthToken' => env_value('CRYPTO_AUTO_VERIFY_AUTH_TOKEN', ''),
+                    'autoVerifyMinConfirmations' => env_value('CRYPTO_AUTO_VERIFY_MIN_CONFIRMATIONS', '1'),
+                    'walletAppInternalBaseUrl' => env_value('WALLET_APP_INTERNAL_BASE_URL', 'http://127.0.0.1')
+                ],
                 'coinbase' => [
+                    'btcpayServerUrl' => env_value('BTCPAY_SERVER_URL', ''),
+                    'btcpayApiKey' => env_value('BTCPAY_API_KEY', ''),
+                    'btcpayStoreId' => env_value('BTCPAY_STORE_ID', ''),
+                    'btcpayWebhookSecret' => env_value('BTCPAY_WEBHOOK_SECRET', ''),
                     'apiKey' => env_value('COINBASE_COMMERCE_API_KEY', ''),
                     'webhookSecret' => env_value('COINBASE_COMMERCE_WEBHOOK_SECRET', ''),
                     'tipAmounts' => env_value('COINBASE_TIP_AMOUNTS', '5,10,20'),
@@ -149,12 +188,17 @@ switch ($action) {
 
         $body = read_json_input();
         $activeProcessor = strtolower(trim((string)($body['activeProcessor'] ?? 'stripe')));
-        if (!in_array($activeProcessor, ['stripe', 'coinbase'], true)) {
-            json_response(['error' => 'Active processor must be stripe or coinbase'], 400);
+        if ($activeProcessor === 'coinbase') {
+            $activeProcessor = 'btcpay';
+        }
+        if (!in_array($activeProcessor, ['stripe', 'btcpay'], true)) {
+            json_response(['error' => 'Active processor must be stripe or btcpay'], 400);
         }
 
         $stripe = is_array($body['stripe'] ?? null) ? $body['stripe'] : [];
-        $coinbase = is_array($body['coinbase'] ?? null) ? $body['coinbase'] : [];
+        $coinbase = is_array($body['btcpay'] ?? null)
+            ? $body['btcpay']
+            : (is_array($body['coinbase'] ?? null) ? $body['coinbase'] : []);
 
         $stripeSecretKey = trim((string)($stripe['secretKey'] ?? env_value('STRIPE_SECRET_KEY', '')));
         $stripePublishableKey = trim((string)($stripe['publishableKey'] ?? env_value('STRIPE_PUBLISHABLE_KEY', '')));
@@ -202,6 +246,10 @@ switch ($action) {
         }
 
         $coinbaseTransferAuthToken = trim((string)($coinbase['transferAuthToken'] ?? env_value('COINBASE_TRANSFER_AUTH_TOKEN', '')));
+        $btcpayServerUrl = trim((string)($coinbase['btcpayServerUrl'] ?? env_value('BTCPAY_SERVER_URL', '')));
+        $btcpayApiKey = trim((string)($coinbase['btcpayApiKey'] ?? env_value('BTCPAY_API_KEY', '')));
+        $btcpayStoreId = trim((string)($coinbase['btcpayStoreId'] ?? env_value('BTCPAY_STORE_ID', '')));
+        $btcpayWebhookSecret = trim((string)($coinbase['btcpayWebhookSecret'] ?? env_value('BTCPAY_WEBHOOK_SECRET', '')));
         $coinbaseApiKey = trim((string)($coinbase['apiKey'] ?? env_value('COINBASE_COMMERCE_API_KEY', '')));
         $coinbaseWebhookSecret = trim((string)($coinbase['webhookSecret'] ?? env_value('COINBASE_COMMERCE_WEBHOOK_SECRET', '')));
         $addressDerivationEnabledRaw = strtolower(trim((string)($coinbase['addressDerivationEnabled'] ?? env_value('CRYPTO_DERIVATION_ENABLED', '0'))));
@@ -264,6 +312,10 @@ switch ($action) {
             json_response(['error' => 'Wallet app internal base URL must be a valid URL'], 400);
         }
 
+        if ($btcpayServerUrl !== '' && filter_var($btcpayServerUrl, FILTER_VALIDATE_URL) === false) {
+            json_response(['error' => 'BTCPay server URL must be a valid URL'], 400);
+        }
+
         $walletAddressMap = json_decode($walletBaseAddressesJson, true);
         if (!is_array($walletAddressMap)) {
             json_response(['error' => 'Wallet base addresses JSON must be a valid object'], 400);
@@ -306,6 +358,10 @@ switch ($action) {
             'STRIPE_WEBHOOK_SECRET' => $stripeWebhookSecret,
             'STRIPE_TIER_PRODUCT_IDS' => $stripeTierProductIds,
             'STRIPE_TIER_PRICE_IDS' => $stripeTierPriceIds,
+            'BTCPAY_SERVER_URL' => $btcpayServerUrl,
+            'BTCPAY_API_KEY' => $btcpayApiKey,
+            'BTCPAY_STORE_ID' => $btcpayStoreId,
+            'BTCPAY_WEBHOOK_SECRET' => $btcpayWebhookSecret,
             'COINBASE_COMMERCE_API_KEY' => $coinbaseApiKey,
             'COINBASE_COMMERCE_WEBHOOK_SECRET' => $coinbaseWebhookSecret,
             'COINBASE_TIP_AMOUNTS' => $coinbaseTipAmounts,
@@ -358,7 +414,46 @@ switch ($action) {
                     'tierProductIds' => $stripeTierProductIds,
                     'tierPriceIds' => $stripeTierPriceIds
                 ],
+                'btcpay' => [
+                    'btcpayServerUrl' => $btcpayServerUrl,
+                    'btcpayApiKey' => $btcpayApiKey,
+                    'btcpayStoreId' => $btcpayStoreId,
+                    'btcpayWebhookSecret' => $btcpayWebhookSecret,
+                    'apiKey' => $coinbaseApiKey,
+                    'webhookSecret' => $coinbaseWebhookSecret,
+                    'tipAmounts' => $coinbaseTipAmounts,
+                    'currency' => $coinbaseCurrency,
+                    'supportedCoins' => $coinbaseSupportedCoins,
+                    'receiveAddressesJson' => $coinbaseReceiveAddressesJson,
+                    'receiveAddresses' => crypto_receive_addresses(),
+                    'destinationAddressesJson' => $coinbaseDestinationAddressesJson,
+                    'cryptoAsset' => $cryptoAsset,
+                    'receiveAddress' => $cryptoReceiveAddress,
+                    'destinationAccount' => $coinbaseDestinationAccount,
+                    'destinationAddresses' => crypto_coinbase_destinations(),
+                    'transferRequestUrl' => $coinbaseTransferRequestUrl,
+                    'transferAuthHeader' => $coinbaseTransferAuthHeader,
+                    'transferAuthToken' => $coinbaseTransferAuthToken,
+                    'addressDerivationEnabled' => $addressDerivationEnabled,
+                    'addressDerivationUrl' => $addressDerivationUrl,
+                    'addressDerivationAuthHeader' => $addressDerivationAuthHeader,
+                    'addressDerivationAuthToken' => $addressDerivationAuthToken,
+                    'walletServicePort' => $walletServicePort,
+                    'walletBaseAddressesJson' => $walletBaseAddressesJson,
+                    'walletTaggedCoins' => $walletTaggedCoins,
+                    'walletDerivationSecret' => $walletDerivationSecret,
+                    'autoVerifyEnabled' => $autoVerifyEnabled,
+                    'autoVerifyProviderUrl' => $autoVerifyProviderUrl,
+                    'autoVerifyAuthHeader' => $autoVerifyAuthHeader,
+                    'autoVerifyAuthToken' => $autoVerifyAuthToken,
+                    'autoVerifyMinConfirmations' => (string)$autoVerifyMinConfirmations,
+                    'walletAppInternalBaseUrl' => $walletAppInternalBaseUrl
+                ],
                 'coinbase' => [
+                    'btcpayServerUrl' => $btcpayServerUrl,
+                    'btcpayApiKey' => $btcpayApiKey,
+                    'btcpayStoreId' => $btcpayStoreId,
+                    'btcpayWebhookSecret' => $btcpayWebhookSecret,
                     'apiKey' => $coinbaseApiKey,
                     'webhookSecret' => $coinbaseWebhookSecret,
                     'tipAmounts' => $coinbaseTipAmounts,
@@ -565,7 +660,7 @@ switch ($action) {
     case 'crypto-transfer-queue':
         $store = read_tip_store();
         $tips = array_values(array_filter($store['tips'], static function (array $tip): bool {
-            return ($tip['processor'] ?? '') === 'coinbase'
+            return in_array((string)($tip['processor'] ?? ''), ['btcpay', 'coinbase'], true)
                 && in_array((string)($tip['status'] ?? ''), ['awaiting_crypto_payment', 'payment_submitted', 'paid', 'coinbase_transfer_requested'], true);
         }));
 
@@ -601,7 +696,7 @@ switch ($action) {
             $pendingCount = 0;
 
             foreach ($allTips as $tip) {
-                if (($tip['processor'] ?? '') !== 'coinbase') {
+                if (!in_array((string)($tip['processor'] ?? ''), ['btcpay', 'coinbase'], true)) {
                     continue;
                 }
                 if (strtoupper((string)($tip['cryptoAsset'] ?? '')) !== $coin) {
@@ -679,7 +774,7 @@ switch ($action) {
         // Collect confirmed-but-not-yet-transferred tip IDs for this coin
         $store = read_tip_store();
         $eligibleTips = array_values(array_filter($store['tips'], static function (array $tip) use ($withdrawCoin): bool {
-            return ($tip['processor'] ?? '') === 'coinbase'
+            return in_array((string)($tip['processor'] ?? ''), ['btcpay', 'coinbase'], true)
                 && strtoupper((string)($tip['cryptoAsset'] ?? '')) === $withdrawCoin
                 && ($tip['status'] ?? '') === 'paid';
         }));
@@ -790,7 +885,7 @@ switch ($action) {
         }
 
         $tip = find_tip_record(static fn(array $item): bool => ($item['id'] ?? '') === $tipId);
-        if ($tip === null || ($tip['processor'] ?? '') !== 'coinbase') {
+        if ($tip === null || !in_array((string)($tip['processor'] ?? ''), ['btcpay', 'coinbase'], true)) {
             json_response(['error' => 'Crypto tip not found'], 404);
         }
 
@@ -822,7 +917,7 @@ switch ($action) {
         }
 
         $tip = find_tip_record(static fn(array $item): bool => ($item['id'] ?? '') === $tipId);
-        if ($tip === null || ($tip['processor'] ?? '') !== 'coinbase') {
+        if ($tip === null || !in_array((string)($tip['processor'] ?? ''), ['btcpay', 'coinbase'], true)) {
             json_response(['error' => 'Crypto tip not found'], 404);
         }
 
@@ -1310,9 +1405,13 @@ switch ($action) {
         $normalized = [
             'platform' => [
                 'BASE_URL' => trim((string)($platform['BASE_URL'] ?? $defaults['platform']['BASE_URL'])),
-                'PAYMENT_PROCESSOR' => in_array(strtolower(trim((string)($platform['PAYMENT_PROCESSOR'] ?? $defaults['platform']['PAYMENT_PROCESSOR']))), ['stripe', 'coinbase'], true)
-                    ? strtolower(trim((string)($platform['PAYMENT_PROCESSOR'] ?? $defaults['platform']['PAYMENT_PROCESSOR'])))
-                    : 'stripe',
+                'PAYMENT_PROCESSOR' => (function () use ($platform, $defaults): string {
+                    $candidate = strtolower(trim((string)($platform['PAYMENT_PROCESSOR'] ?? $defaults['platform']['PAYMENT_PROCESSOR'])));
+                    if ($candidate === 'coinbase') {
+                        return 'btcpay';
+                    }
+                    return in_array($candidate, ['stripe', 'btcpay'], true) ? $candidate : 'stripe';
+                })(),
                 'STRIPE_TIER_PRODUCT_IDS' => trim((string)($platform['STRIPE_TIER_PRODUCT_IDS'] ?? $defaults['platform']['STRIPE_TIER_PRODUCT_IDS'])),
                 'STRIPE_TIER_PRICE_IDS' => trim((string)($platform['STRIPE_TIER_PRICE_IDS'] ?? $defaults['platform']['STRIPE_TIER_PRICE_IDS']))
             ],

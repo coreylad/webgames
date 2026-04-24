@@ -4,6 +4,70 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/common.php';
 
+function btcpay_request(string $method, string $path, array $payload = []): array
+{
+    $serverUrl = rtrim(trim(env_value('BTCPAY_SERVER_URL', '')), '/');
+    $apiKey = trim(env_value('BTCPAY_API_KEY', ''));
+
+    if ($serverUrl === '' || $apiKey === '') {
+        return ['ok' => false, 'error' => 'BTCPay is not configured. Set server URL and API key in admin crypto settings.'];
+    }
+
+    if (!function_exists('curl_init')) {
+        return ['ok' => false, 'error' => 'cURL extension is required for BTCPay integration.'];
+    }
+
+    $url = $serverUrl . '/api/v1/' . ltrim($path, '/');
+    $ch = curl_init($url);
+    if ($ch === false) {
+        return ['ok' => false, 'error' => 'Unable to initialize BTCPay request.'];
+    }
+
+    $body = !empty($payload) ? json_encode($payload, JSON_UNESCAPED_SLASHES) : '';
+    if ($body === false) {
+        $body = '';
+    }
+
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_CUSTOMREQUEST => strtoupper($method),
+        CURLOPT_HTTPHEADER => [
+            'Authorization: token ' . $apiKey,
+            'Accept: application/json',
+            'Content-Type: application/json'
+        ],
+        CURLOPT_TIMEOUT => 20,
+        CURLOPT_CONNECTTIMEOUT => 10,
+        CURLOPT_POSTFIELDS => $body,
+        CURLOPT_SSL_VERIFYPEER => true,
+        CURLOPT_SSL_VERIFYHOST => 2
+    ]);
+
+    $responseBody = curl_exec($ch);
+    $statusCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlErr = curl_error($ch);
+    curl_close($ch);
+
+    if ($responseBody === false) {
+        return ['ok' => false, 'error' => $curlErr !== '' ? $curlErr : 'BTCPay request failed'];
+    }
+
+    $decoded = json_decode((string)$responseBody, true);
+    if (!is_array($decoded)) {
+        $decoded = [];
+    }
+
+    if ($statusCode < 200 || $statusCode >= 300) {
+        $error = trim((string)($decoded['message'] ?? ''));
+        if ($error === '') {
+            $error = 'BTCPay API request failed with status ' . $statusCode;
+        }
+        return ['ok' => false, 'error' => $error, 'status' => $statusCode, 'data' => $decoded];
+    }
+
+    return ['ok' => true, 'status' => $statusCode, 'data' => $decoded];
+}
+
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_response(['error' => 'Method not allowed'], 405);
 }
@@ -12,8 +76,12 @@ $body = read_json_input();
 $username = trim((string)($body['username'] ?? ''));
 $priceId = trim((string)($body['priceId'] ?? ''));
 $requestedProcessor = strtolower(trim((string)($body['processor'] ?? '')));
-$allowedProcessors = ['stripe', 'coinbase'];
+$allowedProcessors = ['stripe', 'btcpay', 'coinbase'];
 $processor = $requestedProcessor !== '' ? $requestedProcessor : active_payment_processor();
+
+if ($processor === 'coinbase') {
+    $processor = 'btcpay';
+}
 
 if (!in_array($processor, $allowedProcessors, true)) {
     json_response(['error' => 'Unsupported payment processor'], 400);
@@ -28,9 +96,9 @@ if ($priceId === '') {
 }
 
 $tiers = [];
-if ($processor === 'coinbase') {
-    $coinbase = coinbase_tip_tiers();
-    $tiers = $coinbase['tiers'];
+if ($processor === 'btcpay') {
+    $btcpay = btcpay_tip_tiers();
+    $tiers = $btcpay['tiers'];
 } else {
     if ($processor === 'stripe' && preg_match('/^price_[a-zA-Z0-9]+$/', $priceId) !== 1) {
         json_response(['error' => 'Please select a valid Stripe tip tier.'], 400);
@@ -66,84 +134,80 @@ $tipRecord = add_tip_record([
     'updatedAt' => now_iso()
 ]);
 
-if ($processor === 'coinbase') {
+if ($processor === 'btcpay') {
     $baseUrl = rtrim(env_value('BASE_URL', detect_base_url()), '/');
-    $coinOptions = crypto_supported_coins();
-    $addresses = crypto_receive_addresses();
-    $addressMeta = [];
-    $derivation = derive_crypto_receive_addresses(
-        (string)$tipRecord['id'],
-        $username,
-        $coinOptions,
-        (int)($selectedTier['amountCents'] ?? 0),
-        (string)($selectedTier['currency'] ?? 'USD')
-    );
-
-    if (($derivation['ok'] ?? false) === true && is_array($derivation['addresses'] ?? null)) {
-        foreach ($derivation['addresses'] as $coin => $address) {
-            $symbol = strtoupper(trim((string)$coin));
-            $value = trim((string)$address);
-            if ($symbol !== '' && $value !== '') {
-                $addresses[$symbol] = $value;
-            }
-        }
-
-        if (is_array($derivation['meta'] ?? null)) {
-            foreach ($derivation['meta'] as $coin => $metaValue) {
-                $symbol = strtoupper(trim((string)$coin));
-                if ($symbol !== '' && is_array($metaValue)) {
-                    $addressMeta[$symbol] = $metaValue;
-                }
-            }
-        }
-    }
-
-    $cryptoAsset = strtoupper(trim(env_value('CRYPTO_ASSET', 'USDC')));
-    if (!in_array($cryptoAsset, $coinOptions, true)) {
-        $cryptoAsset = $coinOptions[0] ?? 'BTC';
-    }
-    $receiveAddress = trim((string)($addresses[$cryptoAsset] ?? ''));
-
-    if ($receiveAddress === '') {
-        foreach ($coinOptions as $coin) {
-            $candidate = trim((string)($addresses[$coin] ?? ''));
-            if ($candidate !== '') {
-                $cryptoAsset = $coin;
-                $receiveAddress = $candidate;
-                break;
-            }
-        }
-    }
-
-    if ($receiveAddress === '') {
+    $storeId = trim(env_value('BTCPAY_STORE_ID', ''));
+    if ($storeId === '') {
         update_tip_record(
             static fn(array $tip): bool => ($tip['id'] ?? '') === $tipRecord['id'],
             ['status' => 'checkout_failed']
         );
-        json_response(['error' => 'Crypto receive addresses are not configured. Set CRYPTO_RECEIVE_ADDRESSES_JSON in payment settings.'], 500);
+        json_response(['error' => 'BTCPay store ID is not configured.'], 500);
+    }
+
+    $amountCents = (int)($selectedTier['amountCents'] ?? 0);
+    $currency = strtoupper((string)($selectedTier['currency'] ?? env_value('COINBASE_CURRENCY', 'GBP')));
+    $successUrl = $baseUrl . '/public/success.html?session_id=' . rawurlencode((string)$tipRecord['id']);
+    $cancelUrl = $baseUrl . '/public/tip.html?tip=cancelled';
+    $webhookUrl = $baseUrl . '/api/btcpay-webhook.php';
+
+    $invoicePayload = [
+        'amount' => number_format($amountCents / 100, 2, '.', ''),
+        'currency' => $currency,
+        'orderId' => (string)$tipRecord['id'],
+        'itemDesc' => 'Tip for ' . $username,
+        'notificationURL' => $webhookUrl,
+        'checkout' => [
+            'speedPolicy' => 'HighSpeed',
+            'redirectURL' => $successUrl,
+            'redirectAutomatically' => true,
+            'defaultPaymentMethod' => ''
+        ],
+        'metadata' => [
+            'tipRecordId' => (string)$tipRecord['id'],
+            'username' => $username,
+            'cancelURL' => $cancelUrl
+        ]
+    ];
+
+    $invoiceResponse = btcpay_request('POST', 'stores/' . rawurlencode($storeId) . '/invoices', $invoicePayload);
+    if (($invoiceResponse['ok'] ?? false) !== true) {
+        update_tip_record(
+            static fn(array $tip): bool => ($tip['id'] ?? '') === $tipRecord['id'],
+            ['status' => 'checkout_failed']
+        );
+
+        $error = (string)($invoiceResponse['error'] ?? 'Unable to create BTCPay invoice');
+        json_response(['error' => $error], 500);
+    }
+
+    $invoice = is_array($invoiceResponse['data'] ?? null) ? $invoiceResponse['data'] : [];
+    $invoiceId = trim((string)($invoice['id'] ?? ''));
+    $checkoutLink = trim((string)($invoice['checkoutLink'] ?? ''));
+
+    if ($invoiceId === '' || $checkoutLink === '') {
+        update_tip_record(
+            static fn(array $tip): bool => ($tip['id'] ?? '') === $tipRecord['id'],
+            ['status' => 'checkout_failed']
+        );
+        json_response(['error' => 'BTCPay invoice response was missing checkout data.'], 500);
     }
 
     update_tip_record(
         static fn(array $tip): bool => ($tip['id'] ?? '') === $tipRecord['id'],
         [
-            'status' => 'awaiting_crypto_payment',
+            'status' => 'checkout_created',
             'sessionId' => (string)$tipRecord['id'],
-            'paymentIntentId' => '',
-            'receiveAddress' => $receiveAddress,
-            'cryptoAsset' => $cryptoAsset,
-            'supportedAssets' => $coinOptions,
-            'receiveAddresses' => $addresses,
-            'receiveAddressMeta' => $addressMeta,
-            'receiveAddressSource' => (($derivation['ok'] ?? false) === true) ? 'derived' : 'static',
-            'derivationReference' => (string)($derivation['reference'] ?? ''),
-            'derivationError' => (string)($derivation['error'] ?? ''),
-            'coinbaseTransferStatus' => 'not_requested'
+            'paymentIntentId' => $invoiceId,
+            'btcpayInvoiceId' => $invoiceId,
+            'btcpayCheckoutUrl' => $checkoutLink,
+            'coinbaseTransferStatus' => 'not_applicable'
         ]
     );
 
     json_response([
-        'processor' => 'coinbase',
-        'checkoutUrl' => $baseUrl . '/public/success.html?session_id=' . rawurlencode((string)$tipRecord['id']),
+        'processor' => 'btcpay',
+        'checkoutUrl' => $checkoutLink,
         'sessionId' => (string)$tipRecord['id']
     ]);
 }

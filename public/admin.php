@@ -614,7 +614,7 @@ $show_login     = !$needs_setup && !$show_dashboard;
                             <label for="activePaymentProcessor">Default Processor Fallback</label>
                             <select id="activePaymentProcessor">
                                 <option value="stripe">Stripe</option>
-                                <option value="coinbase">Crypto</option>
+                                <option value="btcpay">BTCPay (Crypto)</option>
                             </select>
                             <div class="settings-note">Users can choose Stripe or Crypto on the tip page. This fallback is used only when a processor is not explicitly provided.</div>
                         </div>
@@ -821,8 +821,27 @@ $show_login     = !$needs_setup && !$show_dashboard;
                     <div class="settings-note" style="margin-bottom:0.85rem;">
                         No JSON editing required in this tab.
                     </div>
+                    <div class="settings-note" style="margin-bottom:0.85rem;color:#9fd7ff;">
+                        BTCPay hosted checkout is now the primary crypto flow. Configure BTCPay first, then save.
+                    </div>
 
                     <div class="settings-grid">
+                        <div class="form-group" style="grid-column: 1 / -1;">
+                            <label for="btcpayServerUrlInput">BTCPay Server URL</label>
+                            <input type="url" id="btcpayServerUrlInput" placeholder="https://btcpay.example.com" />
+                        </div>
+                        <div class="form-group">
+                            <label for="btcpayStoreIdInput">BTCPay Store ID</label>
+                            <input type="text" id="btcpayStoreIdInput" placeholder="store id" />
+                        </div>
+                        <div class="form-group">
+                            <label for="btcpayApiKeyInput">BTCPay API Key</label>
+                            <input type="password" id="btcpayApiKeyInput" placeholder="token generated in BTCPay" />
+                        </div>
+                        <div class="form-group">
+                            <label for="btcpayWebhookSecretInput">BTCPay Webhook Secret (optional)</label>
+                            <input type="password" id="btcpayWebhookSecretInput" placeholder="webhook secret" />
+                        </div>
                         <div class="form-group">
                             <label for="coinbaseTipAmountsInput">Local Tip Amounts</label>
                             <input type="text" id="coinbaseTipAmountsInput" placeholder="5,10,20" />
@@ -886,12 +905,12 @@ $show_login     = !$needs_setup && !$show_dashboard;
                             <input type="password" id="coinbaseTransferAuthTokenInput" placeholder="shared-secret" />
                         </div>
                         <div class="form-group">
-                            <label for="coinbaseApiKeyInput">Coinbase API Key (optional)</label>
-                            <input type="password" id="coinbaseApiKeyInput" placeholder="Coinbase API key" />
+                            <label for="coinbaseApiKeyInput">Legacy Coinbase API Key (optional)</label>
+                            <input type="password" id="coinbaseApiKeyInput" placeholder="Legacy only" />
                         </div>
                         <div class="form-group">
-                            <label for="coinbaseWebhookSecretInput">Coinbase Webhook Secret (optional)</label>
-                            <input type="password" id="coinbaseWebhookSecretInput" placeholder="Webhook secret" />
+                            <label for="coinbaseWebhookSecretInput">Legacy Coinbase Webhook Secret (optional)</label>
+                            <input type="password" id="coinbaseWebhookSecretInput" placeholder="Legacy only" />
                         </div>
                         <div class="form-group" style="grid-column: 1 / -1; border: 1px solid rgba(42,232,199,0.35); border-radius: 10px; padding: 0.8rem; background: rgba(42,232,199,0.06);">
                             <label style="display:flex;gap:0.45rem;align-items:center;cursor:pointer;">
@@ -1611,7 +1630,9 @@ $show_login     = !$needs_setup && !$show_dashboard;
     function renderPaymentProcessorsConfig(config) {
         paymentProcessorConfigState = config || null;
 
-        document.getElementById('activePaymentProcessor').value = config?.activeProcessor || 'stripe';
+        const activeProcessor = (config?.activeProcessor === 'coinbase') ? 'btcpay' : (config?.activeProcessor || 'stripe');
+        const btcpayConfig = config?.btcpay || config?.coinbase || {};
+        document.getElementById('activePaymentProcessor').value = activeProcessor;
 
         document.getElementById('stripeSecretKeyInput').value = config?.stripe?.secretKey || '';
         document.getElementById('stripePublishableKeyInput').value = config?.stripe?.publishableKey || '';
@@ -1619,49 +1640,53 @@ $show_login     = !$needs_setup && !$show_dashboard;
         document.getElementById('stripeTierProductIdsInput').value = config?.stripe?.tierProductIds || '';
         document.getElementById('stripeTierPriceIdsInput').value = config?.stripe?.tierPriceIds || '';
 
-        document.getElementById('coinbaseTipAmountsInput').value = config?.coinbase?.tipAmounts || '5,10,20';
-        document.getElementById('coinbaseCurrencyInput').value = config?.coinbase?.currency || 'GBP';
-        document.getElementById('coinbaseSupportedCoinsInput').value = config?.coinbase?.supportedCoins || 'BTC,ETH,LTC,BCH,DOGE,USDC,USDT,XRP';
-        document.getElementById('cryptoAssetInput').value = config?.coinbase?.cryptoAsset || 'USDC';
-        document.getElementById('cryptoReceiveAddressInput').value = config?.coinbase?.receiveAddress || '';
-        document.getElementById('coinbaseDestinationAccountInput').value = config?.coinbase?.destinationAccount || '';
+        document.getElementById('coinbaseTipAmountsInput').value = btcpayConfig?.tipAmounts || '5,10,20';
+        document.getElementById('coinbaseCurrencyInput').value = btcpayConfig?.currency || 'GBP';
+        document.getElementById('coinbaseSupportedCoinsInput').value = btcpayConfig?.supportedCoins || 'BTC,ETH,LTC,BCH,DOGE,USDC,USDT,XRP';
+        document.getElementById('btcpayServerUrlInput').value = btcpayConfig?.btcpayServerUrl || '';
+        document.getElementById('btcpayStoreIdInput').value = btcpayConfig?.btcpayStoreId || '';
+        document.getElementById('btcpayApiKeyInput').value = btcpayConfig?.btcpayApiKey || '';
+        document.getElementById('btcpayWebhookSecretInput').value = btcpayConfig?.btcpayWebhookSecret || '';
+        document.getElementById('cryptoAssetInput').value = btcpayConfig?.cryptoAsset || 'USDC';
+        document.getElementById('cryptoReceiveAddressInput').value = btcpayConfig?.receiveAddress || '';
+        document.getElementById('coinbaseDestinationAccountInput').value = btcpayConfig?.destinationAccount || '';
 
         // Build per-coin address rows from config
-        const receiveDataFromJson = tryParseJson(config?.coinbase?.receiveAddressesJson || '{}');
-        const receiveDataResolved = (config?.coinbase?.receiveAddresses && typeof config.coinbase.receiveAddresses === 'object')
-            ? config.coinbase.receiveAddresses
+        const receiveDataFromJson = tryParseJson(btcpayConfig?.receiveAddressesJson || '{}');
+        const receiveDataResolved = (btcpayConfig?.receiveAddresses && typeof btcpayConfig.receiveAddresses === 'object')
+            ? btcpayConfig.receiveAddresses
             : {};
         const receiveData = Object.keys(receiveDataFromJson).length > 0 ? receiveDataFromJson : receiveDataResolved;
 
-        const destinationDataFromJson = tryParseJson(config?.coinbase?.destinationAddressesJson || '{}');
-        const destinationDataResolved = (config?.coinbase?.destinationAddresses && typeof config.coinbase.destinationAddresses === 'object')
-            ? config.coinbase.destinationAddresses
+        const destinationDataFromJson = tryParseJson(btcpayConfig?.destinationAddressesJson || '{}');
+        const destinationDataResolved = (btcpayConfig?.destinationAddresses && typeof btcpayConfig.destinationAddresses === 'object')
+            ? btcpayConfig.destinationAddresses
             : {};
         const destinationData = Object.keys(destinationDataFromJson).length > 0 ? destinationDataFromJson : destinationDataResolved;
-        const walletBaseData = tryParseJson(config?.coinbase?.walletBaseAddressesJson || '{}');
+        const walletBaseData = tryParseJson(btcpayConfig?.walletBaseAddressesJson || '{}');
 
         buildCoinAddressRows('cryptoReceiveAddressRows', receiveData, 'Your');
         buildCoinAddressRows('cryptoDestinationAddressRows', destinationData, 'Coinbase');
         buildCoinAddressRows('walletBaseAddressRows', walletBaseData, 'Wallet base');
         autofillReceiveAddressRows();
-        document.getElementById('coinbaseTransferRequestUrlInput').value = config?.coinbase?.transferRequestUrl || '';
-        document.getElementById('coinbaseTransferAuthHeaderInput').value = config?.coinbase?.transferAuthHeader || 'x-coinbase-transfer-token';
-        document.getElementById('coinbaseTransferAuthTokenInput').value = config?.coinbase?.transferAuthToken || '';
-        document.getElementById('coinbaseApiKeyInput').value = config?.coinbase?.apiKey || '';
-        document.getElementById('coinbaseWebhookSecretInput').value = config?.coinbase?.webhookSecret || '';
-        document.getElementById('addressDerivationEnabledInput').checked = !!config?.coinbase?.addressDerivationEnabled;
-        document.getElementById('addressDerivationUrlInput').value = config?.coinbase?.addressDerivationUrl || '';
-        document.getElementById('addressDerivationAuthHeaderInput').value = config?.coinbase?.addressDerivationAuthHeader || 'x-webgames-wallet-token';
-        document.getElementById('addressDerivationAuthTokenInput').value = config?.coinbase?.addressDerivationAuthToken || '';
-        document.getElementById('walletServicePortInput').value = config?.coinbase?.walletServicePort || '8787';
-        document.getElementById('walletTaggedCoinsInput').value = config?.coinbase?.walletTaggedCoins || 'XRP';
-        document.getElementById('walletDerivationSecretInput').value = config?.coinbase?.walletDerivationSecret || '';
-        document.getElementById('autoVerifyEnabledInput').checked = !!config?.coinbase?.autoVerifyEnabled;
-        document.getElementById('autoVerifyProviderUrlInput').value = config?.coinbase?.autoVerifyProviderUrl || '';
-        document.getElementById('autoVerifyAuthHeaderInput').value = config?.coinbase?.autoVerifyAuthHeader || 'x-webgames-verify-token';
-        document.getElementById('autoVerifyAuthTokenInput').value = config?.coinbase?.autoVerifyAuthToken || '';
-        document.getElementById('autoVerifyMinConfirmationsInput').value = Number(config?.coinbase?.autoVerifyMinConfirmations || 1);
-        document.getElementById('walletAppInternalBaseUrlInput').value = config?.coinbase?.walletAppInternalBaseUrl || 'http://127.0.0.1';
+        document.getElementById('coinbaseTransferRequestUrlInput').value = btcpayConfig?.transferRequestUrl || '';
+        document.getElementById('coinbaseTransferAuthHeaderInput').value = btcpayConfig?.transferAuthHeader || 'x-coinbase-transfer-token';
+        document.getElementById('coinbaseTransferAuthTokenInput').value = btcpayConfig?.transferAuthToken || '';
+        document.getElementById('coinbaseApiKeyInput').value = btcpayConfig?.apiKey || '';
+        document.getElementById('coinbaseWebhookSecretInput').value = btcpayConfig?.webhookSecret || '';
+        document.getElementById('addressDerivationEnabledInput').checked = !!btcpayConfig?.addressDerivationEnabled;
+        document.getElementById('addressDerivationUrlInput').value = btcpayConfig?.addressDerivationUrl || '';
+        document.getElementById('addressDerivationAuthHeaderInput').value = btcpayConfig?.addressDerivationAuthHeader || 'x-webgames-wallet-token';
+        document.getElementById('addressDerivationAuthTokenInput').value = btcpayConfig?.addressDerivationAuthToken || '';
+        document.getElementById('walletServicePortInput').value = btcpayConfig?.walletServicePort || '8787';
+        document.getElementById('walletTaggedCoinsInput').value = btcpayConfig?.walletTaggedCoins || 'XRP';
+        document.getElementById('walletDerivationSecretInput').value = btcpayConfig?.walletDerivationSecret || '';
+        document.getElementById('autoVerifyEnabledInput').checked = !!btcpayConfig?.autoVerifyEnabled;
+        document.getElementById('autoVerifyProviderUrlInput').value = btcpayConfig?.autoVerifyProviderUrl || '';
+        document.getElementById('autoVerifyAuthHeaderInput').value = btcpayConfig?.autoVerifyAuthHeader || 'x-webgames-verify-token';
+        document.getElementById('autoVerifyAuthTokenInput').value = btcpayConfig?.autoVerifyAuthToken || '';
+        document.getElementById('autoVerifyMinConfirmationsInput').value = Number(btcpayConfig?.autoVerifyMinConfirmations || 1);
+        document.getElementById('walletAppInternalBaseUrlInput').value = btcpayConfig?.walletAppInternalBaseUrl || 'http://127.0.0.1';
     }
 
     async function loadPaymentProcessorsConfig() {
@@ -1727,7 +1752,11 @@ $show_login     = !$needs_setup && !$show_dashboard;
                 tierProductIds: document.getElementById('stripeTierProductIdsInput').value.trim(),
                 tierPriceIds: document.getElementById('stripeTierPriceIdsInput').value.trim()
             },
-            coinbase: {
+            btcpay: {
+                btcpayServerUrl: document.getElementById('btcpayServerUrlInput').value.trim(),
+                btcpayStoreId: document.getElementById('btcpayStoreIdInput').value.trim(),
+                btcpayApiKey: document.getElementById('btcpayApiKeyInput').value.trim(),
+                btcpayWebhookSecret: document.getElementById('btcpayWebhookSecretInput').value.trim(),
                 tipAmounts: document.getElementById('coinbaseTipAmountsInput').value.trim(),
                 currency: String(document.getElementById('coinbaseCurrencyInput').value || 'GBP').toUpperCase(),
                 supportedCoins: String(document.getElementById('coinbaseSupportedCoinsInput').value || 'BTC,ETH,LTC,BCH,DOGE,USDC,USDT,XRP').toUpperCase(),
