@@ -31,11 +31,36 @@ if [ -z "${APP_REAL}" ]; then
   APP_REAL="$(normalize_path "${APP_DIR}")"
 fi
 
-echo "[1/6] Pulling latest code..."
+echo "[1/7] Installing deployment requirements..."
+if command -v apt-get >/dev/null 2>&1; then
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update -y
+  apt-get install -y \
+    nginx \
+    rsync \
+    git \
+    curl \
+    jq \
+    openssl \
+    php \
+    php-cli \
+    php-fpm \
+    php-curl \
+    php-mbstring \
+    php-xml \
+    php-intl \
+    php-zip \
+    php-bcmath \
+    php-gmp
+else
+  echo "apt-get not found; skipping automatic package installation."
+fi
+
+echo "[2/7] Pulling latest code..."
 cd "${REPO_DIR}"
 git pull --ff-only
 
-echo "[2/6] Syncing files to ${APP_DIR}..."
+echo "[3/7] Syncing files to ${APP_DIR}..."
 if [ "${REPO_REAL}" = "${APP_REAL}" ]; then
   echo "Repo and app directory are the same; skipping rsync copy step."
 else
@@ -47,7 +72,7 @@ else
     "${REPO_DIR}/" "${APP_DIR}/"
 fi
 
-echo "[3/6] Ensuring data directory permissions..."
+echo "[4/7] Ensuring data directory permissions..."
 mkdir -p "${APP_DIR}/data"
 chown www-data:www-data "${APP_DIR}/data"
 chmod 775 "${APP_DIR}/data"
@@ -99,7 +124,7 @@ ensure_env_key "COINBASE_COMMERCE_API_KEY" ""
 ensure_env_key "COINBASE_COMMERCE_WEBHOOK_SECRET" ""
 ensure_env_key "COINBASE_TIP_AMOUNTS" "5,10,20"
 ensure_env_key "COINBASE_CURRENCY" "USD"
-ensure_env_key "COINBASE_SUPPORTED_COINS" "BTC,ETH,LTC,BCH,DOGE,USDC,USDT"
+ensure_env_key "COINBASE_SUPPORTED_COINS" "BTC,ETH,LTC,BCH,DOGE,USDC,USDT,XRP"
 ensure_env_key "CRYPTO_RECEIVE_ADDRESSES_JSON" "{}"
 ensure_env_key "COINBASE_DESTINATION_ADDRESSES_JSON" "{}"
 ensure_env_key "CRYPTO_ASSET" "USDC"
@@ -112,7 +137,7 @@ ensure_env_key "WEBHOOK_FORWARD_URL" ""
 ensure_env_key "WEBHOOK_FORWARD_AUTH_HEADER" "x-webgames-proxy-token"
 ensure_env_key "WEBHOOK_FORWARD_AUTH_TOKEN" ""
 
-echo "[4/6] Verifying required served files..."
+echo "[5/7] Verifying required served files..."
 REQUIRED_FILES=(
   "admin.php"
   "installer.php"
@@ -141,7 +166,7 @@ for f in "${REQUIRED_FILES[@]}"; do
   fi
 done
 
-echo "[5/6] Refreshing PHP runtime cache..."
+echo "[6/7] Refreshing PHP runtime cache..."
 PHP_FPM_SERVICE=""
 if systemctl list-unit-files | grep -qE '^php[0-9]+\.[0-9]+-fpm\.service'; then
   PHP_FPM_SERVICE="$(systemctl list-unit-files | awk '/^php[0-9]+\.[0-9]+-fpm\.service/ {print $1}' | head -n 1)"
@@ -153,7 +178,7 @@ else
   echo "No php-fpm service detected; skipping php-fpm reload."
 fi
 
-echo "[6/6] Reloading nginx..."
+echo "[7/7] Reloading nginx..."
 nginx -t && systemctl reload nginx
 
 echo ""
