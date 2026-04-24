@@ -70,6 +70,34 @@ if ($processor === 'coinbase') {
     $baseUrl = rtrim(env_value('BASE_URL', detect_base_url()), '/');
     $coinOptions = crypto_supported_coins();
     $addresses = crypto_receive_addresses();
+    $addressMeta = [];
+    $derivation = derive_crypto_receive_addresses(
+        (string)$tipRecord['id'],
+        $username,
+        $coinOptions,
+        (int)($selectedTier['amountCents'] ?? 0),
+        (string)($selectedTier['currency'] ?? 'USD')
+    );
+
+    if (($derivation['ok'] ?? false) === true && is_array($derivation['addresses'] ?? null)) {
+        foreach ($derivation['addresses'] as $coin => $address) {
+            $symbol = strtoupper(trim((string)$coin));
+            $value = trim((string)$address);
+            if ($symbol !== '' && $value !== '') {
+                $addresses[$symbol] = $value;
+            }
+        }
+
+        if (is_array($derivation['meta'] ?? null)) {
+            foreach ($derivation['meta'] as $coin => $metaValue) {
+                $symbol = strtoupper(trim((string)$coin));
+                if ($symbol !== '' && is_array($metaValue)) {
+                    $addressMeta[$symbol] = $metaValue;
+                }
+            }
+        }
+    }
+
     $cryptoAsset = strtoupper(trim(env_value('CRYPTO_ASSET', 'USDC')));
     if (!in_array($cryptoAsset, $coinOptions, true)) {
         $cryptoAsset = $coinOptions[0] ?? 'BTC';
@@ -105,6 +133,10 @@ if ($processor === 'coinbase') {
             'cryptoAsset' => $cryptoAsset,
             'supportedAssets' => $coinOptions,
             'receiveAddresses' => $addresses,
+            'receiveAddressMeta' => $addressMeta,
+            'receiveAddressSource' => (($derivation['ok'] ?? false) === true) ? 'derived' : 'static',
+            'derivationReference' => (string)($derivation['reference'] ?? ''),
+            'derivationError' => (string)($derivation['error'] ?? ''),
             'coinbaseTransferStatus' => 'not_requested'
         ]
     );

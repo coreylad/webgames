@@ -1,0 +1,16 @@
+{
+  "name": "webgames-wallet-service",
+  "version": "1.0.0",
+  "description": "Secure wallet derivation service for webgames crypto tip sessions",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^16.6.1",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.4.1",
+    "helmet": "^7.1.0"
+  }
+}

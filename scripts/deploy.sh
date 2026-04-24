@@ -31,7 +31,7 @@ if [ -z "${APP_REAL}" ]; then
   APP_REAL="$(normalize_path "${APP_DIR}")"
 fi
 
-echo "[1/7] Installing deployment requirements..."
+echo "[1/8] Installing deployment requirements..."
 if command -v apt-get >/dev/null 2>&1; then
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -y
@@ -42,6 +42,8 @@ if command -v apt-get >/dev/null 2>&1; then
     curl \
     jq \
     openssl \
+    nodejs \
+    npm \
     php \
     php-cli \
     php-fpm \
@@ -56,11 +58,11 @@ else
   echo "apt-get not found; skipping automatic package installation."
 fi
 
-echo "[2/7] Pulling latest code..."
+echo "[2/8] Pulling latest code..."
 cd "${REPO_DIR}"
 git pull --ff-only
 
-echo "[3/7] Syncing files to ${APP_DIR}..."
+echo "[3/8] Syncing files to ${APP_DIR}..."
 if [ "${REPO_REAL}" = "${APP_REAL}" ]; then
   echo "Repo and app directory are the same; skipping rsync copy step."
 else
@@ -72,7 +74,7 @@ else
     "${REPO_DIR}/" "${APP_DIR}/"
 fi
 
-echo "[4/7] Ensuring data directory permissions..."
+echo "[4/8] Ensuring data directory permissions..."
 mkdir -p "${APP_DIR}/data"
 chown www-data:www-data "${APP_DIR}/data"
 chmod 775 "${APP_DIR}/data"
@@ -111,6 +113,14 @@ ensure_env_key() {
   fi
 }
 
+set_env_if_empty() {
+  local key="$1"
+  local value="$2"
+  if grep -qE "^${key}=$" "${APP_DIR}/.env"; then
+    sed -i "s|^${key}=$|${key}=${value}|" "${APP_DIR}/.env"
+  fi
+}
+
 # Seed new payment settings without overwriting existing values.
 ensure_env_key "PAYMENT_PROCESSOR" "stripe"
 ensure_env_key "BASE_URL" ""
@@ -127,6 +137,20 @@ ensure_env_key "COINBASE_CURRENCY" "USD"
 ensure_env_key "COINBASE_SUPPORTED_COINS" "BTC,ETH,LTC,BCH,DOGE,USDC,USDT,XRP"
 ensure_env_key "CRYPTO_RECEIVE_ADDRESSES_JSON" "{}"
 ensure_env_key "COINBASE_DESTINATION_ADDRESSES_JSON" "{}"
+ensure_env_key "CRYPTO_DERIVATION_ENABLED" "0"
+ensure_env_key "CRYPTO_DERIVATION_URL" ""
+ensure_env_key "CRYPTO_DERIVATION_AUTH_HEADER" "x-webgames-wallet-token"
+ensure_env_key "CRYPTO_DERIVATION_AUTH_TOKEN" ""
+ensure_env_key "WALLET_SERVICE_PORT" "8787"
+ensure_env_key "WALLET_BASE_ADDRESSES_JSON" "{}"
+ensure_env_key "WALLET_TAGGED_COINS" "XRP"
+ensure_env_key "WALLET_DERIVATION_SECRET" ""
+ensure_env_key "CRYPTO_AUTO_VERIFY_ENABLED" "0"
+ensure_env_key "CRYPTO_AUTO_VERIFY_PROVIDER_URL" ""
+ensure_env_key "CRYPTO_AUTO_VERIFY_AUTH_HEADER" "x-webgames-verify-token"
+ensure_env_key "CRYPTO_AUTO_VERIFY_AUTH_TOKEN" ""
+ensure_env_key "CRYPTO_AUTO_VERIFY_MIN_CONFIRMATIONS" "1"
+ensure_env_key "WALLET_APP_INTERNAL_BASE_URL" "http://127.0.0.1"
 ensure_env_key "CRYPTO_ASSET" "USDC"
 ensure_env_key "CRYPTO_RECEIVE_ADDRESS" ""
 ensure_env_key "COINBASE_DESTINATION_ACCOUNT" ""
@@ -137,7 +161,13 @@ ensure_env_key "WEBHOOK_FORWARD_URL" ""
 ensure_env_key "WEBHOOK_FORWARD_AUTH_HEADER" "x-webgames-proxy-token"
 ensure_env_key "WEBHOOK_FORWARD_AUTH_TOKEN" ""
 
-echo "[5/7] Verifying required served files..."
+if command -v openssl >/dev/null 2>&1; then
+  set_env_if_empty "CRYPTO_DERIVATION_AUTH_TOKEN" "$(openssl rand -hex 32)"
+  set_env_if_empty "WALLET_DERIVATION_SECRET" "$(openssl rand -hex 32)"
+  set_env_if_empty "CRYPTO_AUTO_VERIFY_AUTH_TOKEN" "$(openssl rand -hex 32)"
+fi
+
+echo "[5/8] Verifying required served files..."
 REQUIRED_FILES=(
   "admin.php"
   "installer.php"
@@ -156,6 +186,8 @@ REQUIRED_FILES=(
   "api/submit-crypto-payment.php"
   "api/admin-tips.php"
   "api/stripe-webhook.php"
+  "wallet-service/package.json"
+  "wallet-service/index.js"
   "scripts/deploy.sh"
 )
 
@@ -166,7 +198,46 @@ for f in "${REQUIRED_FILES[@]}"; do
   fi
 done
 
-echo "[6/7] Refreshing PHP runtime cache..."
+echo "[6/8] Installing wallet service dependencies and ensuring service..."
+if [ -f "${APP_DIR}/wallet-service/package.json" ]; then
+  if command -v npm >/dev/null 2>&1; then
+    (cd "${APP_DIR}/wallet-service" && npm install --omit=dev)
+  else
+    echo "npm not found; skipping wallet-service dependency install."
+  fi
+
+  WALLET_SYSTEMD_FILE="/etc/systemd/system/webgames-wallet.service"
+  cat > "${WALLET_SYSTEMD_FILE}" <<'UNIT'
+[Unit]
+Description=webgames wallet derivation service
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/var/www/webgames/wallet-service
+ExecStart=/usr/bin/node /var/www/webgames/wallet-service/index.js
+Restart=always
+RestartSec=2
+User=www-data
+Group=www-data
+EnvironmentFile=/var/www/webgames/.env
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+systemctl daemon-reload
+systemctl enable webgames-wallet.service
+systemctl restart webgames-wallet.service
+
+if grep -qE '^CRYPTO_DERIVATION_URL=$' "${APP_DIR}/.env"; then
+  sed -i 's|^CRYPTO_DERIVATION_URL=$|CRYPTO_DERIVATION_URL=http://127.0.0.1:8787/api/derive-addresses|' "${APP_DIR}/.env"
+fi
+else
+  echo "wallet-service files missing; skipping wallet service setup."
+fi
+
+echo "[7/8] Refreshing PHP runtime cache..."
 PHP_FPM_SERVICE=""
 if systemctl list-unit-files | grep -qE '^php[0-9]+\.[0-9]+-fpm\.service'; then
   PHP_FPM_SERVICE="$(systemctl list-unit-files | awk '/^php[0-9]+\.[0-9]+-fpm\.service/ {print $1}' | head -n 1)"
@@ -178,7 +249,7 @@ else
   echo "No php-fpm service detected; skipping php-fpm reload."
 fi
 
-echo "[7/7] Reloading nginx..."
+echo "[8/8] Reloading nginx..."
 nginx -t && systemctl reload nginx
 
 echo ""

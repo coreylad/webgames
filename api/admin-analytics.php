@@ -114,6 +114,7 @@ switch ($action) {
                     'currency' => env_value('COINBASE_CURRENCY', 'USD'),
                     'supportedCoins' => env_value('COINBASE_SUPPORTED_COINS', 'BTC,ETH,LTC,BCH,DOGE,USDC,USDT,XRP'),
                     'receiveAddressesJson' => env_value('CRYPTO_RECEIVE_ADDRESSES_JSON', '{}'),
+                    'receiveAddresses' => crypto_receive_addresses(),
                     'destinationAddressesJson' => env_value('COINBASE_DESTINATION_ADDRESSES_JSON', '{}'),
                     'cryptoAsset' => env_value('CRYPTO_ASSET', 'USDC'),
                     'receiveAddress' => env_value('CRYPTO_RECEIVE_ADDRESS', ''),
@@ -121,7 +122,21 @@ switch ($action) {
                     'destinationAddresses' => crypto_coinbase_destinations(),
                     'transferRequestUrl' => env_value('COINBASE_TRANSFER_REQUEST_URL', ''),
                     'transferAuthHeader' => env_value('COINBASE_TRANSFER_AUTH_HEADER', 'x-coinbase-transfer-token'),
-                    'transferAuthToken' => env_value('COINBASE_TRANSFER_AUTH_TOKEN', '')
+                    'transferAuthToken' => env_value('COINBASE_TRANSFER_AUTH_TOKEN', ''),
+                    'addressDerivationEnabled' => crypto_address_derivation_enabled(),
+                    'addressDerivationUrl' => env_value('CRYPTO_DERIVATION_URL', ''),
+                    'addressDerivationAuthHeader' => env_value('CRYPTO_DERIVATION_AUTH_HEADER', 'x-webgames-wallet-token'),
+                    'addressDerivationAuthToken' => env_value('CRYPTO_DERIVATION_AUTH_TOKEN', ''),
+                    'walletServicePort' => env_value('WALLET_SERVICE_PORT', '8787'),
+                    'walletBaseAddressesJson' => env_value('WALLET_BASE_ADDRESSES_JSON', '{}'),
+                    'walletTaggedCoins' => env_value('WALLET_TAGGED_COINS', 'XRP'),
+                    'walletDerivationSecret' => env_value('WALLET_DERIVATION_SECRET', ''),
+                    'autoVerifyEnabled' => in_array(strtolower(trim(env_value('CRYPTO_AUTO_VERIFY_ENABLED', '0'))), ['1', 'true', 'yes', 'on'], true),
+                    'autoVerifyProviderUrl' => env_value('CRYPTO_AUTO_VERIFY_PROVIDER_URL', ''),
+                    'autoVerifyAuthHeader' => env_value('CRYPTO_AUTO_VERIFY_AUTH_HEADER', 'x-webgames-verify-token'),
+                    'autoVerifyAuthToken' => env_value('CRYPTO_AUTO_VERIFY_AUTH_TOKEN', ''),
+                    'autoVerifyMinConfirmations' => env_value('CRYPTO_AUTO_VERIFY_MIN_CONFIRMATIONS', '1'),
+                    'walletAppInternalBaseUrl' => env_value('WALLET_APP_INTERNAL_BASE_URL', 'http://127.0.0.1')
                 ]
             ]
         ];
@@ -189,9 +204,70 @@ switch ($action) {
         $coinbaseTransferAuthToken = trim((string)($coinbase['transferAuthToken'] ?? env_value('COINBASE_TRANSFER_AUTH_TOKEN', '')));
         $coinbaseApiKey = trim((string)($coinbase['apiKey'] ?? env_value('COINBASE_COMMERCE_API_KEY', '')));
         $coinbaseWebhookSecret = trim((string)($coinbase['webhookSecret'] ?? env_value('COINBASE_COMMERCE_WEBHOOK_SECRET', '')));
+        $addressDerivationEnabledRaw = strtolower(trim((string)($coinbase['addressDerivationEnabled'] ?? env_value('CRYPTO_DERIVATION_ENABLED', '0'))));
+        $addressDerivationEnabled = in_array($addressDerivationEnabledRaw, ['1', 'true', 'yes', 'on'], true);
+        $addressDerivationUrl = trim((string)($coinbase['addressDerivationUrl'] ?? env_value('CRYPTO_DERIVATION_URL', '')));
+        $addressDerivationAuthHeader = trim((string)($coinbase['addressDerivationAuthHeader'] ?? env_value('CRYPTO_DERIVATION_AUTH_HEADER', 'x-webgames-wallet-token')));
+        $addressDerivationAuthToken = trim((string)($coinbase['addressDerivationAuthToken'] ?? env_value('CRYPTO_DERIVATION_AUTH_TOKEN', '')));
+        $walletServicePort = trim((string)($coinbase['walletServicePort'] ?? env_value('WALLET_SERVICE_PORT', '8787')));
+        $walletBaseAddressesJson = trim((string)($coinbase['walletBaseAddressesJson'] ?? env_value('WALLET_BASE_ADDRESSES_JSON', '{}')));
+        $walletTaggedCoins = strtoupper(trim((string)($coinbase['walletTaggedCoins'] ?? env_value('WALLET_TAGGED_COINS', 'XRP'))));
+        $walletDerivationSecret = trim((string)($coinbase['walletDerivationSecret'] ?? env_value('WALLET_DERIVATION_SECRET', '')));
+        $autoVerifyEnabledRaw = strtolower(trim((string)($coinbase['autoVerifyEnabled'] ?? env_value('CRYPTO_AUTO_VERIFY_ENABLED', '0'))));
+        $autoVerifyEnabled = in_array($autoVerifyEnabledRaw, ['1', 'true', 'yes', 'on'], true);
+        $autoVerifyProviderUrl = trim((string)($coinbase['autoVerifyProviderUrl'] ?? env_value('CRYPTO_AUTO_VERIFY_PROVIDER_URL', '')));
+        $autoVerifyAuthHeader = trim((string)($coinbase['autoVerifyAuthHeader'] ?? env_value('CRYPTO_AUTO_VERIFY_AUTH_HEADER', 'x-webgames-verify-token')));
+        $autoVerifyAuthToken = trim((string)($coinbase['autoVerifyAuthToken'] ?? env_value('CRYPTO_AUTO_VERIFY_AUTH_TOKEN', '')));
+        $autoVerifyMinConfirmationsRaw = trim((string)($coinbase['autoVerifyMinConfirmations'] ?? env_value('CRYPTO_AUTO_VERIFY_MIN_CONFIRMATIONS', '1')));
+        $walletAppInternalBaseUrl = trim((string)($coinbase['walletAppInternalBaseUrl'] ?? env_value('WALLET_APP_INTERNAL_BASE_URL', 'http://127.0.0.1')));
         $coinbaseSupportedCoins = strtoupper(trim((string)($coinbase['supportedCoins'] ?? env_value('COINBASE_SUPPORTED_COINS', 'BTC,ETH,LTC,BCH,DOGE,USDC,USDT,XRP'))));
         $coinbaseReceiveAddressesJson = trim((string)($coinbase['receiveAddressesJson'] ?? env_value('CRYPTO_RECEIVE_ADDRESSES_JSON', '{}')));
         $coinbaseDestinationAddressesJson = trim((string)($coinbase['destinationAddressesJson'] ?? env_value('COINBASE_DESTINATION_ADDRESSES_JSON', '{}')));
+
+        if ($addressDerivationEnabled && ($addressDerivationUrl === '' || filter_var($addressDerivationUrl, FILTER_VALIDATE_URL) === false)) {
+            json_response(['error' => 'Address derivation URL must be a valid URL when derivation is enabled'], 400);
+        }
+
+        if ($addressDerivationAuthHeader !== '' && preg_match('/^[A-Za-z0-9-]{1,64}$/', $addressDerivationAuthHeader) !== 1) {
+            json_response(['error' => 'Address derivation auth header must use only letters, numbers, and dashes'], 400);
+        }
+
+        if ($addressDerivationAuthHeader === '') {
+            $addressDerivationAuthHeader = 'x-webgames-wallet-token';
+        }
+
+        if ($walletServicePort !== '' && preg_match('/^[0-9]{2,5}$/', $walletServicePort) !== 1) {
+            json_response(['error' => 'Wallet service port must be a valid numeric port'], 400);
+        }
+
+        $autoVerifyMinConfirmations = (int)$autoVerifyMinConfirmationsRaw;
+        if ($autoVerifyMinConfirmations < 1) {
+            $autoVerifyMinConfirmations = 1;
+        }
+        if ($autoVerifyMinConfirmations > 1000) {
+            $autoVerifyMinConfirmations = 1000;
+        }
+
+        if ($autoVerifyEnabled && ($autoVerifyProviderUrl === '' || filter_var($autoVerifyProviderUrl, FILTER_VALIDATE_URL) === false)) {
+            json_response(['error' => 'Auto verify provider URL must be a valid URL when auto verification is enabled'], 400);
+        }
+
+        if ($autoVerifyAuthHeader !== '' && preg_match('/^[A-Za-z0-9-]{1,64}$/', $autoVerifyAuthHeader) !== 1) {
+            json_response(['error' => 'Auto verify auth header must use only letters, numbers, and dashes'], 400);
+        }
+
+        if ($autoVerifyAuthHeader === '') {
+            $autoVerifyAuthHeader = 'x-webgames-verify-token';
+        }
+
+        if ($walletAppInternalBaseUrl !== '' && filter_var($walletAppInternalBaseUrl, FILTER_VALIDATE_URL) === false) {
+            json_response(['error' => 'Wallet app internal base URL must be a valid URL'], 400);
+        }
+
+        $walletAddressMap = json_decode($walletBaseAddressesJson, true);
+        if (!is_array($walletAddressMap)) {
+            json_response(['error' => 'Wallet base addresses JSON must be a valid object'], 400);
+        }
 
         $coinTokens = array_filter(array_map('trim', explode(',', $coinbaseSupportedCoins)), static fn(string $t): bool => $t !== '');
         if (empty($coinTokens)) {
@@ -232,7 +308,21 @@ switch ($action) {
             'COINBASE_DESTINATION_ACCOUNT' => $coinbaseDestinationAccount,
             'COINBASE_TRANSFER_REQUEST_URL' => $coinbaseTransferRequestUrl,
             'COINBASE_TRANSFER_AUTH_HEADER' => $coinbaseTransferAuthHeader,
-            'COINBASE_TRANSFER_AUTH_TOKEN' => $coinbaseTransferAuthToken
+            'COINBASE_TRANSFER_AUTH_TOKEN' => $coinbaseTransferAuthToken,
+            'CRYPTO_DERIVATION_ENABLED' => $addressDerivationEnabled ? '1' : '0',
+            'CRYPTO_DERIVATION_URL' => $addressDerivationUrl,
+            'CRYPTO_DERIVATION_AUTH_HEADER' => $addressDerivationAuthHeader,
+            'CRYPTO_DERIVATION_AUTH_TOKEN' => $addressDerivationAuthToken,
+            'WALLET_SERVICE_PORT' => $walletServicePort,
+            'WALLET_BASE_ADDRESSES_JSON' => $walletBaseAddressesJson,
+            'WALLET_TAGGED_COINS' => $walletTaggedCoins,
+            'WALLET_DERIVATION_SECRET' => $walletDerivationSecret,
+            'CRYPTO_AUTO_VERIFY_ENABLED' => $autoVerifyEnabled ? '1' : '0',
+            'CRYPTO_AUTO_VERIFY_PROVIDER_URL' => $autoVerifyProviderUrl,
+            'CRYPTO_AUTO_VERIFY_AUTH_HEADER' => $autoVerifyAuthHeader,
+            'CRYPTO_AUTO_VERIFY_AUTH_TOKEN' => $autoVerifyAuthToken,
+            'CRYPTO_AUTO_VERIFY_MIN_CONFIRMATIONS' => (string)$autoVerifyMinConfirmations,
+            'WALLET_APP_INTERNAL_BASE_URL' => $walletAppInternalBaseUrl
         ]);
 
         if (!$saved) {
@@ -265,6 +355,7 @@ switch ($action) {
                     'currency' => $coinbaseCurrency,
                     'supportedCoins' => $coinbaseSupportedCoins,
                     'receiveAddressesJson' => $coinbaseReceiveAddressesJson,
+                    'receiveAddresses' => crypto_receive_addresses(),
                     'destinationAddressesJson' => $coinbaseDestinationAddressesJson,
                     'cryptoAsset' => $cryptoAsset,
                     'receiveAddress' => $cryptoReceiveAddress,
@@ -272,7 +363,21 @@ switch ($action) {
                     'destinationAddresses' => crypto_coinbase_destinations(),
                     'transferRequestUrl' => $coinbaseTransferRequestUrl,
                     'transferAuthHeader' => $coinbaseTransferAuthHeader,
-                    'transferAuthToken' => $coinbaseTransferAuthToken
+                    'transferAuthToken' => $coinbaseTransferAuthToken,
+                    'addressDerivationEnabled' => $addressDerivationEnabled,
+                    'addressDerivationUrl' => $addressDerivationUrl,
+                    'addressDerivationAuthHeader' => $addressDerivationAuthHeader,
+                    'addressDerivationAuthToken' => $addressDerivationAuthToken,
+                    'walletServicePort' => $walletServicePort,
+                    'walletBaseAddressesJson' => $walletBaseAddressesJson,
+                    'walletTaggedCoins' => $walletTaggedCoins,
+                    'walletDerivationSecret' => $walletDerivationSecret,
+                    'autoVerifyEnabled' => $autoVerifyEnabled,
+                    'autoVerifyProviderUrl' => $autoVerifyProviderUrl,
+                    'autoVerifyAuthHeader' => $autoVerifyAuthHeader,
+                    'autoVerifyAuthToken' => $autoVerifyAuthToken,
+                    'autoVerifyMinConfirmations' => (string)$autoVerifyMinConfirmations,
+                    'walletAppInternalBaseUrl' => $walletAppInternalBaseUrl
                 ]
             ]
         ];

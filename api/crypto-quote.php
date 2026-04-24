@@ -34,6 +34,9 @@ if ($address === '') {
     json_response(['error' => 'No receive address configured for selected asset'], 400);
 }
 
+$addressMetaByCoin = is_array($tip['receiveAddressMeta'] ?? null) ? $tip['receiveAddressMeta'] : [];
+$addressMeta = is_array($addressMetaByCoin[$asset] ?? null) ? $addressMetaByCoin[$asset] : [];
+
 $fiatCurrency = strtoupper((string)($tip['currency'] ?? 'USD'));
 $fiatAmount = ((int)($tip['amountCents'] ?? 0)) / 100;
 if ($fiatAmount <= 0) {
@@ -87,7 +90,17 @@ $schemeMap = [
     'XRP'  => 'ripple'
 ];
 $scheme = $schemeMap[$asset] ?? strtolower($asset);
-$paymentUri = $scheme . ':' . $address . '?amount=' . rawurlencode($cryptoAmountRounded);
+$paymentParams = ['amount=' . rawurlencode($cryptoAmountRounded)];
+
+$destinationTag = trim((string)($addressMeta['destinationTag'] ?? ''));
+if ($asset === 'XRP' && $destinationTag !== '') {
+    $paymentParams[] = 'dt=' . rawurlencode($destinationTag);
+}
+
+$paymentUri = $scheme . ':' . $address;
+if (!empty($paymentParams)) {
+    $paymentUri .= '?' . implode('&', $paymentParams);
+}
 
 json_response([
     'status' => 'ok',
@@ -97,6 +110,8 @@ json_response([
     'rate' => $rate,
     'cryptoAmount' => $cryptoAmountRounded,
     'address' => $address,
+    'addressMeta' => $addressMeta,
+    'destinationTag' => $destinationTag,
     'paymentUri' => $paymentUri,
     'qrUrl' => 'https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=' . rawurlencode($paymentUri)
 ]);

@@ -73,13 +73,18 @@ function setCryptoActions(sessionId, data) {
       const quote = await loadCryptoQuote(sessionId, asset);
       quoteStatus.className = "status success";
       quoteStatus.textContent = `Send ${quote.cryptoAmount} ${quote.asset} to the address below.`;
+      const destinationTagLine = quote.destinationTag
+        ? `<div><strong>Destination Tag:</strong> <code>${escapeHtml(quote.destinationTag)}</code></div>`
+        : "";
       quoteDetails.innerHTML = `
         <div style="display:grid;gap:0.45rem;margin-top:0.35rem;">
           <div><strong>Quote:</strong> ${escapeHtml(quote.cryptoAmount)} ${escapeHtml(quote.asset)} for ${escapeHtml(formatMoney(data.amountCents, data.currency))}</div>
           <div><strong>Address:</strong> <code>${escapeHtml(quote.address)}</code></div>
+          ${destinationTagLine}
           <div><strong>Payment URI:</strong> <code>${escapeHtml(quote.paymentUri)}</code></div>
           <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
             <button type="button" class="btn" id="copyAddressBtn">Copy Address</button>
+            <button type="button" class="btn" id="copyTagBtn" ${quote.destinationTag ? "" : "disabled"}>Copy Tag</button>
             <button type="button" class="btn" id="copyUriBtn">Copy URI</button>
           </div>
           <div>
@@ -89,6 +94,7 @@ function setCryptoActions(sessionId, data) {
       `;
 
       const copyAddressBtn = document.getElementById("copyAddressBtn");
+      const copyTagBtn = document.getElementById("copyTagBtn");
       const copyUriBtn = document.getElementById("copyUriBtn");
 
       copyAddressBtn?.addEventListener("click", async () => {
@@ -110,6 +116,21 @@ function setCryptoActions(sessionId, data) {
         } catch {
           quoteStatus.className = "status error";
           quoteStatus.textContent = "Clipboard unavailable. Copy the URI manually.";
+        }
+      });
+
+      copyTagBtn?.addEventListener("click", async () => {
+        if (!quote.destinationTag) {
+          return;
+        }
+
+        try {
+          await navigator.clipboard.writeText(String(quote.destinationTag));
+          quoteStatus.className = "status success";
+          quoteStatus.textContent = "Destination tag copied.";
+        } catch {
+          quoteStatus.className = "status error";
+          quoteStatus.textContent = "Clipboard unavailable. Copy the destination tag manually.";
         }
       });
     } catch (error) {

@@ -705,6 +705,9 @@ $show_login     = !$needs_setup && !$show_dashboard;
                                 <strong style="color:#2ae8c7;">Receive Addresses</strong>
                                 <span style="font-size:0.78rem;opacity:0.65;">Where users send their tips — your on-site wallets</span>
                             </div>
+                            <div style="display:flex;justify-content:flex-end;margin-bottom:0.45rem;">
+                                <button class="btn btn-sm" type="button" onclick="autofillReceiveAddressRows()">Autofill Empty Receive Rows</button>
+                            </div>
                             <div id="cryptoReceiveAddressRows" style="display:grid;gap:0.45rem;"></div>
                         </div>
 
@@ -718,6 +721,9 @@ $show_login     = !$needs_setup && !$show_dashboard;
                             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.6rem;">
                                 <strong style="color:#4b7fff;">Coinbase Destination Addresses</strong>
                                 <span style="font-size:0.78rem;opacity:0.65;">Your Coinbase deposit addresses — where you withdraw to</span>
+                            </div>
+                            <div style="display:flex;justify-content:flex-end;margin-bottom:0.45rem;">
+                                <button class="btn btn-sm" type="button" onclick="autofillDestinationAddressRows()">Autofill Empty Destination Rows</button>
                             </div>
                             <div id="cryptoDestinationAddressRows" style="display:grid;gap:0.45rem;"></div>
                         </div>
@@ -745,6 +751,68 @@ $show_login     = !$needs_setup && !$show_dashboard;
                         <div class="form-group">
                             <label for="coinbaseWebhookSecretInput">Coinbase Webhook Secret (optional)</label>
                             <input type="password" id="coinbaseWebhookSecretInput" placeholder="Webhook secret" />
+                        </div>
+                        <div class="form-group" style="grid-column: 1 / -1; border: 1px solid rgba(42,232,199,0.35); border-radius: 10px; padding: 0.8rem; background: rgba(42,232,199,0.06);">
+                            <label style="display:flex;gap:0.45rem;align-items:center;cursor:pointer;">
+                                <input type="checkbox" id="addressDerivationEnabledInput" />
+                                Enable per-tip auto-generated wallet addresses
+                            </label>
+                            <div class="settings-note" style="margin-top:0.35rem;">When enabled, this site requests unique receive addresses from your wallet service for each new crypto tip session.</div>
+                        </div>
+                        <div class="form-group" style="grid-column: 1 / -1;">
+                            <label for="addressDerivationUrlInput">Address Derivation Service URL</label>
+                            <input type="url" id="addressDerivationUrlInput" placeholder="https://wallet-service.example/api/derive-addresses" />
+                        </div>
+                        <div class="form-group">
+                            <label for="addressDerivationAuthHeaderInput">Derivation Auth Header</label>
+                            <input type="text" id="addressDerivationAuthHeaderInput" placeholder="x-webgames-wallet-token" />
+                        </div>
+                        <div class="form-group">
+                            <label for="addressDerivationAuthTokenInput">Derivation Auth Token</label>
+                            <input type="password" id="addressDerivationAuthTokenInput" placeholder="shared secret token" />
+                        </div>
+                        <div class="form-group">
+                            <label for="walletServicePortInput">Wallet Service Port</label>
+                            <input type="text" id="walletServicePortInput" placeholder="8787" />
+                        </div>
+                        <div class="form-group">
+                            <label for="walletTaggedCoinsInput">Coins Using Destination Tag/Memo</label>
+                            <input type="text" id="walletTaggedCoinsInput" placeholder="XRP" />
+                        </div>
+                        <div class="form-group" style="grid-column: 1 / -1;">
+                            <label for="walletBaseAddressesJsonInput">Wallet Base Addresses JSON (used by wallet service)</label>
+                            <textarea id="walletBaseAddressesJsonInput" rows="5" placeholder='{"BTC":"bc1...","ETH":"0x...","XRP":"r..."}'></textarea>
+                        </div>
+                        <div class="form-group" style="grid-column: 1 / -1;">
+                            <label for="walletDerivationSecretInput">Wallet Derivation Secret</label>
+                            <input type="password" id="walletDerivationSecretInput" placeholder="high entropy secret used to derive unique tags/refs" />
+                        </div>
+                        <div class="form-group" style="grid-column: 1 / -1; border: 1px solid rgba(75,127,255,0.35); border-radius: 10px; padding: 0.8rem; background: rgba(75,127,255,0.08);">
+                            <label style="display:flex;gap:0.45rem;align-items:center;cursor:pointer;">
+                                <input type="checkbox" id="autoVerifyEnabledInput" />
+                                Enable automatic on-chain verification worker
+                            </label>
+                            <div class="settings-note" style="margin-top:0.35rem;">When enabled, wallet-service polls pending submitted tx hashes, calls your verifier provider, and auto-confirms paid tips.</div>
+                        </div>
+                        <div class="form-group" style="grid-column: 1 / -1;">
+                            <label for="autoVerifyProviderUrlInput">Auto Verify Provider URL</label>
+                            <input type="url" id="autoVerifyProviderUrlInput" placeholder="https://your-verifier.example/api/verify" />
+                        </div>
+                        <div class="form-group">
+                            <label for="autoVerifyAuthHeaderInput">Auto Verify Auth Header</label>
+                            <input type="text" id="autoVerifyAuthHeaderInput" placeholder="x-webgames-verify-token" />
+                        </div>
+                        <div class="form-group">
+                            <label for="autoVerifyAuthTokenInput">Auto Verify Auth Token</label>
+                            <input type="password" id="autoVerifyAuthTokenInput" placeholder="shared secret for verifier" />
+                        </div>
+                        <div class="form-group">
+                            <label for="autoVerifyMinConfirmationsInput">Min Confirmations</label>
+                            <input type="number" id="autoVerifyMinConfirmationsInput" min="1" max="1000" value="1" />
+                        </div>
+                        <div class="form-group" style="grid-column: 1 / -1;">
+                            <label for="walletAppInternalBaseUrlInput">Internal App Base URL (wallet-service)</label>
+                            <input type="url" id="walletAppInternalBaseUrlInput" placeholder="http://127.0.0.1" />
                         </div>
                     </div>
 
@@ -1495,17 +1563,42 @@ $show_login     = !$needs_setup && !$show_dashboard;
         document.getElementById('coinbaseSupportedCoinsInput').value = config?.coinbase?.supportedCoins || 'BTC,ETH,LTC,BCH,DOGE,USDC,USDT,XRP';
         document.getElementById('cryptoAssetInput').value = config?.coinbase?.cryptoAsset || 'USDC';
         document.getElementById('cryptoReceiveAddressInput').value = config?.coinbase?.receiveAddress || '';
-        document.getElementById('coinbaseDestinationAddressesJsonInput') && (document.getElementById('coinbaseDestinationAddressesJsonInput').value = config?.coinbase?.destinationAddressesJson || '{}');
         document.getElementById('coinbaseDestinationAccountInput').value = config?.coinbase?.destinationAccount || '';
 
         // Build per-coin address rows from config
-        buildCoinAddressRows('cryptoReceiveAddressRows', tryParseJson(config?.coinbase?.receiveAddressesJson || '{}'), 'Your');
-        buildCoinAddressRows('cryptoDestinationAddressRows', tryParseJson(config?.coinbase?.destinationAddressesJson || '{}'), 'Coinbase');
+        const receiveDataFromJson = tryParseJson(config?.coinbase?.receiveAddressesJson || '{}');
+        const receiveDataResolved = (config?.coinbase?.receiveAddresses && typeof config.coinbase.receiveAddresses === 'object')
+            ? config.coinbase.receiveAddresses
+            : {};
+        const receiveData = Object.keys(receiveDataFromJson).length > 0 ? receiveDataFromJson : receiveDataResolved;
+
+        const destinationDataFromJson = tryParseJson(config?.coinbase?.destinationAddressesJson || '{}');
+        const destinationDataResolved = (config?.coinbase?.destinationAddresses && typeof config.coinbase.destinationAddresses === 'object')
+            ? config.coinbase.destinationAddresses
+            : {};
+        const destinationData = Object.keys(destinationDataFromJson).length > 0 ? destinationDataFromJson : destinationDataResolved;
+
+        buildCoinAddressRows('cryptoReceiveAddressRows', receiveData, 'Your');
+        buildCoinAddressRows('cryptoDestinationAddressRows', destinationData, 'Coinbase');
         document.getElementById('coinbaseTransferRequestUrlInput').value = config?.coinbase?.transferRequestUrl || '';
         document.getElementById('coinbaseTransferAuthHeaderInput').value = config?.coinbase?.transferAuthHeader || 'x-coinbase-transfer-token';
         document.getElementById('coinbaseTransferAuthTokenInput').value = config?.coinbase?.transferAuthToken || '';
         document.getElementById('coinbaseApiKeyInput').value = config?.coinbase?.apiKey || '';
         document.getElementById('coinbaseWebhookSecretInput').value = config?.coinbase?.webhookSecret || '';
+        document.getElementById('addressDerivationEnabledInput').checked = !!config?.coinbase?.addressDerivationEnabled;
+        document.getElementById('addressDerivationUrlInput').value = config?.coinbase?.addressDerivationUrl || '';
+        document.getElementById('addressDerivationAuthHeaderInput').value = config?.coinbase?.addressDerivationAuthHeader || 'x-webgames-wallet-token';
+        document.getElementById('addressDerivationAuthTokenInput').value = config?.coinbase?.addressDerivationAuthToken || '';
+        document.getElementById('walletServicePortInput').value = config?.coinbase?.walletServicePort || '8787';
+        document.getElementById('walletTaggedCoinsInput').value = config?.coinbase?.walletTaggedCoins || 'XRP';
+        document.getElementById('walletBaseAddressesJsonInput').value = config?.coinbase?.walletBaseAddressesJson || '{}';
+        document.getElementById('walletDerivationSecretInput').value = config?.coinbase?.walletDerivationSecret || '';
+        document.getElementById('autoVerifyEnabledInput').checked = !!config?.coinbase?.autoVerifyEnabled;
+        document.getElementById('autoVerifyProviderUrlInput').value = config?.coinbase?.autoVerifyProviderUrl || '';
+        document.getElementById('autoVerifyAuthHeaderInput').value = config?.coinbase?.autoVerifyAuthHeader || 'x-webgames-verify-token';
+        document.getElementById('autoVerifyAuthTokenInput').value = config?.coinbase?.autoVerifyAuthToken || '';
+        document.getElementById('autoVerifyMinConfirmationsInput').value = Number(config?.coinbase?.autoVerifyMinConfirmations || 1);
+        document.getElementById('walletAppInternalBaseUrlInput').value = config?.coinbase?.walletAppInternalBaseUrl || 'http://127.0.0.1';
     }
 
     async function loadPaymentProcessorsConfig() {
@@ -1554,7 +1647,21 @@ $show_login     = !$needs_setup && !$show_dashboard;
                 transferAuthHeader: document.getElementById('coinbaseTransferAuthHeaderInput').value.trim(),
                 transferAuthToken: document.getElementById('coinbaseTransferAuthTokenInput').value.trim(),
                 apiKey: document.getElementById('coinbaseApiKeyInput').value.trim(),
-                webhookSecret: document.getElementById('coinbaseWebhookSecretInput').value.trim()
+                webhookSecret: document.getElementById('coinbaseWebhookSecretInput').value.trim(),
+                addressDerivationEnabled: document.getElementById('addressDerivationEnabledInput').checked,
+                addressDerivationUrl: document.getElementById('addressDerivationUrlInput').value.trim(),
+                addressDerivationAuthHeader: document.getElementById('addressDerivationAuthHeaderInput').value.trim(),
+                addressDerivationAuthToken: document.getElementById('addressDerivationAuthTokenInput').value.trim(),
+                walletServicePort: document.getElementById('walletServicePortInput').value.trim(),
+                walletTaggedCoins: String(document.getElementById('walletTaggedCoinsInput').value || 'XRP').toUpperCase(),
+                walletBaseAddressesJson: document.getElementById('walletBaseAddressesJsonInput').value.trim(),
+                walletDerivationSecret: document.getElementById('walletDerivationSecretInput').value.trim(),
+                autoVerifyEnabled: document.getElementById('autoVerifyEnabledInput').checked,
+                autoVerifyProviderUrl: document.getElementById('autoVerifyProviderUrlInput').value.trim(),
+                autoVerifyAuthHeader: document.getElementById('autoVerifyAuthHeaderInput').value.trim(),
+                autoVerifyAuthToken: document.getElementById('autoVerifyAuthTokenInput').value.trim(),
+                autoVerifyMinConfirmations: String(document.getElementById('autoVerifyMinConfirmationsInput').value || '1').trim(),
+                walletAppInternalBaseUrl: document.getElementById('walletAppInternalBaseUrlInput').value.trim()
             }
         };
 
@@ -1706,6 +1813,29 @@ $show_login     = !$needs_setup && !$show_dashboard;
         const destData = tryParseJson(collectCoinAddressJson('cryptoDestinationAddressRows'));
         buildCoinAddressRows('cryptoReceiveAddressRows', receiveData, 'Your');
         buildCoinAddressRows('cryptoDestinationAddressRows', destData, 'Coinbase');
+    }
+
+    function autofillAddressRows(containerId, fallbackValue) {
+        const container = document.getElementById(containerId);
+        if (!container || !fallbackValue) {
+            return;
+        }
+
+        container.querySelectorAll('input[data-coin]').forEach((input) => {
+            if (String(input.value || '').trim() === '') {
+                input.value = fallbackValue;
+            }
+        });
+    }
+
+    function autofillReceiveAddressRows() {
+        const fallback = String(document.getElementById('cryptoReceiveAddressInput')?.value || '').trim();
+        autofillAddressRows('cryptoReceiveAddressRows', fallback);
+    }
+
+    function autofillDestinationAddressRows() {
+        const fallback = String(document.getElementById('coinbaseDestinationAccountInput')?.value || '').trim();
+        autofillAddressRows('cryptoDestinationAddressRows', fallback);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -2735,6 +2865,7 @@ $show_login     = !$needs_setup && !$show_dashboard;
     loadWebhookProxyConfig();
     populateStripeWebhookEndpointHelper();
     loadPaymentProcessorsConfig();
+    loadWalletOverview();
     loadCryptoTransferQueue();
     loadStripeOneTimeConfig();
     loadRuntimeConfig();

@@ -6,6 +6,7 @@ const priceIdSelect = document.getElementById("priceId");
 const tipSubmit = document.getElementById("tipSubmit");
 let activeTipProcessor = "stripe";
 const processorTierMap = new Map();
+const processorErrors = new Map();
 
 function processorLabel(processor) {
   if (processor === "coinbase") {
@@ -72,34 +73,52 @@ async function loadTipTiers() {
   priceIdSelect.innerHTML = '<option value="">Loading tiers...</option>';
   tipSubmit.disabled = true;
   processorTierMap.clear();
+  processorErrors.clear();
 
   try {
     const candidates = ["stripe", "coinbase"];
     await Promise.all(candidates.map(async (processor) => {
       try {
         await loadTiersForProcessor(processor);
-      } catch {
-        // Ignore unavailable processor so users can still pay with available options.
+      } catch (error) {
+        const message = error instanceof Error ? error.message : `Unable to load ${processorLabel(processor)} tiers.`;
+        processorErrors.set(processor, message);
       }
     }));
 
-    const availableProcessors = [...processorTierMap.keys()];
+    const availableProcessors = candidates.filter((processor) => processorTierMap.has(processor));
     if (availableProcessors.length === 0) {
       throw new Error("No payment methods are currently available.");
     }
 
     paymentProcessorSelect.innerHTML = "";
-    availableProcessors.forEach((processor, index) => {
+    candidates.forEach((processor) => {
       const option = document.createElement("option");
       option.value = processor;
-      option.textContent = processorLabel(processor);
-      if (index === 0) {
+      const available = processorTierMap.has(processor);
+      option.textContent = available
+        ? processorLabel(processor)
+        : `${processorLabel(processor)} (not configured)`;
+      option.disabled = !available;
+      if (available && !paymentProcessorSelect.value) {
         option.selected = true;
       }
       paymentProcessorSelect.appendChild(option);
     });
 
     renderProcessorTiers(availableProcessors[0]);
+
+    const unavailable = candidates.filter((processor) => !processorTierMap.has(processor));
+    if (unavailable.length > 0) {
+      const details = unavailable
+        .map((processor) => `${processorLabel(processor)}: ${processorErrors.get(processor) || "not configured"}`)
+        .join(" | ");
+      tipMessage.className = "status error";
+      tipMessage.textContent = `Some methods are unavailable: ${details}`;
+    } else {
+      tipMessage.className = "status";
+      tipMessage.textContent = "";
+    }
   } catch (error) {
     paymentProcessorSelect.innerHTML = '<option value="">Unavailable</option>';
     priceIdSelect.innerHTML = '<option value="">Tier loading failed</option>';

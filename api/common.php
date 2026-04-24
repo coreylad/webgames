@@ -32,6 +32,20 @@ function load_env_values(): array
         'COINBASE_SUPPORTED_COINS' => 'BTC,ETH,LTC,BCH,DOGE,USDC,USDT,XRP',
         'CRYPTO_RECEIVE_ADDRESSES_JSON' => '{}',
         'COINBASE_DESTINATION_ADDRESSES_JSON' => '{}',
+        'CRYPTO_DERIVATION_ENABLED' => '0',
+        'CRYPTO_DERIVATION_URL' => '',
+        'CRYPTO_DERIVATION_AUTH_HEADER' => 'x-webgames-wallet-token',
+        'CRYPTO_DERIVATION_AUTH_TOKEN' => '',
+        'WALLET_SERVICE_PORT' => '8787',
+        'WALLET_BASE_ADDRESSES_JSON' => '{}',
+        'WALLET_TAGGED_COINS' => 'XRP',
+        'WALLET_DERIVATION_SECRET' => '',
+        'CRYPTO_AUTO_VERIFY_ENABLED' => '0',
+        'CRYPTO_AUTO_VERIFY_PROVIDER_URL' => '',
+        'CRYPTO_AUTO_VERIFY_AUTH_HEADER' => 'x-webgames-verify-token',
+        'CRYPTO_AUTO_VERIFY_AUTH_TOKEN' => '',
+        'CRYPTO_AUTO_VERIFY_MIN_CONFIRMATIONS' => '1',
+        'WALLET_APP_INTERNAL_BASE_URL' => 'http://127.0.0.1',
         'CRYPTO_ASSET' => 'USDC',
         'CRYPTO_RECEIVE_ADDRESS' => '',
         'COINBASE_DESTINATION_ACCOUNT' => '',
@@ -702,6 +716,177 @@ function crypto_coinbase_destinations(): array
     }
 
     return $destinations;
+}
+
+function crypto_address_derivation_enabled(): bool
+{
+    $raw = strtolower(trim(env_value('CRYPTO_DERIVATION_ENABLED', '0')));
+    return in_array($raw, ['1', 'true', 'yes', 'on'], true);
+}
+
+function derive_crypto_receive_addresses(string $tipId, string $username, array $coins, int $amountCents, string $currency): array
+{
+    if (!crypto_address_derivation_enabled()) {
+        return [
+            'ok' => false,
+            'addresses' => [],
+            'meta' => [],
+            'reference' => '',
+            'error' => 'Address derivation is disabled'
+        ];
+    }
+
+    $url = trim(env_value('CRYPTO_DERIVATION_URL', ''));
+    if ($url === '') {
+        return [
+            'ok' => false,
+            'addresses' => [],
+            'meta' => [],
+            'reference' => '',
+            'error' => 'CRYPTO_DERIVATION_URL is not configured'
+        ];
+    }
+
+    if (!function_exists('curl_init')) {
+        return [
+            'ok' => false,
+            'addresses' => [],
+            'meta' => [],
+            'reference' => '',
+            'error' => 'PHP curl extension is required for address derivation'
+        ];
+    }
+
+    $sanitizedCoins = [];
+    foreach ($coins as $coin) {
+        $symbol = strtoupper(trim((string)$coin));
+        if ($symbol === '' || preg_match('/^[A-Z0-9]{2,12}$/', $symbol) !== 1) {
+            continue;
+        }
+        if (!in_array($symbol, $sanitizedCoins, true)) {
+            $sanitizedCoins[] = $symbol;
+        }
+    }
+
+    if (empty($sanitizedCoins)) {
+        return [
+            'ok' => false,
+            'addresses' => [],
+            'meta' => [],
+            'reference' => '',
+            'error' => 'No valid coins provided for derivation'
+        ];
+    }
+
+    $payload = [
+        'tipId' => $tipId,
+        'username' => $username,
+        'coins' => $sanitizedCoins,
+        'amountCents' => $amountCents,
+        'currency' => strtoupper($currency),
+        'requestedAt' => now_iso()
+    ];
+
+    $authHeader = trim(env_value('CRYPTO_DERIVATION_AUTH_HEADER', 'x-webgames-wallet-token'));
+    if ($authHeader === '') {
+        $authHeader = 'x-webgames-wallet-token';
+    }
+    $authToken = trim(env_value('CRYPTO_DERIVATION_AUTH_TOKEN', ''));
+
+    $headers = [
+        'Content-Type: application/json',
+        'Accept: application/json',
+        'User-Agent: webgames-crypto-derivation/1.0'
+    ];
+    if ($authToken !== '') {
+        $headers[] = $authHeader . ': ' . $authToken;
+    }
+
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => json_encode($payload),
+        CURLOPT_HTTPHEADER => $headers,
+        CURLOPT_TIMEOUT => 12
+    ]);
+
+    $body = curl_exec($ch);
+    $statusCode = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    curl_close($ch);
+
+    if ($body === false || $statusCode < 200 || $statusCode >= 300) {
+        return [
+            'ok' => false,
+            'addresses' => [],
+            'meta' => [],
+            'reference' => '',
+            'error' => 'Derivation service returned non-2xx status'
+        ];
+    }
+
+    $decoded = json_decode($body, true);
+    if (!is_array($decoded)) {
+        return [
+            'ok' => false,
+            'addresses' => [],
+            'meta' => [],
+            'reference' => '',
+            'error' => 'Derivation service returned invalid JSON'
+        ];
+    }
+
+    $rawAddresses = $decoded['addresses'] ?? null;
+    if (!is_array($rawAddresses)) {
+        return [
+            'ok' => false,
+            'addresses' => [],
+            'meta' => [],
+            'reference' => '',
+            'error' => 'Derivation response missing addresses object'
+        ];
+    }
+
+    $rawMeta = is_array($decoded['meta'] ?? null) ? $decoded['meta'] : [];
+
+    $addresses = [];
+    $meta = [];
+    foreach ($sanitizedCoins as $coin) {
+        $value = '';
+        if (isset($rawAddresses[$coin]) && is_string($rawAddresses[$coin])) {
+            $value = trim($rawAddresses[$coin]);
+        } elseif (isset($rawAddresses[strtolower($coin)]) && is_string($rawAddresses[strtolower($coin)])) {
+            $value = trim($rawAddresses[strtolower($coin)]);
+        }
+
+        if ($value !== '') {
+            $addresses[$coin] = $value;
+        }
+
+        if (isset($rawMeta[$coin]) && is_array($rawMeta[$coin])) {
+            $meta[$coin] = $rawMeta[$coin];
+        } elseif (isset($rawMeta[strtolower($coin)]) && is_array($rawMeta[strtolower($coin)])) {
+            $meta[$coin] = $rawMeta[strtolower($coin)];
+        }
+    }
+
+    if (empty($addresses)) {
+        return [
+            'ok' => false,
+            'addresses' => [],
+            'meta' => [],
+            'reference' => '',
+            'error' => 'Derivation response did not contain usable addresses'
+        ];
+    }
+
+    return [
+        'ok' => true,
+        'addresses' => $addresses,
+        'meta' => $meta,
+        'reference' => trim((string)($decoded['reference'] ?? '')),
+        'error' => ''
+    ];
 }
 
 function reset_stripe_configuration(): void
