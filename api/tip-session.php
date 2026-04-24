@@ -23,5 +23,10 @@ json_response([
     'amountCents' => (int)($tip['amountCents'] ?? 0),
     'status' => (string)($tip['status'] ?? 'processing'),
     'paidAt' => $tip['paidAt'] ?? null,
-    'tierName' => (string)($tip['tierName'] ?? 'Tip Tier')
+    'tierName' => (string)($tip['tierName'] ?? 'Tip Tier'),
+    'processor' => (string)($tip['processor'] ?? 'stripe'),
+    'cryptoAsset' => (string)($tip['cryptoAsset'] ?? ''),
+    'receiveAddress' => (string)($tip['receiveAddress'] ?? ''),
+    'txHash' => (string)($tip['txHash'] ?? ''),
+    'coinbaseTransferStatus' => (string)($tip['coinbaseTransferStatus'] ?? 'not_requested')
 ]);

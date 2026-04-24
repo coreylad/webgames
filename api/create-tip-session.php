@@ -11,7 +11,13 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 $body = read_json_input();
 $username = trim((string)($body['username'] ?? ''));
 $priceId = trim((string)($body['priceId'] ?? ''));
-$processor = active_payment_processor();
+$requestedProcessor = strtolower(trim((string)($body['processor'] ?? '')));
+$allowedProcessors = ['stripe', 'coinbase', 'paypal'];
+$processor = $requestedProcessor !== '' ? $requestedProcessor : active_payment_processor();
+
+if (!in_array($processor, $allowedProcessors, true)) {
+    json_response(['error' => 'Unsupported payment processor'], 400);
+}
 
 if (!is_valid_username($username)) {
     json_response(['error' => 'Username must be 3-24 characters and only include letters, numbers, _ or -.'], 400);
@@ -22,11 +28,14 @@ if ($priceId === '') {
 }
 
 $tiers = [];
-if ($processor === 'paypal') {
+if ($processor === 'coinbase') {
+    $coinbase = coinbase_tip_tiers();
+    $tiers = $coinbase['tiers'];
+} elseif ($processor === 'paypal') {
     $paypal = paypal_tip_tiers();
     $tiers = $paypal['tiers'];
 } else {
-    if (preg_match('/^price_[a-zA-Z0-9]+$/', $priceId) !== 1) {
+    if ($processor === 'stripe' && preg_match('/^price_[a-zA-Z0-9]+$/', $priceId) !== 1) {
         json_response(['error' => 'Please select a valid Stripe tip tier.'], 400);
     }
     $tiers = fetch_tip_tiers();
@@ -41,7 +50,7 @@ foreach ($tiers as $tier) {
 }
 
 if ($selectedTier === null) {
-    json_response(['error' => 'Selected tier is not available for the active payment processor.'], 400);
+    json_response(['error' => 'Selected tier is not available for the chosen payment processor.'], 400);
 }
 
 $tipRecord = add_tip_record([
@@ -59,6 +68,38 @@ $tipRecord = add_tip_record([
     'createdAt' => now_iso(),
     'updatedAt' => now_iso()
 ]);
+
+if ($processor === 'coinbase') {
+    $baseUrl = rtrim(env_value('BASE_URL', detect_base_url()), '/');
+    $receiveAddress = trim(env_value('CRYPTO_RECEIVE_ADDRESS', ''));
+    $cryptoAsset = strtoupper(trim(env_value('CRYPTO_ASSET', 'USDC')));
+
+    if ($receiveAddress === '') {
+        update_tip_record(
+            static fn(array $tip): bool => ($tip['id'] ?? '') === $tipRecord['id'],
+            ['status' => 'checkout_failed']
+        );
+        json_response(['error' => 'Crypto receive address is not configured. Set CRYPTO_RECEIVE_ADDRESS in payment settings.'], 500);
+    }
+
+    update_tip_record(
+        static fn(array $tip): bool => ($tip['id'] ?? '') === $tipRecord['id'],
+        [
+            'status' => 'awaiting_crypto_payment',
+            'sessionId' => (string)$tipRecord['id'],
+            'paymentIntentId' => '',
+            'receiveAddress' => $receiveAddress,
+            'cryptoAsset' => $cryptoAsset,
+            'coinbaseTransferStatus' => 'not_requested'
+        ]
+    );
+
+    json_response([
+        'processor' => 'coinbase',
+        'checkoutUrl' => $baseUrl . '/public/success.html?session_id=' . rawurlencode((string)$tipRecord['id']),
+        'sessionId' => (string)$tipRecord['id']
+    ]);
+}
 
 if ($processor === 'paypal') {
     $paypal = paypal_tip_tiers();

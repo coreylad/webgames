@@ -30,14 +30,14 @@
         <p class="hero-badge">Support the Arcade</p>
         <h1>Fuel new games, modes, and leaderboard features.</h1>
         <p>
-          Tips are optional and massively appreciated. Pick any Stripe tier below and help keep webgames.lol shipping.
+          Tips are optional and massively appreciated. Pick any available tier below and help keep webgames.lol shipping.
         </p>
       </section>
 
       <section class="panel tip-panel-compact" id="tip">
         <div class="panel-header">
           <h2>Tip Jar</h2>
-          <p>Secure checkout powered by Stripe.</p>
+          <p>Checkout method is selected from admin payment settings.</p>
         </div>
 
         <form id="tipForm" class="tip-form">
@@ -53,7 +53,12 @@
             required
           />
 
-          <label for="priceId">Tip tier (from Stripe product catalogue)</label>
+          <label for="paymentProcessor">Payment method</label>
+          <select id="paymentProcessor" name="paymentProcessor" required>
+            <option value="">Loading payment methods...</option>
+          </select>
+
+          <label for="priceId">Tip tier</label>
           <select id="priceId" name="priceId" required>
             <option value="">Loading tiers...</option>
           </select>

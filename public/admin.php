@@ -614,6 +614,7 @@ $show_login     = !$needs_setup && !$show_dashboard;
                             <select id="activePaymentProcessor">
                                 <option value="stripe">Stripe</option>
                                 <option value="paypal">PayPal</option>
+                                <option value="coinbase">Local Crypto + Coinbase Transfer</option>
                             </select>
                             <div class="settings-note">This controls which processor is used by the public tip flow.</div>
                         </div>
@@ -716,7 +717,81 @@ $show_login     = !$needs_setup && !$show_dashboard;
                         </div>
                     </div>
 
+                    <h3 style="margin-top:1.1rem;margin-bottom:0.65rem;">Local Crypto + Coinbase Transfer Settings</h3>
+                    <div class="settings-grid">
+                        <div class="form-group">
+                            <label for="coinbaseTipAmountsInput">Local Tip Amounts</label>
+                            <input type="text" id="coinbaseTipAmountsInput" placeholder="5,10,20" />
+                        </div>
+                        <div class="form-group">
+                            <label for="coinbaseCurrencyInput">Local Currency</label>
+                            <input type="text" id="coinbaseCurrencyInput" placeholder="USD" maxlength="3" />
+                        </div>
+                        <div class="form-group">
+                            <label for="cryptoAssetInput">Crypto Asset</label>
+                            <input type="text" id="cryptoAssetInput" placeholder="USDC" maxlength="12" />
+                        </div>
+                        <div class="form-group" style="grid-column: 1 / -1;">
+                            <label for="cryptoReceiveAddressInput">Local Receive Address</label>
+                            <input type="text" id="cryptoReceiveAddressInput" placeholder="Crypto wallet address controlled by this site" />
+                            <div class="settings-note">Users send funds here first. This is on-site payment intake.</div>
+                        </div>
+                        <div class="form-group">
+                            <label for="coinbaseDestinationAccountInput">Coinbase Destination</label>
+                            <input type="text" id="coinbaseDestinationAccountInput" placeholder="Coinbase account email or deposit address" />
+                        </div>
+                        <div class="form-group" style="grid-column: 1 / -1;">
+                            <label for="coinbaseTransferRequestUrlInput">Transfer Relay URL (optional)</label>
+                            <input type="url" id="coinbaseTransferRequestUrlInput" placeholder="https://relay.example/coinbase-transfer" />
+                            <div class="settings-note">When set, the Request Transfer action posts to this URL so your relay can execute the Coinbase transfer.</div>
+                        </div>
+                        <div class="form-group">
+                            <label for="coinbaseTransferAuthHeaderInput">Transfer Relay Auth Header</label>
+                            <input type="text" id="coinbaseTransferAuthHeaderInput" placeholder="x-coinbase-transfer-token" />
+                        </div>
+                        <div class="form-group">
+                            <label for="coinbaseTransferAuthTokenInput">Transfer Relay Auth Token</label>
+                            <input type="password" id="coinbaseTransferAuthTokenInput" placeholder="shared-secret" />
+                        </div>
+                        <div class="form-group">
+                            <label for="coinbaseApiKeyInput">Coinbase API Key (optional)</label>
+                            <input type="password" id="coinbaseApiKeyInput" placeholder="Coinbase API key" />
+                        </div>
+                        <div class="form-group">
+                            <label for="coinbaseWebhookSecretInput">Coinbase Webhook Secret (optional)</label>
+                            <input type="password" id="coinbaseWebhookSecretInput" placeholder="Webhook secret" />
+                        </div>
+                    </div>
+
                     <div class="settings-status" id="paymentProcessorsStatus"></div>
+                </div>
+
+                <h2>Crypto Transfer Queue</h2>
+                <div class="settings-panel">
+                    <p class="settings-note" style="margin-bottom:0.85rem;">
+                        Local crypto tips are received on-site. Confirm incoming hashes, then request transfer to Coinbase from here.
+                    </p>
+                    <div class="wizard-nav" style="margin-top:0.2rem;margin-bottom:0.65rem;">
+                        <button class="btn" type="button" onclick="loadCryptoTransferQueue()">Reload Queue</button>
+                    </div>
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Created</th>
+                                    <th>User</th>
+                                    <th>Amount</th>
+                                    <th>Status</th>
+                                    <th>Tx Hash</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="cryptoTransferTbody">
+                                <tr><td colspan="6">No crypto records loaded yet.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="settings-status" id="cryptoTransferStatus"></div>
                 </div>
 
                 <h2>Stripe Backfill</h2>
@@ -1423,6 +1498,17 @@ $show_login     = !$needs_setup && !$show_dashboard;
         document.getElementById('paypalCurrencyInput').value = config?.paypal?.currency || 'GBP';
         document.getElementById('paypalTipAmountsInput').value = config?.paypal?.tipAmounts || '5,10,20';
         document.getElementById('paypalCheckoutUrlInput').value = config?.paypal?.checkoutUrl || '';
+
+        document.getElementById('coinbaseTipAmountsInput').value = config?.coinbase?.tipAmounts || '5,10,20';
+        document.getElementById('coinbaseCurrencyInput').value = config?.coinbase?.currency || 'USD';
+        document.getElementById('cryptoAssetInput').value = config?.coinbase?.cryptoAsset || 'USDC';
+        document.getElementById('cryptoReceiveAddressInput').value = config?.coinbase?.receiveAddress || '';
+        document.getElementById('coinbaseDestinationAccountInput').value = config?.coinbase?.destinationAccount || '';
+        document.getElementById('coinbaseTransferRequestUrlInput').value = config?.coinbase?.transferRequestUrl || '';
+        document.getElementById('coinbaseTransferAuthHeaderInput').value = config?.coinbase?.transferAuthHeader || 'x-coinbase-transfer-token';
+        document.getElementById('coinbaseTransferAuthTokenInput').value = config?.coinbase?.transferAuthToken || '';
+        document.getElementById('coinbaseApiKeyInput').value = config?.coinbase?.apiKey || '';
+        document.getElementById('coinbaseWebhookSecretInput').value = config?.coinbase?.webhookSecret || '';
     }
 
     async function loadPaymentProcessorsConfig() {
@@ -1466,6 +1552,18 @@ $show_login     = !$needs_setup && !$show_dashboard;
                 currency: String(document.getElementById('paypalCurrencyInput').value || 'GBP').toUpperCase(),
                 tipAmounts: document.getElementById('paypalTipAmountsInput').value.trim(),
                 checkoutUrl: document.getElementById('paypalCheckoutUrlInput').value.trim()
+            },
+            coinbase: {
+                tipAmounts: document.getElementById('coinbaseTipAmountsInput').value.trim(),
+                currency: String(document.getElementById('coinbaseCurrencyInput').value || 'USD').toUpperCase(),
+                cryptoAsset: String(document.getElementById('cryptoAssetInput').value || 'USDC').toUpperCase(),
+                receiveAddress: document.getElementById('cryptoReceiveAddressInput').value.trim(),
+                destinationAccount: document.getElementById('coinbaseDestinationAccountInput').value.trim(),
+                transferRequestUrl: document.getElementById('coinbaseTransferRequestUrlInput').value.trim(),
+                transferAuthHeader: document.getElementById('coinbaseTransferAuthHeaderInput').value.trim(),
+                transferAuthToken: document.getElementById('coinbaseTransferAuthTokenInput').value.trim(),
+                apiKey: document.getElementById('coinbaseApiKeyInput').value.trim(),
+                webhookSecret: document.getElementById('coinbaseWebhookSecretInput').value.trim()
             }
         };
 
@@ -1531,6 +1629,144 @@ $show_login     = !$needs_setup && !$show_dashboard;
             showSaveToast(err.message || 'Unable to save payment settings.', true);
         } finally {
             saveBtn.disabled = false;
+        }
+    }
+
+    function shortText(value, max = 14) {
+        const text = String(value || '');
+        if (text.length <= max) {
+            return text;
+        }
+        return `${text.slice(0, max)}...`;
+    }
+
+    function escapeHtml(value) {
+        return String(value || '')
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;')
+            .replaceAll("'", '&#39;');
+    }
+
+    async function loadCryptoTransferQueue() {
+        const tbody = document.getElementById('cryptoTransferTbody');
+        const statusEl = document.getElementById('cryptoTransferStatus');
+        if (!tbody || !statusEl) {
+            return;
+        }
+
+        statusEl.className = 'settings-status';
+        statusEl.textContent = 'Loading crypto queue...';
+
+        try {
+            const data = await fetch_admin_api('crypto-transfer-queue');
+            const rows = Array.isArray(data.tips) ? data.tips : [];
+            tbody.innerHTML = '';
+
+            if (rows.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6">No local crypto tips in queue.</td></tr>';
+                statusEl.className = 'settings-status';
+                statusEl.textContent = 'Queue is empty.';
+                return;
+            }
+
+            rows.forEach((tip) => {
+                const tr = document.createElement('tr');
+                const created = tip.createdAt ? new Date(tip.createdAt).toLocaleString() : '-';
+                const fiatAmount = (Number(tip.amountCents || 0) / 100).toFixed(2);
+                const fiatCurrency = String(tip.currency || 'USD').toUpperCase();
+                const asset = String(tip.cryptoAsset || '').toUpperCase();
+                const amount = `${fiatAmount} ${fiatCurrency}${asset ? ` (${asset})` : ''}`;
+                const txHash = tip.txHash ? `<code style="font-size:.75rem">${escapeHtml(shortText(tip.txHash, 16))}</code>` : '-';
+                const canConfirm = tip.status === 'awaiting_crypto_payment' || tip.status === 'payment_submitted';
+                const canRequest = tip.status === 'paid' || tip.status === 'payment_submitted' || tip.status === 'coinbase_transfer_requested';
+
+                tr.innerHTML = `
+                    <td>${created}</td>
+                    <td>${escapeHtml(tip.username || 'anonymous')}</td>
+                    <td>${escapeHtml(amount)}</td>
+                    <td>${escapeHtml(tip.status || 'unknown')}</td>
+                    <td>${txHash}</td>
+                    <td>
+                        <button class="btn btn-sm" type="button" ${canConfirm ? '' : 'disabled'} onclick="confirmCryptoPayment('${tip.id}')">Confirm Received</button>
+                        <button class="btn btn-sm" type="button" ${canRequest ? '' : 'disabled'} onclick="requestCoinbaseTransfer('${tip.id}')">Request Coinbase Transfer</button>
+                    </td>`;
+                tbody.appendChild(tr);
+            });
+
+            statusEl.className = 'settings-status success';
+            statusEl.textContent = `Loaded ${rows.length} crypto queue item(s).`;
+        } catch (err) {
+            statusEl.className = 'settings-status error';
+            statusEl.textContent = err.message || 'Unable to load crypto queue.';
+        }
+    }
+
+    async function confirmCryptoPayment(tipId) {
+        const txHash = prompt('Enter the transaction hash for this payment (optional if already submitted):', '');
+        const statusEl = document.getElementById('cryptoTransferStatus');
+        if (!statusEl || !tipId) {
+            return;
+        }
+
+        statusEl.className = 'settings-status';
+        statusEl.textContent = 'Confirming crypto payment...';
+
+        try {
+            const response = await fetch(`/api/admin-analytics.php?action=confirm-crypto-payment&token=${encodeURIComponent(sessionToken)}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Admin-Token': sessionToken
+                },
+                body: JSON.stringify({ tipId, txHash: String(txHash || '').trim() })
+            });
+
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok || data.status !== 'ok') {
+                throw new Error(data.error || 'Unable to confirm payment');
+            }
+
+            statusEl.className = 'settings-status success';
+            statusEl.textContent = 'Crypto payment marked as received.';
+            await loadCryptoTransferQueue();
+        } catch (err) {
+            statusEl.className = 'settings-status error';
+            statusEl.textContent = err.message;
+        }
+    }
+
+    async function requestCoinbaseTransfer(tipId) {
+        const statusEl = document.getElementById('cryptoTransferStatus');
+        if (!statusEl || !tipId) {
+            return;
+        }
+
+        statusEl.className = 'settings-status';
+        statusEl.textContent = 'Requesting Coinbase transfer...';
+
+        try {
+            const response = await fetch(`/api/admin-analytics.php?action=request-coinbase-transfer&token=${encodeURIComponent(sessionToken)}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Admin-Token': sessionToken
+                },
+                body: JSON.stringify({ tipId })
+            });
+
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok || data.status !== 'ok') {
+                throw new Error(data.error || 'Unable to request transfer');
+            }
+
+            statusEl.className = 'settings-status success';
+            statusEl.textContent = data.message || 'Transfer request submitted.';
+            await loadCryptoTransferQueue();
+        } catch (err) {
+            statusEl.className = 'settings-status error';
+            statusEl.textContent = err.message;
         }
     }
 
@@ -2331,6 +2567,7 @@ $show_login     = !$needs_setup && !$show_dashboard;
     loadWebhookProxyConfig();
     populateStripeWebhookEndpointHelper();
     loadPaymentProcessorsConfig();
+    loadCryptoTransferQueue();
     loadStripeOneTimeConfig();
     loadRuntimeConfig();
     loadStaffList();

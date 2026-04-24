@@ -25,6 +25,10 @@ function load_env_values(): array
         'STRIPE_SECRET_KEY' => '',
         'STRIPE_PUBLISHABLE_KEY' => '',
         'STRIPE_WEBHOOK_SECRET' => '',
+        'COINBASE_COMMERCE_API_KEY' => '',
+        'COINBASE_COMMERCE_WEBHOOK_SECRET' => '',
+        'COINBASE_TIP_AMOUNTS' => '5,10,20',
+        'COINBASE_CURRENCY' => 'USD',
         'PAYPAL_CLIENT_ID' => '',
         'PAYPAL_CLIENT_SECRET' => '',
         'PAYPAL_WEBHOOK_ID' => '',
@@ -559,11 +563,60 @@ function parse_csv_env(string $key): array
 function active_payment_processor(): string
 {
     $processor = strtolower(trim(env_value('PAYMENT_PROCESSOR', 'stripe')));
-    if (!in_array($processor, ['stripe', 'paypal'], true)) {
+    if (!in_array($processor, ['stripe', 'paypal', 'coinbase'], true)) {
         return 'stripe';
     }
 
     return $processor;
+}
+
+function coinbase_tip_tiers(): array
+{
+    $amountTokens = parse_csv_env('COINBASE_TIP_AMOUNTS');
+    $currency = strtoupper(trim(env_value('COINBASE_CURRENCY', 'USD')));
+
+    if (!preg_match('/^[A-Z]{3}$/', $currency)) {
+        $currency = 'USD';
+    }
+
+    $tiers = [];
+    $seen = [];
+
+    foreach ($amountTokens as $token) {
+        if (!is_numeric($token)) {
+            continue;
+        }
+
+        $amount = (float)$token;
+        if ($amount <= 0) {
+            continue;
+        }
+
+        $amount = round($amount, 2);
+        $tierKey = number_format($amount, 2, '.', '');
+        if (isset($seen[$tierKey])) {
+            continue;
+        }
+
+        $seen[$tierKey] = true;
+        $amountCents = (int)round($amount * 100);
+        $tiers[] = [
+            'id' => 'coinbase_' . str_replace('.', '_', $tierKey),
+            'provider' => 'coinbase',
+            'amount' => $amount,
+            'amountCents' => $amountCents,
+            'currency' => $currency,
+            'productName' => 'Crypto Tip',
+            'label' => format_money($amountCents, $currency)
+        ];
+    }
+
+    usort($tiers, static fn(array $a, array $b): int => ($a['amountCents'] ?? 0) <=> ($b['amountCents'] ?? 0));
+
+    return [
+        'tiers' => $tiers,
+        'currency' => $currency
+    ];
 }
 
 function paypal_tip_tiers(): array
@@ -709,6 +762,69 @@ function stripe_request(string $method, string $path, array $params = []): array
     }
 
     return ['ok' => true, 'status' => $statusCode, 'data' => $decoded];
+}
+
+function coinbase_request(string $method, string $path, array $payload = []): array
+{
+    $apiKey = trim(env_value('COINBASE_COMMERCE_API_KEY', ''));
+    if ($apiKey === '' || str_contains($apiKey, '...')) {
+        return ['ok' => false, 'status' => 500, 'error' => 'Coinbase Commerce is not configured'];
+    }
+
+    if (!function_exists('curl_init')) {
+        return ['ok' => false, 'status' => 500, 'error' => 'PHP curl extension is required for Coinbase API calls'];
+    }
+
+    $url = 'https://api.commerce.coinbase.com/' . ltrim($path, '/');
+    $method = strtoupper($method);
+
+    if ($method === 'GET' && !empty($payload)) {
+        $url .= '?' . http_build_query($payload);
+    }
+
+    $ch = curl_init($url);
+    $headers = [
+        'X-CC-Api-Key: ' . $apiKey,
+        'X-CC-Version: 2018-03-22',
+        'Accept: application/json'
+    ];
+
+    $curlOptions = [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 20,
+        CURLOPT_HTTPHEADER => $headers,
+        CURLOPT_CUSTOMREQUEST => $method
+    ];
+
+    if ($method !== 'GET') {
+        $headers[] = 'Content-Type: application/json';
+        $curlOptions[CURLOPT_HTTPHEADER] = $headers;
+        $curlOptions[CURLOPT_POSTFIELDS] = json_encode($payload, JSON_UNESCAPED_SLASHES);
+    }
+
+    curl_setopt_array($ch, $curlOptions);
+
+    $responseBody = curl_exec($ch);
+    $curlError = curl_error($ch);
+    $statusCode = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    curl_close($ch);
+
+    if ($responseBody === false) {
+        return ['ok' => false, 'status' => 500, 'error' => $curlError !== '' ? $curlError : 'Coinbase request failed'];
+    }
+
+    $decoded = json_decode($responseBody, true);
+    if (!is_array($decoded)) {
+        return ['ok' => false, 'status' => 500, 'error' => 'Invalid response from Coinbase'];
+    }
+
+    if ($statusCode < 200 || $statusCode >= 300) {
+        $message = (string)($decoded['error']['message'] ?? $decoded['error']['type'] ?? 'Coinbase API request failed');
+        return ['ok' => false, 'status' => $statusCode, 'error' => $message, 'data' => $decoded];
+    }
+
+    $data = is_array($decoded['data'] ?? null) ? $decoded['data'] : $decoded;
+    return ['ok' => true, 'status' => $statusCode, 'data' => $data];
 }
 
 function stripe_tip_status_from_session(array $session): string
