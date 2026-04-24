@@ -536,6 +536,7 @@ $show_login     = !$needs_setup && !$show_dashboard;
             <button class="tab-btn" onclick="switchTab('moderation', event)">Moderation</button>
             <button class="tab-btn" onclick="switchTab('achievements', event)">Achievements</button>
             <button class="tab-btn" onclick="switchTab('payment-settings', event)">Payment Settings</button>
+            <button class="tab-btn" onclick="switchTab('crypto-settings', event)">Crypto Settings</button>
             <button class="tab-btn" onclick="switchTab('games', event)">Games</button>
             <button class="tab-btn" onclick="switchTab('webhooks', event)">Webhooks</button>
             <button class="tab-btn" onclick="switchTab('staff', event)">Staff</button>
@@ -680,7 +681,144 @@ $show_login     = !$needs_setup && !$show_dashboard;
                         <button class="btn btn-reject" type="button" id="resetStripeAccountBtn" onclick="resetStripeAccountConfig()">Reset Stripe Account</button>
                     </div>
 
-                    <h3 style="margin-top:1.1rem;margin-bottom:0.65rem;">Local Crypto + Coinbase Transfer Settings</h3>
+                    <h3 style="margin-top:1.1rem;margin-bottom:0.65rem;">Crypto Moved To Dedicated Tab</h3>
+                    <p class="settings-note" style="margin-bottom:0.75rem;">
+                        Crypto checkout, wallet addresses, derivation settings, wallet overview, and transfer queue are now in the <strong>Crypto Settings</strong> tab.
+                    </p>
+                    <div class="wizard-nav" style="margin-top:0.2rem;">
+                        <button class="btn" type="button" onclick="switchTab('crypto-settings')">Open Crypto Settings</button>
+                    </div>
+
+                    <div class="settings-status" id="paymentProcessorsStatus"></div>
+                </div>
+
+                <h2>Stripe Backfill</h2>
+                <div class="settings-panel">
+                    <p class="settings-note" style="margin-bottom:0.85rem;">
+                        Pull historical Stripe Checkout sessions and upsert them into local transaction data. Use this if webhook events were missed or old transactions are missing.
+                    </p>
+
+                    <div class="settings-grid">
+                        <div class="form-group">
+                            <label>Backfill Mode</label>
+                            <div style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
+                                <label style="display:flex;gap:0.35rem;align-items:center;">
+                                    <input type="radio" name="stripeBackfillMode" value="full" checked />
+                                    Full history
+                                </label>
+                                <label style="display:flex;gap:0.35rem;align-items:center;">
+                                    <input type="radio" name="stripeBackfillMode" value="days" />
+                                    Last
+                                </label>
+                                <input id="stripeBackfillDaysInput" type="number" min="1" max="3650" value="365" style="width:100px;" />
+                                <span style="opacity:0.85;">days</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="wizard-nav" style="margin-top:0.2rem;">
+                        <button class="btn" type="button" id="stripeBackfillRunBtn" onclick="runStripeBackfillFromSettings()">Run Stripe Backfill</button>
+                    </div>
+
+                    <div class="settings-status" id="stripeBackfillStatus"></div>
+                </div>
+
+                <h2>Stripe One-Time Checkout</h2>
+                <div class="settings-panel">
+                    <p class="settings-note" style="margin-bottom:0.85rem;">
+                        Configure a one-time Stripe product+price, then generate a Checkout Session URL and verify completion via webhook events.
+                    </p>
+                    <p class="settings-note" style="margin-bottom:0.85rem;">
+                        Requires STRIPE_SECRET_KEY and STRIPE_PUBLISHABLE_KEY in your server environment. Get these from the Stripe Dashboard.
+                    </p>
+
+                    <div class="settings-grid">
+                        <div class="form-group">
+                            <label for="stripeOneTimeName">Product Name</label>
+                            <input type="text" id="stripeOneTimeName" value="Example Product" />
+                        </div>
+                        <div class="form-group">
+                            <label for="stripeOneTimeCurrency">Currency</label>
+                            <input type="text" id="stripeOneTimeCurrency" value="gbp" maxlength="3" />
+                        </div>
+                        <div class="form-group">
+                            <label for="stripeOneTimeAmount">Unit Amount (cents)</label>
+                            <input type="number" id="stripeOneTimeAmount" value="2000" min="50" step="1" />
+                        </div>
+                        <div class="form-group">
+                            <label for="stripeOneTimeProductId">Product ID</label>
+                            <input type="text" id="stripeOneTimeProductId" readonly />
+                        </div>
+                        <div class="form-group">
+                            <label for="stripeOneTimePriceId">Price ID</label>
+                            <input type="text" id="stripeOneTimePriceId" readonly />
+                        </div>
+                        <div class="form-group">
+                            <label for="stripeOneTimeLastSession">Last Session ID</label>
+                            <input type="text" id="stripeOneTimeLastSession" readonly />
+                        </div>
+                    </div>
+
+                    <div class="wizard-nav">
+                        <button class="btn" type="button" id="stripeOneTimeReloadBtn" onclick="loadStripeOneTimeConfig()">Reload Stripe Config</button>
+                        <button class="btn" type="button" id="stripeOneTimeCreateProductBtn" onclick="createStripeOneTimeProduct()">Create Product + Price</button>
+                        <button class="btn" type="button" id="stripeOneTimeCreateSessionBtn" onclick="createStripeOneTimeSession()">Create Checkout Session</button>
+                    </div>
+
+                    <div class="form-group" style="margin-top:0.9rem;">
+                        <label for="stripeOneTimeCheckoutUrl">Last Checkout URL</label>
+                        <input type="text" id="stripeOneTimeCheckoutUrl" readonly />
+                    </div>
+                    <div class="wizard-nav" style="margin-top:0.2rem;">
+                        <button class="btn" type="button" id="stripeOneTimeOpenCheckoutBtn" onclick="openStripeCheckoutUrl()">Open Checkout</button>
+                    </div>
+
+                    <div class="settings-status" id="stripeOneTimeStatus"></div>
+
+                    <h3 style="margin-top:1.2rem;margin-bottom:0.6rem;">Recent Completed Sessions</h3>
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Completed At</th>
+                                    <th>Session ID</th>
+                                    <th>Amount</th>
+                                    <th>Status</th>
+                                    <th>Event ID</th>
+                                </tr>
+                            </thead>
+                            <tbody id="stripeOneTimeCompletedTbody">
+                                <tr><td colspan="5">No completed sessions yet</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <h2>Payment API Log</h2>
+                <div class="settings-panel">
+                    <p class="settings-note" style="margin-bottom:0.7rem;">Live API error output for Payment Settings actions.</p>
+                    <div class="wizard-nav" style="margin-top:0.2rem;">
+                        <button class="btn" type="button" onclick="clearPaymentApiLog()">Clear Log</button>
+                    </div>
+                    <div class="api-log-shell">
+                        <pre id="paymentApiLog" class="api-log-window">No API errors yet.</pre>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+        <?php endif; ?>
+
+        <!-- Crypto Settings -->
+        <?php if ($user_role === 'admin'): ?>
+        <div class="tab-content" id="crypto-settings">
+            <div class="section">
+                <h2>Crypto Checkout Settings</h2>
+                <div class="settings-panel">
+                    <p class="settings-note" style="margin-bottom:0.85rem;">
+                        Configure local crypto checkout, per-coin receive addresses, derivation, and Coinbase transfer relay in one place.
+                    </p>
+
                     <div class="settings-grid">
                         <div class="form-group">
                             <label for="coinbaseTipAmountsInput">Local Tip Amounts</label>
@@ -816,7 +954,11 @@ $show_login     = !$needs_setup && !$show_dashboard;
                         </div>
                     </div>
 
-                    <div class="settings-status" id="paymentProcessorsStatus"></div>
+                    <div class="wizard-nav" style="margin-top:0.2rem;">
+                        <button class="btn" type="button" onclick="savePaymentProcessorsConfig()">Save Crypto Settings</button>
+                        <button class="btn" type="button" onclick="testCryptoDerivation()">Test Wallet Derivation</button>
+                    </div>
+                    <div class="settings-status" id="cryptoSettingsStatus"></div>
                 </div>
 
                 <h2>Crypto Wallets</h2>
@@ -860,120 +1002,6 @@ $show_login     = !$needs_setup && !$show_dashboard;
                     </div>
                     <div class="settings-status" id="cryptoTransferStatus"></div>
                 </div>
-
-                <h2>Stripe Backfill</h2>
-                <div class="settings-panel">
-                    <p class="settings-note" style="margin-bottom:0.85rem;">
-                        Pull historical Stripe Checkout sessions and upsert them into local transaction data. Use this if webhook events were missed or old transactions are missing.
-                    </p>
-
-                    <div class="settings-grid">
-                        <div class="form-group">
-                            <label>Backfill Mode</label>
-                            <div style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
-                                <label style="display:flex;gap:0.35rem;align-items:center;">
-                                    <input type="radio" name="stripeBackfillMode" value="full" checked />
-                                    Full history
-                                </label>
-                                <label style="display:flex;gap:0.35rem;align-items:center;">
-                                    <input type="radio" name="stripeBackfillMode" value="days" />
-                                    Last
-                                </label>
-                                <input id="stripeBackfillDaysInput" type="number" min="1" max="3650" value="365" style="width:100px;" />
-                                <span style="opacity:0.85;">days</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="wizard-nav" style="margin-top:0.2rem;">
-                        <button class="btn" type="button" id="stripeBackfillRunBtn" onclick="runStripeBackfillFromSettings()">Run Stripe Backfill</button>
-                    </div>
-
-                    <div class="settings-status" id="stripeBackfillStatus"></div>
-                </div>
-
-                <h2>Stripe One-Time Checkout</h2>
-                <div class="settings-panel">
-                    <p class="settings-note" style="margin-bottom:0.85rem;">
-                        Configure a one-time Stripe product+price, then generate a Checkout Session URL and verify completion via webhook events.
-                    </p>
-                    <p class="settings-note" style="margin-bottom:0.85rem;">
-                        Requires STRIPE_SECRET_KEY and STRIPE_PUBLISHABLE_KEY in your server environment. Get these from the Stripe Dashboard.
-                    </p>
-
-                    <div class="settings-grid">
-                        <div class="form-group">
-                            <label for="stripeOneTimeName">Product Name</label>
-                            <input type="text" id="stripeOneTimeName" value="Example Product" />
-                        </div>
-                        <div class="form-group">
-                            <label for="stripeOneTimeCurrency">Currency</label>
-                            <input type="text" id="stripeOneTimeCurrency" value="gbp" maxlength="3" />
-                        </div>
-                        <div class="form-group">
-                            <label for="stripeOneTimeAmount">Unit Amount (cents)</label>
-                            <input type="number" id="stripeOneTimeAmount" value="2000" min="50" step="1" />
-                        </div>
-                        <div class="form-group">
-                            <label for="stripeOneTimeProductId">Product ID</label>
-                            <input type="text" id="stripeOneTimeProductId" readonly />
-                        </div>
-                        <div class="form-group">
-                            <label for="stripeOneTimePriceId">Price ID</label>
-                            <input type="text" id="stripeOneTimePriceId" readonly />
-                        </div>
-                        <div class="form-group">
-                            <label for="stripeOneTimeLastSession">Last Session ID</label>
-                            <input type="text" id="stripeOneTimeLastSession" readonly />
-                        </div>
-                    </div>
-
-                    <div class="wizard-nav">
-                        <button class="btn" type="button" id="stripeOneTimeReloadBtn" onclick="loadStripeOneTimeConfig()">Reload Stripe Config</button>
-                        <button class="btn" type="button" id="stripeOneTimeCreateProductBtn" onclick="createStripeOneTimeProduct()">Create Product + Price</button>
-                        <button class="btn" type="button" id="stripeOneTimeCreateSessionBtn" onclick="createStripeOneTimeSession()">Create Checkout Session</button>
-                    </div>
-
-                    <div class="form-group" style="margin-top:0.9rem;">
-                        <label for="stripeOneTimeCheckoutUrl">Last Checkout URL</label>
-                        <input type="text" id="stripeOneTimeCheckoutUrl" readonly />
-                    </div>
-                    <div class="wizard-nav" style="margin-top:0.2rem;">
-                        <button class="btn" type="button" id="stripeOneTimeOpenCheckoutBtn" onclick="openStripeCheckoutUrl()">Open Checkout</button>
-                    </div>
-
-                    <div class="settings-status" id="stripeOneTimeStatus"></div>
-
-                    <h3 style="margin-top:1.2rem;margin-bottom:0.6rem;">Recent Completed Sessions</h3>
-                    <div class="table-responsive">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Completed At</th>
-                                    <th>Session ID</th>
-                                    <th>Amount</th>
-                                    <th>Status</th>
-                                    <th>Event ID</th>
-                                </tr>
-                            </thead>
-                            <tbody id="stripeOneTimeCompletedTbody">
-                                <tr><td colspan="5">No completed sessions yet</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <h2>Payment API Log</h2>
-                <div class="settings-panel">
-                    <p class="settings-note" style="margin-bottom:0.7rem;">Live API error output for Payment Settings actions.</p>
-                    <div class="wizard-nav" style="margin-top:0.2rem;">
-                        <button class="btn" type="button" onclick="clearPaymentApiLog()">Clear Log</button>
-                    </div>
-                    <div class="api-log-shell">
-                        <pre id="paymentApiLog" class="api-log-window">No API errors yet.</pre>
-                    </div>
-                </div>
-
             </div>
         </div>
         <?php endif; ?>
@@ -1356,6 +1384,11 @@ $show_login     = !$needs_setup && !$show_dashboard;
         if (tabName === 'overview') {
             refreshOverviewTick();
         }
+
+        if (tabName === 'crypto-settings') {
+            loadWalletOverview();
+            loadCryptoTransferQueue();
+        }
     }
 
     function isOverviewActive() {
@@ -1604,19 +1637,38 @@ $show_login     = !$needs_setup && !$show_dashboard;
 
     async function loadPaymentProcessorsConfig() {
         const statusEl = document.getElementById('paymentProcessorsStatus');
-        statusEl.className = 'settings-status';
-        statusEl.textContent = 'Loading payment settings...';
+        const cryptoStatusEl = document.getElementById('cryptoSettingsStatus');
+        if (statusEl) {
+            statusEl.className = 'settings-status';
+            statusEl.textContent = 'Loading payment settings...';
+        }
+        if (cryptoStatusEl) {
+            cryptoStatusEl.className = 'settings-status';
+            cryptoStatusEl.textContent = 'Loading payment settings...';
+        }
         populateStripeWebhookEndpointHelper();
 
         try {
             const data = await fetch_admin_api('payment-processors-config');
             const config = data.config || {};
             renderPaymentProcessorsConfig(config);
-            statusEl.className = 'settings-status success';
-            statusEl.textContent = 'Payment settings loaded.';
+            if (statusEl) {
+                statusEl.className = 'settings-status success';
+                statusEl.textContent = 'Payment settings loaded.';
+            }
+            if (cryptoStatusEl) {
+                cryptoStatusEl.className = 'settings-status success';
+                cryptoStatusEl.textContent = 'Crypto settings loaded.';
+            }
         } catch (err) {
-            statusEl.className = 'settings-status error';
-            statusEl.textContent = 'Unable to load payment settings.';
+            if (statusEl) {
+                statusEl.className = 'settings-status error';
+                statusEl.textContent = 'Unable to load payment settings.';
+            }
+            if (cryptoStatusEl) {
+                cryptoStatusEl.className = 'settings-status error';
+                cryptoStatusEl.textContent = 'Unable to load crypto settings.';
+            }
             logPaymentApiError('payment-processors-config', err);
             console.error('Payment settings load error:', err);
         }
@@ -1624,7 +1676,18 @@ $show_login     = !$needs_setup && !$show_dashboard;
 
     async function savePaymentProcessorsConfig() {
         const statusEl = document.getElementById('paymentProcessorsStatus');
+        const cryptoStatusEl = document.getElementById('cryptoSettingsStatus');
         const saveBtn = document.getElementById('savePaymentProcessorsBtn');
+        const setStatus = (className, text) => {
+            if (statusEl) {
+                statusEl.className = className;
+                statusEl.textContent = text;
+            }
+            if (cryptoStatusEl) {
+                cryptoStatusEl.className = className;
+                cryptoStatusEl.textContent = text;
+            }
+        };
 
         const payload = {
             activeProcessor: String(document.getElementById('activePaymentProcessor').value || 'stripe').toLowerCase(),
@@ -1666,9 +1729,10 @@ $show_login     = !$needs_setup && !$show_dashboard;
             }
         };
 
-        statusEl.className = 'settings-status';
-        statusEl.textContent = 'Saving payment settings...';
-        saveBtn.disabled = true;
+        setStatus('settings-status', 'Saving payment settings...');
+        if (saveBtn) {
+            saveBtn.disabled = true;
+        }
 
         const publishableKey = payload.stripe.publishableKey;
         const serverKey = payload.stripe.secretKey;
@@ -1676,28 +1740,31 @@ $show_login     = !$needs_setup && !$show_dashboard;
 
         if (publishableKey !== '' && !/^pk_(test|live)_[A-Za-z0-9]+$/.test(publishableKey)) {
             const err = new Error('Stripe publishable key must start with pk_test_ or pk_live_.');
-            statusEl.className = 'settings-status error';
-            statusEl.textContent = err.message;
+            setStatus('settings-status error', err.message);
             logPaymentApiError('stripe-key-validation', err, { field: 'publishableKey' });
-            saveBtn.disabled = false;
+            if (saveBtn) {
+                saveBtn.disabled = false;
+            }
             return;
         }
 
         if (serverKey !== '' && !/^(sk|rk)_(test|live)_[A-Za-z0-9]+$/.test(serverKey)) {
             const err = new Error('Stripe server key must start with sk_test_, sk_live_, rk_test_, or rk_live_.');
-            statusEl.className = 'settings-status error';
-            statusEl.textContent = err.message;
+            setStatus('settings-status error', err.message);
             logPaymentApiError('stripe-key-validation', err, { field: 'serverKey' });
-            saveBtn.disabled = false;
+            if (saveBtn) {
+                saveBtn.disabled = false;
+            }
             return;
         }
 
         if (webhookSecret !== '' && !/^whsec_[A-Za-z0-9]+$/.test(webhookSecret)) {
             const err = new Error('Webhook signing secret must start with whsec_.');
-            statusEl.className = 'settings-status error';
-            statusEl.textContent = err.message;
+            setStatus('settings-status error', err.message);
             logPaymentApiError('stripe-key-validation', err, { field: 'webhookSecret' });
-            saveBtn.disabled = false;
+            if (saveBtn) {
+                saveBtn.disabled = false;
+            }
             return;
         }
 
@@ -1717,17 +1784,59 @@ $show_login     = !$needs_setup && !$show_dashboard;
             }
 
             renderPaymentProcessorsConfig(data.config || payload);
-            statusEl.className = 'settings-status success';
-            statusEl.textContent = 'Payment settings saved.';
+            setStatus('settings-status success', 'Payment settings saved.');
             showSaveToast('Payment settings saved successfully.');
             await loadRuntimeConfig();
         } catch (err) {
-            statusEl.className = 'settings-status error';
-            statusEl.textContent = err.message;
+            setStatus('settings-status error', err.message);
             logPaymentApiError('update-payment-processors-config', err, payload);
             showSaveToast(err.message || 'Unable to save payment settings.', true);
         } finally {
-            saveBtn.disabled = false;
+            if (saveBtn) {
+                saveBtn.disabled = false;
+            }
+        }
+    }
+
+    async function testCryptoDerivation() {
+        const statusEl = document.getElementById('cryptoSettingsStatus');
+        if (!statusEl) {
+            return;
+        }
+
+        statusEl.className = 'settings-status';
+        statusEl.textContent = 'Testing wallet derivation...';
+
+        try {
+            const response = await fetch(`/api/admin-analytics.php?action=test-crypto-derivation&token=${encodeURIComponent(sessionToken)}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Admin-Token': sessionToken
+                },
+                body: JSON.stringify({
+                    coins: String(document.getElementById('coinbaseSupportedCoinsInput')?.value || '').toUpperCase()
+                })
+            });
+
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok || data.status !== 'ok') {
+                throw new Error(data.error || 'Derivation test failed');
+            }
+
+            const result = data.derivation || {};
+            if (result.ok) {
+                const count = Object.keys(result.addresses || {}).length;
+                statusEl.className = 'settings-status success';
+                statusEl.textContent = `Derivation is working. Received ${count} address(es) from wallet service.`;
+            } else {
+                const details = result.error || 'Unknown derivation error';
+                statusEl.className = 'settings-status error';
+                statusEl.textContent = `Derivation failed: ${details}`;
+            }
+        } catch (err) {
+            statusEl.className = 'settings-status error';
+            statusEl.textContent = err.message || 'Unable to run derivation test.';
         }
     }
 
@@ -2870,8 +2979,6 @@ $show_login     = !$needs_setup && !$show_dashboard;
     loadWebhookProxyConfig();
     populateStripeWebhookEndpointHelper();
     loadPaymentProcessorsConfig();
-    loadWalletOverview();
-    loadCryptoTransferQueue();
     loadStripeOneTimeConfig();
     loadRuntimeConfig();
     loadStaffList();

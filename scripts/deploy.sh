@@ -41,7 +41,19 @@ if [ -z "${APP_REAL}" ]; then
   APP_REAL="$(normalize_path "${APP_DIR}")"
 fi
 
-echo "[1/8] Installing deployment requirements..."
+echo "[1/8] Syncing files to ${APP_DIR}..."
+if [ "${REPO_REAL}" = "${APP_REAL}" ]; then
+  echo "Repo and app directory are the same; skipping rsync copy step."
+else
+  rsync -a --delete \
+    --exclude '.git' \
+    --exclude 'node_modules' \
+    --exclude '.env' \
+    --exclude 'data/' \
+    "${REPO_DIR}/" "${APP_DIR}/"
+fi
+
+echo "[2/8] Installing deployment requirements..."
 if command -v apt-get >/dev/null 2>&1; then
   export DEBIAN_FRONTEND=noninteractive
   # Clear distro npm selection before any install transaction when NodeSource
@@ -88,21 +100,7 @@ else
   echo "apt-get not found; skipping automatic package installation."
 fi
 
-echo "[2/8] Code already synced at startup."
-
-echo "[3/8] Syncing files to ${APP_DIR}..."
-if [ "${REPO_REAL}" = "${APP_REAL}" ]; then
-  echo "Repo and app directory are the same; skipping rsync copy step."
-else
-  rsync -a --delete \
-    --exclude '.git' \
-    --exclude 'node_modules' \
-    --exclude '.env' \
-    --exclude 'data/' \
-    "${REPO_DIR}/" "${APP_DIR}/"
-fi
-
-echo "[4/8] Ensuring data directory permissions..."
+echo "[3/8] Ensuring data directory permissions..."
 mkdir -p "${APP_DIR}/data"
 chown www-data:www-data "${APP_DIR}/data"
 chmod 775 "${APP_DIR}/data"
@@ -199,7 +197,7 @@ if grep -qE '^CRYPTO_AUTO_VERIFY_PROVIDER_URL=$' "${APP_DIR}/.env"; then
   sed -i 's|^CRYPTO_AUTO_VERIFY_PROVIDER_URL=$|CRYPTO_AUTO_VERIFY_PROVIDER_URL=http://127.0.0.1:8787/api/verify-tx|' "${APP_DIR}/.env"
 fi
 
-echo "[5/8] Verifying required served files..."
+echo "[4/8] Verifying required served files..."
 REQUIRED_FILES=(
   "admin.php"
   "installer.php"
@@ -230,7 +228,7 @@ for f in "${REQUIRED_FILES[@]}"; do
   fi
 done
 
-echo "[6/8] Installing wallet service dependencies and ensuring service..."
+echo "[5/8] Installing wallet service dependencies and ensuring service..."
 if [ -f "${APP_DIR}/wallet-service/package.json" ]; then
   if command -v npm >/dev/null 2>&1; then
     (cd "${APP_DIR}/wallet-service" && npm install --omit=dev)
@@ -269,7 +267,7 @@ else
   echo "wallet-service files missing; skipping wallet service setup."
 fi
 
-echo "[7/8] Refreshing PHP runtime cache..."
+echo "[6/8] Refreshing PHP runtime cache..."
 PHP_FPM_SERVICE=""
 if systemctl list-unit-files | grep -qE '^php[0-9]+\.[0-9]+-fpm\.service'; then
   PHP_FPM_SERVICE="$(systemctl list-unit-files | awk '/^php[0-9]+\.[0-9]+-fpm\.service/ {print $1}' | head -n 1)"
@@ -281,7 +279,7 @@ else
   echo "No php-fpm service detected; skipping php-fpm reload."
 fi
 
-echo "[8/8] Reloading nginx..."
+echo "[7/8] Reloading nginx..."
 nginx -t && systemctl reload nginx
 
 echo ""

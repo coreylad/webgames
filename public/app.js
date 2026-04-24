@@ -95,57 +95,74 @@ async function loadTipTiers() {
   processorTierMap.clear();
   processorErrors.clear();
 
-  try {
-    const candidates = ["stripe", "coinbase"];
-    await Promise.all(candidates.map(async (processor) => {
-      try {
-        await loadTiersForProcessor(processor);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : `Unable to load ${processorLabel(processor)} tiers.`;
-        processorErrors.set(processor, message);
-      }
-    }));
+  let stripeAvailable = false;
+  let coinbaseAvailable = false;
 
-    const availableProcessors = candidates.filter((processor) => processorTierMap.has(processor));
-    if (availableProcessors.length === 0) {
-      throw new Error("No payment methods are currently available.");
+  // Stripe is the hard fallback path: render it first so a slow/broken crypto
+  // setup never leaves the payment selector stuck in a loading state.
+  try {
+    await loadTiersForProcessor("stripe");
+    stripeAvailable = true;
+    paymentProcessorSelect.innerHTML = `<option value="stripe">${processorLabel("stripe")}</option>`;
+    renderProcessorTiers("stripe");
+    tipMessage.className = "status";
+    tipMessage.textContent = "";
+  } catch (error) {
+    const message = error instanceof Error ? error.message : `Unable to load ${processorLabel("stripe")} tiers.`;
+    processorErrors.set("stripe", message);
+  }
+
+  try {
+    await loadTiersForProcessor("coinbase");
+    coinbaseAvailable = true;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : `Unable to load ${processorLabel("coinbase")} tiers.`;
+    processorErrors.set("coinbase", message);
+  }
+
+  if (stripeAvailable || coinbaseAvailable) {
+    paymentProcessorSelect.innerHTML = "";
+
+    if (stripeAvailable) {
+      const stripeOption = document.createElement("option");
+      stripeOption.value = "stripe";
+      stripeOption.textContent = processorLabel("stripe");
+      paymentProcessorSelect.appendChild(stripeOption);
     }
 
-    paymentProcessorSelect.innerHTML = "";
-    candidates.forEach((processor) => {
-      const option = document.createElement("option");
-      option.value = processor;
-      const available = processorTierMap.has(processor);
-      option.textContent = available
-        ? processorLabel(processor)
-        : `${processorLabel(processor)} (not configured)`;
-      option.disabled = !available;
-      if (available && !paymentProcessorSelect.value) {
-        option.selected = true;
-      }
-      paymentProcessorSelect.appendChild(option);
-    });
+    const coinbaseOption = document.createElement("option");
+    coinbaseOption.value = "coinbase";
+    coinbaseOption.textContent = coinbaseAvailable
+      ? processorLabel("coinbase")
+      : `${processorLabel("coinbase")} (not configured)`;
+    coinbaseOption.disabled = !coinbaseAvailable;
+    paymentProcessorSelect.appendChild(coinbaseOption);
 
-    renderProcessorTiers(availableProcessors[0]);
+    if (stripeAvailable) {
+      paymentProcessorSelect.value = "stripe";
+      renderProcessorTiers("stripe");
+    } else {
+      paymentProcessorSelect.value = "coinbase";
+      renderProcessorTiers("coinbase");
+    }
 
-    const unavailable = candidates.filter((processor) => !processorTierMap.has(processor));
-    if (unavailable.length > 0) {
-      const details = unavailable
-        .map((processor) => `${processorLabel(processor)}: ${processorErrors.get(processor) || "not configured"}`)
-        .join(" | ");
-      tipMessage.className = "status error";
-      tipMessage.textContent = `Some methods are unavailable: ${details}`;
+    if (!coinbaseAvailable && stripeAvailable) {
+      tipMessage.className = "status";
+      tipMessage.textContent = "Crypto is currently unavailable. Stripe checkout is ready.";
     } else {
       tipMessage.className = "status";
       tipMessage.textContent = "";
     }
-  } catch (error) {
-    paymentProcessorSelect.innerHTML = '<option value="">Unavailable</option>';
-    priceIdSelect.innerHTML = '<option value="">Tier loading failed</option>';
-    tipMessage.textContent = `${error.message} Refresh to retry or check payment settings in admin.`;
-    tipMessage.className = "status error";
-    tipSubmit.disabled = true;
+
+    return;
   }
+
+  paymentProcessorSelect.innerHTML = '<option value="">Unavailable</option>';
+  priceIdSelect.innerHTML = '<option value="">Tier loading failed</option>';
+  const stripeError = processorErrors.get("stripe") || "Stripe is unavailable.";
+  tipMessage.textContent = `${stripeError} Refresh to retry or check payment settings in admin.`;
+  tipMessage.className = "status error";
+  tipSubmit.disabled = true;
 }
 
 if (tipForm) {

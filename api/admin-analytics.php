@@ -383,6 +383,71 @@ switch ($action) {
         ];
         break;
 
+    case 'test-crypto-derivation':
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            json_response(['error' => 'Method not allowed'], 405);
+        }
+
+        $body = read_json_input();
+        $rawCoins = strtoupper(trim((string)($body['coins'] ?? '')));
+        $coins = [];
+
+        if ($rawCoins !== '') {
+            $tokens = array_map('trim', explode(',', $rawCoins));
+            foreach ($tokens as $token) {
+                if ($token === '') {
+                    continue;
+                }
+                if (preg_match('/^[A-Z0-9]{2,12}$/', $token) !== 1) {
+                    continue;
+                }
+                if (!in_array($token, $coins, true)) {
+                    $coins[] = $token;
+                }
+            }
+        }
+
+        if (empty($coins)) {
+            $coins = crypto_supported_coins();
+        }
+
+        $tipId = 'derivation_test_' . generate_id();
+        $currency = strtoupper(trim(env_value('COINBASE_CURRENCY', 'GBP')));
+        if (!preg_match('/^[A-Z]{3}$/', $currency)) {
+            $currency = 'GBP';
+        }
+
+        $derivation = derive_crypto_receive_addresses(
+            $tipId,
+            'admin_test',
+            $coins,
+            500,
+            $currency
+        );
+
+        $staticAddresses = crypto_receive_addresses();
+        $configuredStatic = 0;
+        foreach ($staticAddresses as $addr) {
+            if (trim((string)$addr) !== '') {
+                $configuredStatic += 1;
+            }
+        }
+
+        $output = [
+            'status' => 'ok',
+            'derivation' => $derivation,
+            'diagnostics' => [
+                'enabled' => crypto_address_derivation_enabled(),
+                'url' => env_value('CRYPTO_DERIVATION_URL', ''),
+                'authHeader' => env_value('CRYPTO_DERIVATION_AUTH_HEADER', 'x-webgames-wallet-token'),
+                'hasAuthToken' => trim(env_value('CRYPTO_DERIVATION_AUTH_TOKEN', '')) !== '',
+                'walletServicePort' => env_value('WALLET_SERVICE_PORT', '8787'),
+                'coinsRequested' => $coins,
+                'staticReceiveAddressCount' => $configuredStatic
+            ]
+        ];
+        break;
+
     case 'crypto-transfer-queue':
         $store = read_tip_store();
         $tips = array_values(array_filter($store['tips'], static function (array $tip): bool {
