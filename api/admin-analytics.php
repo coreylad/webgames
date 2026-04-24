@@ -458,6 +458,110 @@ switch ($action) {
         ];
         break;
 
+    case 'crypto-service-health':
+        $derivationEnabled = crypto_address_derivation_enabled();
+        $derivationUrl = trim(env_value('CRYPTO_DERIVATION_URL', ''));
+        $walletInternalBase = trim(env_value('WALLET_APP_INTERNAL_BASE_URL', 'http://127.0.0.1'));
+        $walletPort = trim(env_value('WALLET_SERVICE_PORT', '8787'));
+        $autoVerifyEnabled = in_array(strtolower(trim(env_value('CRYPTO_AUTO_VERIFY_ENABLED', '0'))), ['1', 'true', 'yes', 'on'], true);
+
+        $healthUrl = '';
+        if ($derivationUrl !== '' && filter_var($derivationUrl, FILTER_VALIDATE_URL) !== false) {
+            $parts = parse_url($derivationUrl);
+            if (is_array($parts) && isset($parts['scheme'], $parts['host'])) {
+                $healthUrl = $parts['scheme'] . '://' . $parts['host'];
+                if (isset($parts['port'])) {
+                    $healthUrl .= ':' . (string)$parts['port'];
+                }
+                $healthUrl .= '/api/health';
+            }
+        }
+
+        if ($healthUrl === '') {
+            $base = rtrim($walletInternalBase, '/');
+            if ($base === '') {
+                $base = 'http://127.0.0.1';
+            }
+
+            if (preg_match('/:[0-9]{2,5}$/', $base) !== 1 && preg_match('/^[0-9]{2,5}$/', $walletPort) === 1) {
+                $base .= ':' . $walletPort;
+            }
+
+            $healthUrl = $base . '/api/health';
+        }
+
+        $reachable = false;
+        $httpStatus = 0;
+        $error = '';
+        $healthResponse = [];
+
+        if (!function_exists('curl_init')) {
+            $error = 'PHP curl extension is required for health checks';
+        } elseif (filter_var($healthUrl, FILTER_VALIDATE_URL) === false) {
+            $error = 'Wallet health URL is invalid';
+        } else {
+            $ch = curl_init($healthUrl);
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_HTTPGET => true,
+                CURLOPT_HTTPHEADER => [
+                    'Accept: application/json',
+                    'User-Agent: webgames-admin-health-check/1.0'
+                ],
+                CURLOPT_TIMEOUT => 8
+            ]);
+
+            $body = curl_exec($ch);
+            $curlError = curl_error($ch);
+            $httpStatus = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+            curl_close($ch);
+
+            if ($body === false) {
+                $error = $curlError !== '' ? $curlError : 'Request to wallet health endpoint failed';
+            } else {
+                $decoded = json_decode((string)$body, true);
+                if (!is_array($decoded)) {
+                    $error = 'Wallet health endpoint returned invalid JSON';
+                } else {
+                    $healthResponse = $decoded;
+                    $reachable = $httpStatus >= 200 && $httpStatus < 300 && !empty($decoded['ok']);
+                    if (!$reachable && $error === '') {
+                        $error = 'Wallet service returned non-healthy response';
+                    }
+                }
+            }
+        }
+
+        $autoVerify = is_array($healthResponse['autoVerify'] ?? null) ? $healthResponse['autoVerify'] : [];
+        $autoVerifyProviderConfigured = !empty($autoVerify['providerConfigured']) || trim(env_value('CRYPTO_AUTO_VERIFY_PROVIDER_URL', '')) !== '';
+        $autoVerifyWorkerEnabled = !empty($autoVerify['enabled']) && $autoVerifyEnabled;
+        $autoVerifyLastError = trim((string)($autoVerify['lastError'] ?? ''));
+
+        $output = [
+            'status' => 'ok',
+            'health' => [
+                'walletHealthUrl' => $healthUrl,
+                'reachable' => $reachable,
+                'httpStatus' => $httpStatus,
+                'error' => $error,
+                'derivation' => [
+                    'enabled' => $derivationEnabled,
+                    'online' => $derivationEnabled && $reachable,
+                    'url' => $derivationUrl,
+                    'configuredCoins' => is_array($healthResponse['configuredCoins'] ?? null) ? $healthResponse['configuredCoins'] : []
+                ],
+                'autoVerify' => [
+                    'enabled' => $autoVerifyEnabled,
+                    'providerConfigured' => $autoVerifyProviderConfigured,
+                    'online' => $autoVerifyWorkerEnabled && $autoVerifyProviderConfigured && $reachable && $autoVerifyLastError === '',
+                    'lastRunAt' => (string)($autoVerify['lastRunAt'] ?? ''),
+                    'lastError' => $autoVerifyLastError,
+                    'minConfirmations' => (int)($autoVerify['minConfirmations'] ?? env_value('CRYPTO_AUTO_VERIFY_MIN_CONFIRMATIONS', '1'))
+                ]
+            ]
+        ];
+        break;
+
     case 'crypto-transfer-queue':
         $store = read_tip_store();
         $tips = array_values(array_filter($store['tips'], static function (array $tip): bool {

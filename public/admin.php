@@ -966,8 +966,26 @@ $show_login     = !$needs_setup && !$show_dashboard;
                     <div class="wizard-nav" style="margin-top:0.2rem;">
                         <button class="btn" type="button" onclick="savePaymentProcessorsConfig()">Save Crypto Settings</button>
                         <button class="btn" type="button" onclick="testCryptoDerivation()">Test Wallet Derivation</button>
+                        <button class="btn" type="button" onclick="loadCryptoServiceHealth()">Refresh Service Status</button>
                     </div>
                     <div class="settings-status" id="cryptoSettingsStatus"></div>
+
+                    <div class="settings-panel" style="margin-top:0.9rem;padding:0.95rem;border:1px solid rgba(103,232,249,0.35);background:rgba(103,232,249,0.07);">
+                        <h3 style="margin-bottom:0.6rem;">Crypto Service Health</h3>
+                        <div class="settings-grid" style="margin-bottom:0.35rem;">
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label>Derivation Service</label>
+                                <div id="cryptoDerivationHealthBadge" class="status-badge status-degraded">Checking...</div>
+                                <div class="settings-note" id="cryptoDerivationHealthMeta">No data yet.</div>
+                            </div>
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label>Auto Verification Worker</label>
+                                <div id="cryptoAutoVerifyHealthBadge" class="status-badge status-degraded">Checking...</div>
+                                <div class="settings-note" id="cryptoAutoVerifyHealthMeta">No data yet.</div>
+                            </div>
+                        </div>
+                        <div class="settings-note" id="cryptoServiceHealthInfo">Health URL: pending...</div>
+                    </div>
                 </div>
 
                 <h2>Crypto Wallets</h2>
@@ -1395,6 +1413,7 @@ $show_login     = !$needs_setup && !$show_dashboard;
         }
 
         if (tabName === 'crypto-settings') {
+            loadCryptoServiceHealth();
             loadWalletOverview();
             loadCryptoTransferQueue();
         }
@@ -1850,6 +1869,85 @@ $show_login     = !$needs_setup && !$show_dashboard;
         }
     }
 
+    function applyCryptoServiceBadge(el, level, text) {
+        if (!el) {
+            return;
+        }
+
+        el.className = `status-badge status-${level}`;
+        el.textContent = text;
+    }
+
+    async function loadCryptoServiceHealth() {
+        const infoEl = document.getElementById('cryptoServiceHealthInfo');
+        const derivationBadge = document.getElementById('cryptoDerivationHealthBadge');
+        const derivationMeta = document.getElementById('cryptoDerivationHealthMeta');
+        const autoVerifyBadge = document.getElementById('cryptoAutoVerifyHealthBadge');
+        const autoVerifyMeta = document.getElementById('cryptoAutoVerifyHealthMeta');
+
+        applyCryptoServiceBadge(derivationBadge, 'degraded', 'Checking...');
+        applyCryptoServiceBadge(autoVerifyBadge, 'degraded', 'Checking...');
+        if (derivationMeta) derivationMeta.textContent = 'Checking derivation service health...';
+        if (autoVerifyMeta) autoVerifyMeta.textContent = 'Checking auto verification worker health...';
+        if (infoEl) infoEl.textContent = 'Health URL: checking...';
+
+        try {
+            const data = await fetch_admin_api('crypto-service-health');
+            const health = data?.health || {};
+            const derivation = health?.derivation || {};
+            const autoVerify = health?.autoVerify || {};
+
+            if (infoEl) {
+                const healthUrl = String(health?.walletHealthUrl || '').trim();
+                const statusCode = Number(health?.httpStatus || 0);
+                if (healthUrl) {
+                    infoEl.textContent = `Health URL: ${healthUrl}${statusCode > 0 ? ` (HTTP ${statusCode})` : ''}`;
+                } else {
+                    infoEl.textContent = 'Health URL: not configured';
+                }
+            }
+
+            if (!derivation?.enabled) {
+                applyCryptoServiceBadge(derivationBadge, 'degraded', 'Disabled');
+                if (derivationMeta) derivationMeta.textContent = 'Enable per-tip auto-generated wallet addresses to use derivation.';
+            } else if (derivation?.online) {
+                applyCryptoServiceBadge(derivationBadge, 'healthy', 'Online');
+                const coins = Array.isArray(derivation?.configuredCoins) ? derivation.configuredCoins : [];
+                if (derivationMeta) {
+                    derivationMeta.textContent = coins.length > 0
+                        ? `Configured coins: ${coins.join(', ')}`
+                        : 'Service is online.';
+                }
+            } else {
+                applyCryptoServiceBadge(derivationBadge, 'critical', 'Offline');
+                const err = String(health?.error || '').trim();
+                if (derivationMeta) derivationMeta.textContent = err || 'Derivation service is not reachable.';
+            }
+
+            if (!autoVerify?.enabled) {
+                applyCryptoServiceBadge(autoVerifyBadge, 'degraded', 'Disabled');
+                if (autoVerifyMeta) autoVerifyMeta.textContent = 'Enable automatic on-chain verification worker to use auto verification.';
+            } else if (!autoVerify?.providerConfigured) {
+                applyCryptoServiceBadge(autoVerifyBadge, 'degraded', 'Misconfigured');
+                if (autoVerifyMeta) autoVerifyMeta.textContent = 'Auto verify provider URL is missing.';
+            } else if (autoVerify?.online) {
+                applyCryptoServiceBadge(autoVerifyBadge, 'healthy', 'Online');
+                const lastRun = String(autoVerify?.lastRunAt || '').trim();
+                if (autoVerifyMeta) autoVerifyMeta.textContent = lastRun ? `Last run: ${new Date(lastRun).toLocaleString()}` : 'Worker is active.';
+            } else {
+                applyCryptoServiceBadge(autoVerifyBadge, 'critical', 'Offline');
+                const lastErr = String(autoVerify?.lastError || '').trim();
+                if (autoVerifyMeta) autoVerifyMeta.textContent = lastErr || 'Worker is not running or health check failed.';
+            }
+        } catch (err) {
+            applyCryptoServiceBadge(derivationBadge, 'critical', 'Error');
+            applyCryptoServiceBadge(autoVerifyBadge, 'critical', 'Error');
+            if (derivationMeta) derivationMeta.textContent = err?.message || 'Unable to fetch service status.';
+            if (autoVerifyMeta) autoVerifyMeta.textContent = 'Unable to fetch service status.';
+            if (infoEl) infoEl.textContent = 'Health URL: unavailable';
+        }
+    }
+
     function shortText(value, max = 14) {
         const text = String(value || '');
         if (text.length <= max) {
@@ -1931,6 +2029,30 @@ $show_login     = !$needs_setup && !$show_dashboard;
         return JSON.stringify(result);
     }
 
+    function collectCoinAddressMap(containerId) {
+        try {
+            return tryParseJson(collectCoinAddressJson(containerId));
+        } catch {
+            return {};
+        }
+    }
+
+    function firstMapValue(mapObj) {
+        if (!mapObj || typeof mapObj !== 'object') {
+            return '';
+        }
+
+        const keys = Object.keys(mapObj);
+        for (const key of keys) {
+            const value = String(mapObj[key] || '').trim();
+            if (value) {
+                return value;
+            }
+        }
+
+        return '';
+    }
+
     function rebuildCoinAddressRows() {
         // Preserve current values during rebuild
         const receiveData = tryParseJson(collectCoinAddressJson('cryptoReceiveAddressRows'));
@@ -1960,18 +2082,29 @@ $show_login     = !$needs_setup && !$show_dashboard;
             return;
         }
 
-        const walletBaseMap = tryParseJson(collectCoinAddressJson('walletBaseAddressRows'));
+        const walletBaseMap = collectCoinAddressMap('walletBaseAddressRows');
+        const destinationMap = collectCoinAddressMap('cryptoDestinationAddressRows');
+        const receiveMap = collectCoinAddressMap('cryptoReceiveAddressRows');
         const fallback = String(document.getElementById('cryptoReceiveAddressInput')?.value || '').trim();
+        const sharedFallback =
+            fallback ||
+            firstMapValue(walletBaseMap) ||
+            firstMapValue(destinationMap) ||
+            firstMapValue(receiveMap);
         let changed = 0;
+        let emptyBefore = 0;
 
         container.querySelectorAll('input[data-coin]').forEach((input) => {
             if (String(input.value || '').trim() !== '') {
                 return;
             }
 
+            emptyBefore += 1;
+
             const coin = String(input.dataset.coin || '').toUpperCase();
             const fromBase = String(walletBaseMap[coin] || walletBaseMap[coin.toLowerCase()] || '').trim();
-            const next = fromBase || fallback;
+            const fromDestination = String(destinationMap[coin] || destinationMap[coin.toLowerCase()] || '').trim();
+            const next = fromBase || fromDestination || sharedFallback;
             if (!next) {
                 return;
             }
@@ -1984,10 +2117,14 @@ $show_login     = !$needs_setup && !$show_dashboard;
         if (statusEl) {
             if (changed > 0) {
                 statusEl.className = 'settings-status success';
-                statusEl.textContent = `Filled ${changed} receive row(s) from wallet base/fallback values.`;
+                statusEl.textContent = `Filled ${changed} receive row(s).`;
             } else {
                 statusEl.className = 'settings-status error';
-                statusEl.textContent = 'Nothing filled. Add addresses to Wallet Base Addresses JSON or set Fallback Receive Address first.';
+                if (emptyBefore === 0) {
+                    statusEl.textContent = 'All receive rows already have values.';
+                } else {
+                    statusEl.textContent = 'Nothing filled. Add at least one wallet base, destination, or fallback receive address first.';
+                }
             }
         }
     }
@@ -3037,6 +3174,7 @@ $show_login     = !$needs_setup && !$show_dashboard;
     loadPaymentProcessorsConfig();
     loadStripeOneTimeConfig();
     loadRuntimeConfig();
+    loadCryptoServiceHealth();
     loadStaffList();
     startOverviewPolling();
     startAdminEventsStream();
