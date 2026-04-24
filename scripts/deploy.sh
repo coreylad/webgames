@@ -31,11 +31,11 @@ if [ -z "${APP_REAL}" ]; then
   APP_REAL="$(normalize_path "${APP_DIR}")"
 fi
 
-echo "[1/5] Pulling latest code..."
+echo "[1/6] Pulling latest code..."
 cd "${REPO_DIR}"
 git pull --ff-only
 
-echo "[2/5] Syncing files to ${APP_DIR}..."
+echo "[2/6] Syncing files to ${APP_DIR}..."
 if [ "${REPO_REAL}" = "${APP_REAL}" ]; then
   echo "Repo and app directory are the same; skipping rsync copy step."
 else
@@ -47,7 +47,7 @@ else
     "${REPO_DIR}/" "${APP_DIR}/"
 fi
 
-echo "[3/5] Ensuring data directory permissions..."
+echo "[3/6] Ensuring data directory permissions..."
 mkdir -p "${APP_DIR}/data"
 chown www-data:www-data "${APP_DIR}/data"
 chmod 775 "${APP_DIR}/data"
@@ -116,14 +116,22 @@ ensure_env_key "WEBHOOK_FORWARD_URL" ""
 ensure_env_key "WEBHOOK_FORWARD_AUTH_HEADER" "x-webgames-proxy-token"
 ensure_env_key "WEBHOOK_FORWARD_AUTH_TOKEN" ""
 
-echo "[4/5] Verifying required served files..."
+echo "[4/6] Verifying required served files..."
 REQUIRED_FILES=(
   "admin.php"
   "installer.php"
   "public/index.html"
+  "public/tip.html"
+  "public/app.js"
+  "public/success.html"
+  "public/success.js"
   "public/admin.php"
   "public/admin-advanced.html"
   "api/admin-analytics.php"
+  "api/create-tip-session.php"
+  "api/tip-tiers.php"
+  "api/tip-session.php"
+  "api/submit-crypto-payment.php"
   "api/admin-tips.php"
   "api/stripe-webhook.php"
   "scripts/deploy.sh"

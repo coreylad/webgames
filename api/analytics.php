@@ -162,7 +162,8 @@ function get_player_stats(string $username): array
 function get_revenue_analytics(string $period = 'all'): array
 {
     $store = read_analytics_store();
-    $now = time();
+    $ukTz = new DateTimeZone('Europe/London');
+    $now = (new DateTimeImmutable('now', $ukTz))->getTimestamp();
     $cutoff = $now;
     
     switch ($period) {
@@ -173,7 +174,7 @@ function get_revenue_analytics(string $period = 'all'): array
             $cutoff = $now - (604800);
             break;
         case 'month':
-            $cutoff = $now - (2592000);
+            $cutoff = (new DateTimeImmutable('first day of this month 00:00:00', $ukTz))->getTimestamp();
             break;
     }
     

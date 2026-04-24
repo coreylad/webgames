@@ -539,13 +539,26 @@ switch ($action) {
         
         $tips = read_tip_store();
         $paidTips = array_filter($tips['tips'], fn($t) => ($t['status'] ?? '') === 'paid');
+
+        $ukTz = new DateTimeZone('Europe/London');
+        $monthStart = new DateTimeImmutable('first day of this month 00:00:00', $ukTz);
+        $monthStartTs = $monthStart->getTimestamp();
+        $monthlyPaidTips = array_values(array_filter($paidTips, static function (array $tip) use ($monthStartTs): bool {
+            $paidAtRaw = (string)($tip['paidAt'] ?? $tip['createdAt'] ?? '');
+            $paidAtTs = strtotime($paidAtRaw);
+            if ($paidAtTs === false) {
+                return false;
+            }
+
+            return $paidAtTs >= $monthStartTs;
+        }));
         
         $analytics = read_analytics_store();
         $uniquePlayers = count(array_unique(array_map(fn($s) => $s['username'], $analytics['sessions'] ?? [])));
         
         // Build revenue breakdown from paid tips by type
         $byType = [];
-        foreach ($paidTips as $tip) {
+        foreach ($monthlyPaidTips as $tip) {
             $type = $tip['type'] ?? 'tip';
             $amountCents = $tip['amountCents'] ?? 0;
             if (!isset($byType[$type])) {
@@ -560,7 +573,7 @@ switch ($action) {
             $breakdown[] = [
                 'type' => $type,
                 'amountCents' => $amountCents,
-                'count' => count(array_filter($paidTips, fn($t) => ($t['type'] ?? 'tip') === $type))
+                'count' => count(array_filter($monthlyPaidTips, fn($t) => ($t['type'] ?? 'tip') === $type))
             ];
         }
         
@@ -578,7 +591,7 @@ switch ($action) {
             ];
         }
         
-        $totalRevenue = array_sum(array_map(fn($t) => $t['amountCents'] ?? 0, $paidTips));
+        $totalRevenue = array_sum(array_map(fn($t) => $t['amountCents'] ?? 0, $monthlyPaidTips));
         
         $output = [
             'status' => 'ok',
@@ -589,7 +602,7 @@ switch ($action) {
                     'totalEntries' => $totalLeaderboardEntries
                 ],
                 'monetization' => [
-                    'totalTips' => count($paidTips),
+                    'totalTips' => count($monthlyPaidTips),
                     'totalRevenueCents' => $totalRevenue,
                     'breakdown' => $breakdown
                 ],
