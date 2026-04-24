@@ -115,6 +115,20 @@ if command -v apt-get >/dev/null 2>&1; then
   apt-get install -y docker-compose-plugin >/dev/null 2>&1 || true
   apt-get install -y docker-compose >/dev/null 2>&1 || true
 
+  if ! command -v docker >/dev/null 2>&1; then
+    install -m 0755 -d /etc/apt/keyrings
+    curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
+    chmod a+r /etc/apt/keyrings/docker.asc
+
+    . /etc/os-release
+    echo \
+      "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian ${VERSION_CODENAME} stable" \
+      > /etc/apt/sources.list.d/docker.list
+
+    apt-get update -y
+    apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  fi
+
   # Ensure Node.js + npm are installed from a single package source.
   # Never run a blind --fix-broken here because it can re-select apt npm,
   # which conflicts with NodeSource nodejs packages.
@@ -128,8 +142,69 @@ if command -v apt-get >/dev/null 2>&1; then
     # Distro packages typically split nodejs and npm.
     apt-get install -y nodejs npm
   fi
+
+  if ! command -v docker >/dev/null 2>&1; then
+    echo "Docker installation did not provide a docker command."
+    exit 1
+  fi
+elif command -v dnf >/dev/null 2>&1; then
+  dnf install -y \
+    nginx \
+    rsync \
+    git \
+    curl \
+    jq \
+    openssl \
+    php \
+    php-cli \
+    php-fpm \
+    php-curl \
+    php-mbstring \
+    php-xml \
+    php-intl \
+    php-zip \
+    php-bcmath \
+    php-gmp \
+    nodejs \
+    npm
+
+  if ! command -v docker >/dev/null 2>&1; then
+    dnf install -y dnf-plugins-core
+    dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+    dnf install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  else
+    dnf install -y docker-compose-plugin >/dev/null 2>&1 || true
+  fi
+elif command -v yum >/dev/null 2>&1; then
+  yum install -y \
+    nginx \
+    rsync \
+    git \
+    curl \
+    jq \
+    openssl \
+    php \
+    php-cli \
+    php-fpm \
+    php-curl \
+    php-mbstring \
+    php-xml \
+    php-intl \
+    php-zip \
+    php-bcmath \
+    php-gmp \
+    nodejs \
+    npm
+
+  if ! command -v docker >/dev/null 2>&1; then
+    yum install -y yum-utils
+    yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+    yum install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  else
+    yum install -y docker-compose-plugin >/dev/null 2>&1 || true
+  fi
 else
-  echo "apt-get not found; skipping automatic package installation."
+  echo "No supported package manager found; skipping automatic package installation."
 fi
 
 echo "[3/8] Ensuring data directory permissions..."
