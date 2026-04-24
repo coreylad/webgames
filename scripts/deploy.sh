@@ -53,6 +53,30 @@ else
     "${REPO_DIR}/" "${APP_DIR}/"
 fi
 
+echo "[1/8] Publishing public web assets to root compatibility paths..."
+publish_public_asset() {
+  local rel="$1"
+  local src="${APP_DIR}/public/${rel}"
+  local dest="${APP_DIR}/${rel}"
+
+  if [ -f "${src}" ]; then
+    cp -f "${src}" "${dest}"
+    chown root:root "${dest}" 2>/dev/null || true
+    chmod 644 "${dest}" 2>/dev/null || true
+  else
+    rm -f "${dest}" 2>/dev/null || true
+  fi
+}
+
+# Keep legacy/direct root URLs updated (for caches, bookmarks, and old links).
+publish_public_asset "index.html"
+publish_public_asset "tip.html"
+publish_public_asset "styles.css"
+publish_public_asset "app.js"
+publish_public_asset "success.html"
+publish_public_asset "success.js"
+publish_public_asset "admin.php"
+
 echo "[2/8] Installing deployment requirements..."
 if command -v apt-get >/dev/null 2>&1; then
   export DEBIAN_FRONTEND=noninteractive
@@ -217,6 +241,12 @@ echo "[4/8] Verifying required served files..."
 REQUIRED_FILES=(
   "admin.php"
   "installer.php"
+  "index.html"
+  "tip.html"
+  "styles.css"
+  "app.js"
+  "success.html"
+  "success.js"
   "public/index.html"
   "public/tip.html"
   "public/app.js"

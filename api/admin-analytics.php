@@ -284,6 +284,16 @@ switch ($action) {
             json_response(['error' => 'Receive addresses JSON must be a valid object'], 400);
         }
 
+        // If wallet base addresses are left empty in the simple UI, use
+        // receive addresses as the default derivation base map.
+        if (empty($walletAddressMap) && !empty($addressesDecoded)) {
+            $walletAddressMap = $addressesDecoded;
+            $walletBaseAddressesJson = json_encode($walletAddressMap, JSON_UNESCAPED_SLASHES);
+            if (!is_string($walletBaseAddressesJson) || $walletBaseAddressesJson === '') {
+                $walletBaseAddressesJson = '{}';
+            }
+        }
+
         $destinationsDecoded = json_decode($coinbaseDestinationAddressesJson, true);
         if (!is_array($destinationsDecoded)) {
             json_response(['error' => 'Destination addresses JSON must be a valid object'], 400);

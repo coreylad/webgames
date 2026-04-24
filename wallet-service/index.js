@@ -16,7 +16,7 @@ const PORT = Number(process.env.WALLET_SERVICE_PORT || 8787);
 
 const AUTH_HEADER = String(process.env.CRYPTO_DERIVATION_AUTH_HEADER || "x-webgames-wallet-token").trim().toLowerCase();
 const AUTH_TOKEN = String(process.env.CRYPTO_DERIVATION_AUTH_TOKEN || "").trim();
-const BASE_ADDRESSES = parseAddressMap(process.env.WALLET_BASE_ADDRESSES_JSON || "{}");
+const BASE_ADDRESSES = resolveBaseAddresses();
 const TAGGED_COINS = parseCoinSet(process.env.WALLET_TAGGED_COINS || "XRP");
 const DERIVATION_SECRET = String(process.env.WALLET_DERIVATION_SECRET || "").trim();
 const AUTO_VERIFY_ENABLED = parseBool(process.env.CRYPTO_AUTO_VERIFY_ENABLED || "0");
@@ -60,6 +60,18 @@ function parseAddressMap(raw) {
   } catch {
     return {};
   }
+}
+
+function resolveBaseAddresses() {
+  const configuredBase = parseAddressMap(process.env.WALLET_BASE_ADDRESSES_JSON || "{}");
+  if (Object.keys(configuredBase).length > 0) {
+    return configuredBase;
+  }
+
+  // Backward-compatible fallback: use receive addresses when explicit wallet
+  // base addresses are not configured yet.
+  const receiveMap = parseAddressMap(process.env.CRYPTO_RECEIVE_ADDRESSES_JSON || "{}");
+  return receiveMap;
 }
 
 function parseCoinSet(raw) {

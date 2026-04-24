@@ -3,10 +3,41 @@ const tipMessage = document.getElementById("tipMessage");
 const usernameInput = document.getElementById("username");
 const priceIdSelect = document.getElementById("priceId");
 const tipSubmit = document.getElementById("tipSubmit");
-const tipCryptoSubmit = document.getElementById("tipCryptoSubmit");
+let tipCryptoSubmit = document.getElementById("tipCryptoSubmit");
+const legacyPaymentProcessorSelect = document.getElementById("paymentProcessor");
 let activeTipProcessor = "stripe";
 const processorTierMap = new Map();
 const processorErrors = new Map();
+
+function sanitizeTipFormUi() {
+  if (!tipForm) {
+    return;
+  }
+
+  // If an older cached/stale template is served, remove the broken payment
+  // method selector and keep only explicit Stripe/Crypto actions.
+  if (legacyPaymentProcessorSelect) {
+    const maybeLabel = tipForm.querySelector('label[for="paymentProcessor"]');
+    maybeLabel?.remove();
+    legacyPaymentProcessorSelect.remove();
+  }
+
+  if (!tipCryptoSubmit && tipSubmit) {
+    const container = document.createElement("div");
+    container.style.display = "grid";
+    container.style.gap = "0.65rem";
+
+    tipSubmit.parentNode?.insertBefore(container, tipSubmit);
+    container.appendChild(tipSubmit);
+
+    const created = document.createElement("button");
+    created.type = "button";
+    created.id = "tipCryptoSubmit";
+    created.textContent = "Continue with Crypto";
+    container.appendChild(created);
+    tipCryptoSubmit = created;
+  }
+}
 
 async function fetchWithTimeout(url, options = {}, timeoutMs = 10000) {
   const controller = new AbortController();
@@ -169,6 +200,7 @@ async function loadTipTiers() {
 }
 
 if (tipForm) {
+  sanitizeTipFormUi();
   loadTipTiers();
 
   const cachedName = localStorage.getItem("webgames.username");
