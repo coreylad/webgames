@@ -58,17 +58,15 @@
             required
           />
 
-          <label for="paymentProcessor">Payment method</label>
-          <select id="paymentProcessor" name="paymentProcessor" required>
-            <option value="">Loading payment methods...</option>
-          </select>
-
           <label for="priceId">Tip tier</label>
           <select id="priceId" name="priceId" required>
             <option value="">Loading tiers...</option>
           </select>
 
-          <button type="submit" id="tipSubmit">Continue to Stripe</button>
+          <div style="display:grid;gap:0.65rem;">
+            <button type="submit" id="tipSubmit">Continue to Stripe</button>
+            <button type="button" id="tipCryptoSubmit">Continue with Crypto</button>
+          </div>
           <p id="tipMessage" class="status" aria-live="polite"></p>
         </form>
 

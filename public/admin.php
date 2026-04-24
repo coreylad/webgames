@@ -816,8 +816,11 @@ $show_login     = !$needs_setup && !$show_dashboard;
                 <h2>Crypto Checkout Settings</h2>
                 <div class="settings-panel">
                     <p class="settings-note" style="margin-bottom:0.85rem;">
-                        Configure local crypto checkout, per-coin receive addresses, derivation, and Coinbase transfer relay in one place.
+                        Simple setup: choose coins, add addresses per coin, save, then test derivation.
                     </p>
+                    <div class="settings-note" style="margin-bottom:0.85rem;">
+                        No JSON editing required in this tab.
+                    </div>
 
                     <div class="settings-grid">
                         <div class="form-group">
@@ -918,8 +921,14 @@ $show_login     = !$needs_setup && !$show_dashboard;
                             <input type="text" id="walletTaggedCoinsInput" placeholder="XRP" />
                         </div>
                         <div class="form-group" style="grid-column: 1 / -1;">
-                            <label for="walletBaseAddressesJsonInput">Wallet Base Addresses JSON (used by wallet service)</label>
-                            <textarea id="walletBaseAddressesJsonInput" rows="5" placeholder='{"BTC":"bc1...","ETH":"0x...","XRP":"r..."}'></textarea>
+                            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.6rem;">
+                                <strong style="color:#67e8f9;">Wallet Base Addresses (required for derivation)</strong>
+                                <span style="font-size:0.78rem;opacity:0.65;">Used by wallet-service for per-tip address/tag derivation</span>
+                            </div>
+                            <div style="display:flex;justify-content:flex-end;margin-bottom:0.45rem;">
+                                <button class="btn btn-sm" type="button" onclick="autofillWalletBaseAddressRows()">Autofill Empty Base Rows</button>
+                            </div>
+                            <div id="walletBaseAddressRows" style="display:grid;gap:0.45rem;"></div>
                         </div>
                         <div class="form-group" style="grid-column: 1 / -1;">
                             <label for="walletDerivationSecretInput">Wallet Derivation Secret</label>
@@ -1610,9 +1619,11 @@ $show_login     = !$needs_setup && !$show_dashboard;
             ? config.coinbase.destinationAddresses
             : {};
         const destinationData = Object.keys(destinationDataFromJson).length > 0 ? destinationDataFromJson : destinationDataResolved;
+        const walletBaseData = tryParseJson(config?.coinbase?.walletBaseAddressesJson || '{}');
 
         buildCoinAddressRows('cryptoReceiveAddressRows', receiveData, 'Your');
         buildCoinAddressRows('cryptoDestinationAddressRows', destinationData, 'Coinbase');
+        buildCoinAddressRows('walletBaseAddressRows', walletBaseData, 'Wallet base');
         autofillReceiveAddressRows();
         document.getElementById('coinbaseTransferRequestUrlInput').value = config?.coinbase?.transferRequestUrl || '';
         document.getElementById('coinbaseTransferAuthHeaderInput').value = config?.coinbase?.transferAuthHeader || 'x-coinbase-transfer-token';
@@ -1625,7 +1636,6 @@ $show_login     = !$needs_setup && !$show_dashboard;
         document.getElementById('addressDerivationAuthTokenInput').value = config?.coinbase?.addressDerivationAuthToken || '';
         document.getElementById('walletServicePortInput').value = config?.coinbase?.walletServicePort || '8787';
         document.getElementById('walletTaggedCoinsInput').value = config?.coinbase?.walletTaggedCoins || 'XRP';
-        document.getElementById('walletBaseAddressesJsonInput').value = config?.coinbase?.walletBaseAddressesJson || '{}';
         document.getElementById('walletDerivationSecretInput').value = config?.coinbase?.walletDerivationSecret || '';
         document.getElementById('autoVerifyEnabledInput').checked = !!config?.coinbase?.autoVerifyEnabled;
         document.getElementById('autoVerifyProviderUrlInput').value = config?.coinbase?.autoVerifyProviderUrl || '';
@@ -1718,7 +1728,7 @@ $show_login     = !$needs_setup && !$show_dashboard;
                 addressDerivationAuthToken: document.getElementById('addressDerivationAuthTokenInput').value.trim(),
                 walletServicePort: document.getElementById('walletServicePortInput').value.trim(),
                 walletTaggedCoins: String(document.getElementById('walletTaggedCoinsInput').value || 'XRP').toUpperCase(),
-                walletBaseAddressesJson: document.getElementById('walletBaseAddressesJsonInput').value.trim(),
+                walletBaseAddressesJson: collectCoinAddressJson('walletBaseAddressRows'),
                 walletDerivationSecret: document.getElementById('walletDerivationSecretInput').value.trim(),
                 autoVerifyEnabled: document.getElementById('autoVerifyEnabledInput').checked,
                 autoVerifyProviderUrl: document.getElementById('autoVerifyProviderUrlInput').value.trim(),
@@ -1925,8 +1935,10 @@ $show_login     = !$needs_setup && !$show_dashboard;
         // Preserve current values during rebuild
         const receiveData = tryParseJson(collectCoinAddressJson('cryptoReceiveAddressRows'));
         const destData = tryParseJson(collectCoinAddressJson('cryptoDestinationAddressRows'));
+        const baseData = tryParseJson(collectCoinAddressJson('walletBaseAddressRows'));
         buildCoinAddressRows('cryptoReceiveAddressRows', receiveData, 'Your');
         buildCoinAddressRows('cryptoDestinationAddressRows', destData, 'Coinbase');
+        buildCoinAddressRows('walletBaseAddressRows', baseData, 'Wallet base');
     }
 
     function autofillAddressRows(containerId, fallbackValue) {
@@ -1943,8 +1955,52 @@ $show_login     = !$needs_setup && !$show_dashboard;
     }
 
     function autofillReceiveAddressRows() {
+        const container = document.getElementById('cryptoReceiveAddressRows');
+        if (!container) {
+            return;
+        }
+
+        const walletBaseMap = tryParseJson(collectCoinAddressJson('walletBaseAddressRows'));
         const fallback = String(document.getElementById('cryptoReceiveAddressInput')?.value || '').trim();
-        autofillAddressRows('cryptoReceiveAddressRows', fallback);
+        let changed = 0;
+
+        container.querySelectorAll('input[data-coin]').forEach((input) => {
+            if (String(input.value || '').trim() !== '') {
+                return;
+            }
+
+            const coin = String(input.dataset.coin || '').toUpperCase();
+            const fromBase = String(walletBaseMap[coin] || walletBaseMap[coin.toLowerCase()] || '').trim();
+            const next = fromBase || fallback;
+            if (!next) {
+                return;
+            }
+
+            input.value = next;
+            changed += 1;
+        });
+
+        const statusEl = document.getElementById('cryptoSettingsStatus');
+        if (statusEl) {
+            if (changed > 0) {
+                statusEl.className = 'settings-status success';
+                statusEl.textContent = `Filled ${changed} receive row(s) from wallet base/fallback values.`;
+            } else {
+                statusEl.className = 'settings-status error';
+                statusEl.textContent = 'Nothing filled. Add addresses to Wallet Base Addresses JSON or set Fallback Receive Address first.';
+            }
+        }
+    }
+
+    function autofillWalletBaseAddressRows() {
+        const fallback = String(document.getElementById('cryptoReceiveAddressInput')?.value || '').trim();
+        autofillAddressRows('walletBaseAddressRows', fallback);
+
+        const statusEl = document.getElementById('cryptoSettingsStatus');
+        if (statusEl) {
+            statusEl.className = 'settings-status success';
+            statusEl.textContent = 'Wallet base address rows autofilled where possible.';
+        }
     }
 
     function autofillDestinationAddressRows() {

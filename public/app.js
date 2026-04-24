@@ -1,9 +1,9 @@
 const tipForm = document.getElementById("tipForm");
 const tipMessage = document.getElementById("tipMessage");
 const usernameInput = document.getElementById("username");
-const paymentProcessorSelect = document.getElementById("paymentProcessor");
 const priceIdSelect = document.getElementById("priceId");
 const tipSubmit = document.getElementById("tipSubmit");
+const tipCryptoSubmit = document.getElementById("tipCryptoSubmit");
 let activeTipProcessor = "stripe";
 const processorTierMap = new Map();
 const processorErrors = new Map();
@@ -30,11 +30,26 @@ function processorLabel(processor) {
 }
 
 function updateSubmitLabel(processor) {
-  if (processor === "coinbase") {
-    tipSubmit.textContent = "Continue with Crypto";
-  } else {
+  if (tipSubmit) {
     tipSubmit.textContent = "Continue to Stripe";
   }
+  if (tipCryptoSubmit) {
+    tipCryptoSubmit.textContent = "Continue with Crypto";
+  }
+}
+
+function setProcessorAvailability() {
+  const stripeAvailable = processorTierMap.has("stripe");
+  const coinbaseAvailable = processorTierMap.has("coinbase");
+
+  if (tipSubmit) {
+    tipSubmit.disabled = !stripeAvailable;
+  }
+  if (tipCryptoSubmit) {
+    tipCryptoSubmit.disabled = !coinbaseAvailable;
+  }
+
+  return { stripeAvailable, coinbaseAvailable };
 }
 
 function renderProcessorTiers(processor) {
@@ -43,7 +58,6 @@ function renderProcessorTiers(processor) {
 
   if (tiers.length === 0) {
     priceIdSelect.innerHTML = '<option value="">No tiers available</option>';
-    tipSubmit.disabled = true;
     return;
   }
 
@@ -59,7 +73,6 @@ function renderProcessorTiers(processor) {
 
   activeTipProcessor = processor;
   updateSubmitLabel(processor);
-  tipSubmit.disabled = false;
 }
 
 async function loadTiersForProcessor(processor) {
@@ -85,13 +98,17 @@ async function loadTiersForProcessor(processor) {
 }
 
 async function loadTipTiers() {
-  if (!priceIdSelect || !paymentProcessorSelect) {
+  if (!priceIdSelect) {
     return;
   }
 
-  paymentProcessorSelect.innerHTML = '<option value="">Loading payment methods...</option>';
   priceIdSelect.innerHTML = '<option value="">Loading tiers...</option>';
-  tipSubmit.disabled = true;
+  if (tipSubmit) {
+    tipSubmit.disabled = true;
+  }
+  if (tipCryptoSubmit) {
+    tipCryptoSubmit.disabled = true;
+  }
   processorTierMap.clear();
   processorErrors.clear();
 
@@ -103,7 +120,6 @@ async function loadTipTiers() {
   try {
     await loadTiersForProcessor("stripe");
     stripeAvailable = true;
-    paymentProcessorSelect.innerHTML = `<option value="stripe">${processorLabel("stripe")}</option>`;
     renderProcessorTiers("stripe");
     tipMessage.className = "status";
     tipMessage.textContent = "";
@@ -121,30 +137,13 @@ async function loadTipTiers() {
   }
 
   if (stripeAvailable || coinbaseAvailable) {
-    paymentProcessorSelect.innerHTML = "";
-
     if (stripeAvailable) {
-      const stripeOption = document.createElement("option");
-      stripeOption.value = "stripe";
-      stripeOption.textContent = processorLabel("stripe");
-      paymentProcessorSelect.appendChild(stripeOption);
-    }
-
-    const coinbaseOption = document.createElement("option");
-    coinbaseOption.value = "coinbase";
-    coinbaseOption.textContent = coinbaseAvailable
-      ? processorLabel("coinbase")
-      : `${processorLabel("coinbase")} (not configured)`;
-    coinbaseOption.disabled = !coinbaseAvailable;
-    paymentProcessorSelect.appendChild(coinbaseOption);
-
-    if (stripeAvailable) {
-      paymentProcessorSelect.value = "stripe";
       renderProcessorTiers("stripe");
     } else {
-      paymentProcessorSelect.value = "coinbase";
       renderProcessorTiers("coinbase");
     }
+
+    setProcessorAvailability();
 
     if (!coinbaseAvailable && stripeAvailable) {
       tipMessage.className = "status";
@@ -157,12 +156,16 @@ async function loadTipTiers() {
     return;
   }
 
-  paymentProcessorSelect.innerHTML = '<option value="">Unavailable</option>';
   priceIdSelect.innerHTML = '<option value="">Tier loading failed</option>';
   const stripeError = processorErrors.get("stripe") || "Stripe is unavailable.";
   tipMessage.textContent = `${stripeError} Refresh to retry or check payment settings in admin.`;
   tipMessage.className = "status error";
-  tipSubmit.disabled = true;
+  if (tipSubmit) {
+    tipSubmit.disabled = true;
+  }
+  if (tipCryptoSubmit) {
+    tipCryptoSubmit.disabled = true;
+  }
 }
 
 if (tipForm) {
@@ -179,16 +182,24 @@ if (tipForm) {
     tipMessage.className = "status error";
   }
 
-  if (paymentProcessorSelect) {
-    paymentProcessorSelect.addEventListener("change", () => {
-      const next = String(paymentProcessorSelect.value || "").trim();
-      if (!next) {
+  if (tipCryptoSubmit) {
+    tipCryptoSubmit.addEventListener("click", () => {
+      if (!processorTierMap.has("coinbase")) {
+        tipMessage.className = "status error";
+        tipMessage.textContent = processorErrors.get("coinbase") || "Crypto is currently unavailable.";
         return;
       }
 
-      tipMessage.className = "status";
-      tipMessage.textContent = "";
-      renderProcessorTiers(next);
+      renderProcessorTiers("coinbase");
+      tipForm.requestSubmit();
+    });
+  }
+
+  if (tipSubmit) {
+    tipSubmit.addEventListener("click", () => {
+      if (processorTierMap.has("stripe")) {
+        renderProcessorTiers("stripe");
+      }
     });
   }
 
@@ -197,7 +208,7 @@ if (tipForm) {
 
     const formData = new FormData(tipForm);
     const username = String(formData.get("username") || "").trim();
-    const processor = String(formData.get("paymentProcessor") || activeTipProcessor).trim();
+    const processor = activeTipProcessor;
     const priceId = String(formData.get("priceId") || "").trim();
 
     tipMessage.className = "status";
