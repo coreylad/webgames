@@ -80,6 +80,26 @@
       <p>webgames.lol © 2026 | Competitive browser arcade platform</p>
     </footer>
 
-    <script src="/public/app.js"></script>
+    <script>
+      (function loadTipAppScript() {
+        const candidates = ["/public/app.js", "/app.js", "app.js"];
+        let idx = 0;
+
+        function tryNext() {
+          if (idx >= candidates.length) {
+            return;
+          }
+
+          const src = candidates[idx++];
+          const script = document.createElement("script");
+          script.src = src;
+          script.defer = true;
+          script.onerror = tryNext;
+          document.body.appendChild(script);
+        }
+
+        tryNext();
+      })();
+    </script>
   </body>
 </html>

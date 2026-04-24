@@ -824,16 +824,37 @@ function derive_crypto_receive_addresses(string $tipId, string $username, array 
     ]);
 
     $body = curl_exec($ch);
+    $curlError = curl_error($ch);
     $statusCode = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
     curl_close($ch);
 
     if ($body === false || $statusCode < 200 || $statusCode >= 300) {
+        $details = [];
+        if ($statusCode > 0) {
+            $details[] = 'status=' . $statusCode;
+        }
+        if ($curlError !== '') {
+            $details[] = 'curl=' . $curlError;
+        }
+        if (is_string($body) && trim($body) !== '') {
+            $snippet = trim($body);
+            if (strlen($snippet) > 220) {
+                $snippet = substr($snippet, 0, 220) . '...';
+            }
+            $details[] = 'body=' . $snippet;
+        }
+
+        $message = 'Derivation service returned non-2xx status';
+        if (!empty($details)) {
+            $message .= ' (' . implode('; ', $details) . ')';
+        }
+
         return [
             'ok' => false,
             'addresses' => [],
             'meta' => [],
             'reference' => '',
-            'error' => 'Derivation service returned non-2xx status'
+            'error' => $message
         ];
     }
 

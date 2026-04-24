@@ -147,6 +147,21 @@ set_env_if_empty() {
   fi
 }
 
+set_env_secret_if_empty() {
+  local key="$1"
+  local bytes="$2"
+
+  if ! command -v openssl >/dev/null 2>&1; then
+    return 0
+  fi
+
+  local generated
+  generated="$(openssl rand -hex "${bytes}")"
+  if [ -n "${generated}" ]; then
+    set_env_if_empty "${key}" "${generated}"
+  fi
+}
+
 # Seed new payment settings without overwriting existing values.
 ensure_env_key "PAYMENT_PROCESSOR" "stripe"
 ensure_env_key "BASE_URL" ""
@@ -187,11 +202,12 @@ ensure_env_key "WEBHOOK_FORWARD_URL" ""
 ensure_env_key "WEBHOOK_FORWARD_AUTH_HEADER" "x-webgames-proxy-token"
 ensure_env_key "WEBHOOK_FORWARD_AUTH_TOKEN" ""
 
-if command -v openssl >/dev/null 2>&1; then
-  set_env_if_empty "CRYPTO_DERIVATION_AUTH_TOKEN" "$(openssl rand -hex 32)"
-  set_env_if_empty "WALLET_DERIVATION_SECRET" "$(openssl rand -hex 32)"
-  set_env_if_empty "CRYPTO_AUTO_VERIFY_AUTH_TOKEN" "$(openssl rand -hex 32)"
-fi
+set_env_secret_if_empty "ADMIN_DASHBOARD_TOKEN" 32
+set_env_secret_if_empty "CRYPTO_DERIVATION_AUTH_TOKEN" 32
+set_env_secret_if_empty "WALLET_DERIVATION_SECRET" 32
+set_env_secret_if_empty "CRYPTO_AUTO_VERIFY_AUTH_TOKEN" 32
+set_env_secret_if_empty "COINBASE_TRANSFER_AUTH_TOKEN" 32
+set_env_secret_if_empty "WEBHOOK_FORWARD_AUTH_TOKEN" 32
 
 if grep -qE '^CRYPTO_AUTO_VERIFY_PROVIDER_URL=$' "${APP_DIR}/.env"; then
   sed -i 's|^CRYPTO_AUTO_VERIFY_PROVIDER_URL=$|CRYPTO_AUTO_VERIFY_PROVIDER_URL=http://127.0.0.1:8787/api/verify-tx|' "${APP_DIR}/.env"
