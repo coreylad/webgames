@@ -9,6 +9,17 @@
 # ---------------------------------------------------------------------------
 set -euo pipefail
 
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# Always pull latest code before any other deploy action.
+if [ -z "${DEPLOY_SCRIPT_REEXEC:-}" ] && command -v git >/dev/null 2>&1; then
+  if git -C "${REPO_DIR}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    echo "[0/8] Pulling latest code before deploy..."
+    git -C "${REPO_DIR}" pull --ff-only
+    exec env DEPLOY_SCRIPT_REEXEC=1 bash "${REPO_DIR}/scripts/deploy.sh" "$@"
+  fi
+fi
+
 if [ "$(id -u)" -ne 0 ]; then
   echo "Run as root (use sudo)."
   exit 1
@@ -16,7 +27,6 @@ fi
 
 APP_NAME="webgames"
 APP_DIR="/var/www/${APP_NAME}"
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 normalize_path() {
   local p="$1"
@@ -29,14 +39,6 @@ APP_REAL="$(normalize_path "${APP_DIR}" || echo "")"
 if [ -z "${APP_REAL}" ]; then
   mkdir -p "${APP_DIR}"
   APP_REAL="$(normalize_path "${APP_DIR}")"
-fi
-
-if [ -z "${DEPLOY_SCRIPT_REEXEC:-}" ] && command -v git >/dev/null 2>&1; then
-  if git -C "${REPO_DIR}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    echo "[0/8] Syncing deploy script from git..."
-    git -C "${REPO_DIR}" pull --ff-only
-    exec env DEPLOY_SCRIPT_REEXEC=1 bash "${REPO_DIR}/scripts/deploy.sh" "$@"
-  fi
 fi
 
 echo "[1/8] Installing deployment requirements..."
@@ -86,9 +88,7 @@ else
   echo "apt-get not found; skipping automatic package installation."
 fi
 
-echo "[2/8] Pulling latest code..."
-cd "${REPO_DIR}"
-git pull --ff-only
+echo "[2/8] Code already synced at startup."
 
 echo "[3/8] Syncing files to ${APP_DIR}..."
 if [ "${REPO_REAL}" = "${APP_REAL}" ]; then
