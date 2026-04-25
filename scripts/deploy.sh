@@ -303,6 +303,7 @@ ensure_env_key "BTCPAY_INSTALL_ENABLED" "1"
 ensure_env_key "BTCPAY_EXTERNAL_URL" "https://webgames.lol/btcpay/"
 ensure_env_key "BTCPAY_INTERNAL_PORT" "23000"
 ensure_env_key "BTCPAY_POSTGRES_PASSWORD" ""
+ensure_env_key "BTCPAY_DOCKER_TAG" "2.3.9"
 ensure_env_key "COINBASE_COMMERCE_API_KEY" ""
 ensure_env_key "COINBASE_COMMERCE_WEBHOOK_SECRET" ""
 ensure_env_key "COINBASE_TIP_AMOUNTS" "5,10,20"
@@ -452,6 +453,11 @@ else
     exit 1
   fi
 
+  BTCPAY_DOCKER_TAG_VALUE="$(get_env_value "BTCPAY_DOCKER_TAG")"
+  if [ -z "${BTCPAY_DOCKER_TAG_VALUE}" ]; then
+    BTCPAY_DOCKER_TAG_VALUE="2.3.9"
+  fi
+
   # Keep API integration endpoint aligned if not already set by admin.
   set_env_if_empty "BTCPAY_SERVER_URL" "${BTCPAY_EXTERNAL_URL_VALUE%/}"
 
@@ -459,8 +465,6 @@ else
   mkdir -p /etc/nginx/snippets
 
   cat > "${BTCPAY_COMPOSE_FILE}" <<EOF
-version: "3.8"
-
 services:
   btcpay-db:
     image: postgres:16-alpine
@@ -474,7 +478,7 @@ services:
       - btcpay_db_data:/var/lib/postgresql/data
 
   btcpay-server:
-    image: btcpayserver/btcpayserver:latest
+    image: btcpayserver/btcpayserver:${BTCPAY_DOCKER_TAG_VALUE}
     container_name: webgames-btcpay
     restart: unless-stopped
     depends_on:

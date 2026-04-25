@@ -85,6 +85,7 @@ function setProcessorAvailability() {
 
 function renderProcessorTiers(processor) {
   const tiers = processorTierMap.get(processor) || [];
+  const previousSelection = String(priceIdSelect?.value || "").trim();
   priceIdSelect.innerHTML = "";
 
   if (tiers.length === 0) {
@@ -96,7 +97,9 @@ function renderProcessorTiers(processor) {
     const option = document.createElement("option");
     option.value = tier.id;
     option.textContent = tier.label;
-    if (index === 0) {
+    if (previousSelection !== "" && tier.id === previousSelection) {
+      option.selected = true;
+    } else if (index === 0) {
       option.selected = true;
     }
     priceIdSelect.appendChild(option);
@@ -222,14 +225,16 @@ if (tipForm) {
         return;
       }
 
-      renderProcessorTiers("btcpay");
+      if (activeTipProcessor !== "btcpay") {
+        renderProcessorTiers("btcpay");
+      }
       tipForm.requestSubmit();
     });
   }
 
   if (tipSubmit) {
     tipSubmit.addEventListener("click", () => {
-      if (processorTierMap.has("stripe")) {
+      if (processorTierMap.has("stripe") && activeTipProcessor !== "stripe") {
         renderProcessorTiers("stripe");
       }
     });
