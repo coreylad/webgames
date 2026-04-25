@@ -8,35 +8,9 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     json_response(['error' => 'Method not allowed'], 405);
 }
 
-$requestedProcessor = strtolower(trim((string)($_GET['processor'] ?? '')));
-$allowedProcessors = ['stripe', 'btcpay', 'coinbase'];
-$processor = $requestedProcessor !== '' ? $requestedProcessor : active_payment_processor();
-
-if ($processor === 'coinbase') {
-    $processor = 'btcpay';
-}
-
-if (!in_array($processor, $allowedProcessors, true)) {
-    json_response(['error' => 'Unsupported payment processor'], 400);
-}
-
-if ($processor === 'btcpay') {
-    $btcpay = btcpay_tip_tiers();
-    $tiers = $btcpay['tiers'];
-
-    if (empty($tiers)) {
-        json_response([
-            'processor' => 'btcpay',
-            'tiers' => [],
-            'error' => 'No crypto tip amounts configured. Set COINBASE_TIP_AMOUNTS in .env or admin settings.'
-        ], 500);
-    }
-
-    json_response([
-        'processor' => 'btcpay',
-        'currency' => $btcpay['currency'] ?? 'USD',
-        'tiers' => $tiers
-    ]);
+$requestedProcessor = strtolower(trim((string)($_GET['processor'] ?? 'stripe')));
+if ($requestedProcessor !== '' && $requestedProcessor !== 'stripe') {
+    json_response(['error' => 'Only Stripe is enabled.'], 400);
 }
 
 $tiers = fetch_tip_tiers();

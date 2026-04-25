@@ -3,40 +3,22 @@ const tipMessage = document.getElementById("tipMessage");
 const usernameInput = document.getElementById("username");
 const priceIdSelect = document.getElementById("priceId");
 const tipSubmit = document.getElementById("tipSubmit");
-let tipCryptoSubmit = document.getElementById("tipCryptoSubmit");
+const tipCryptoSubmit = document.getElementById("tipCryptoSubmit");
 const legacyPaymentProcessorSelect = document.getElementById("paymentProcessor");
-let activeTipProcessor = "stripe";
-const processorTierMap = new Map();
-const processorErrors = new Map();
 
 function sanitizeTipFormUi() {
   if (!tipForm) {
     return;
   }
 
-  // If an older cached/stale template is served, remove the broken payment
-  // method selector and keep only explicit Stripe/Crypto actions.
+  // Remove stale or deprecated processor controls and keep Stripe-only UI.
   if (legacyPaymentProcessorSelect) {
     const maybeLabel = tipForm.querySelector('label[for="paymentProcessor"]');
     maybeLabel?.remove();
     legacyPaymentProcessorSelect.remove();
   }
 
-  if (!tipCryptoSubmit && tipSubmit) {
-    const container = document.createElement("div");
-    container.style.display = "grid";
-    container.style.gap = "0.65rem";
-
-    tipSubmit.parentNode?.insertBefore(container, tipSubmit);
-    container.appendChild(tipSubmit);
-
-    const created = document.createElement("button");
-    created.type = "button";
-    created.id = "tipCryptoSubmit";
-    created.textContent = "Continue with Crypto";
-    container.appendChild(created);
-    tipCryptoSubmit = created;
-  }
+  tipCryptoSubmit?.remove();
 }
 
 async function fetchWithTimeout(url, options = {}, timeoutMs = 10000) {
@@ -53,38 +35,7 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 10000) {
   }
 }
 
-function processorLabel(processor) {
-  if (processor === "btcpay" || processor === "coinbase") {
-    return "Crypto (BTCPay)";
-  }
-  return "Stripe";
-}
-
-function updateSubmitLabel(processor) {
-  if (tipSubmit) {
-    tipSubmit.textContent = "Continue to Stripe";
-  }
-  if (tipCryptoSubmit) {
-    tipCryptoSubmit.textContent = "Continue with Crypto";
-  }
-}
-
-function setProcessorAvailability() {
-  const stripeAvailable = processorTierMap.has("stripe");
-  const btcpayAvailable = processorTierMap.has("btcpay");
-
-  if (tipSubmit) {
-    tipSubmit.disabled = !stripeAvailable;
-  }
-  if (tipCryptoSubmit) {
-    tipCryptoSubmit.disabled = !btcpayAvailable;
-  }
-
-  return { stripeAvailable, btcpayAvailable };
-}
-
-function renderProcessorTiers(processor) {
-  const tiers = processorTierMap.get(processor) || [];
+function renderStripeTiers(tiers) {
   const previousSelection = String(priceIdSelect?.value || "").trim();
   priceIdSelect.innerHTML = "";
 
@@ -104,31 +55,6 @@ function renderProcessorTiers(processor) {
     }
     priceIdSelect.appendChild(option);
   });
-
-  activeTipProcessor = processor;
-  updateSubmitLabel(processor);
-}
-
-async function loadTiersForProcessor(processor) {
-  let response;
-  try {
-    response = await fetchWithTimeout(`/api/tip-tiers.php?processor=${encodeURIComponent(processor)}`, {}, 10000);
-  } catch (error) {
-    throw new Error(`Timed out loading ${processorLabel(processor)} tiers.`);
-  }
-
-  const payload = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    throw new Error(payload.error || `Unable to load ${processorLabel(processor)} tiers.`);
-  }
-
-  const tiers = Array.isArray(payload.tiers) ? payload.tiers : [];
-  if (tiers.length === 0) {
-    throw new Error(`No ${processorLabel(processor)} tiers were returned.`);
-  }
-
-  processorTierMap.set(processor, tiers);
 }
 
 async function loadTipTiers() {
@@ -140,66 +66,35 @@ async function loadTipTiers() {
   if (tipSubmit) {
     tipSubmit.disabled = true;
   }
-  if (tipCryptoSubmit) {
-    tipCryptoSubmit.disabled = true;
-  }
-  processorTierMap.clear();
-  processorErrors.clear();
 
-  let stripeAvailable = false;
-  let btcpayAvailable = false;
-
-  // Stripe is the hard fallback path: render it first so a slow/broken crypto
-  // setup never leaves the payment selector stuck in a loading state.
+  let response;
   try {
-    await loadTiersForProcessor("stripe");
-    stripeAvailable = true;
-    renderProcessorTiers("stripe");
-    tipMessage.className = "status";
-    tipMessage.textContent = "";
+    response = await fetchWithTimeout("/api/tip-tiers.php", {}, 10000);
   } catch (error) {
-    const message = error instanceof Error ? error.message : `Unable to load ${processorLabel("stripe")} tiers.`;
-    processorErrors.set("stripe", message);
-  }
-
-  try {
-    await loadTiersForProcessor("btcpay");
-    btcpayAvailable = true;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : `Unable to load ${processorLabel("btcpay")} tiers.`;
-    processorErrors.set("btcpay", message);
-  }
-
-  if (stripeAvailable || btcpayAvailable) {
-    if (stripeAvailable) {
-      renderProcessorTiers("stripe");
-    } else {
-      renderProcessorTiers("btcpay");
-    }
-
-    setProcessorAvailability();
-
-    if (!btcpayAvailable && stripeAvailable) {
-      tipMessage.className = "status";
-      tipMessage.textContent = "Crypto is currently unavailable. Stripe checkout is ready.";
-    } else {
-      tipMessage.className = "status";
-      tipMessage.textContent = "";
-    }
-
+    tipMessage.textContent = "Timed out loading Stripe tiers.";
+    tipMessage.className = "status error";
     return;
   }
 
-  priceIdSelect.innerHTML = '<option value="">Tier loading failed</option>';
-  const stripeError = processorErrors.get("stripe") || "Stripe is unavailable.";
-  tipMessage.textContent = `${stripeError} Refresh to retry or check payment settings in admin.`;
-  tipMessage.className = "status error";
-  if (tipSubmit) {
-    tipSubmit.disabled = true;
+  const payload = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    tipMessage.textContent = payload.error || "Unable to load Stripe tiers.";
+    tipMessage.className = "status error";
+    return;
   }
-  if (tipCryptoSubmit) {
-    tipCryptoSubmit.disabled = true;
+
+  const tiers = Array.isArray(payload.tiers) ? payload.tiers : [];
+  if (tiers.length === 0) {
+    tipMessage.textContent = "No Stripe tiers were returned.";
+    tipMessage.className = "status error";
+    return;
   }
+
+  renderStripeTiers(tiers);
+  tipMessage.className = "status";
+  tipMessage.textContent = "";
+  tipSubmit.disabled = false;
 }
 
 if (tipForm) {
@@ -217,43 +112,15 @@ if (tipForm) {
     tipMessage.className = "status error";
   }
 
-  if (tipCryptoSubmit) {
-    tipCryptoSubmit.addEventListener("click", () => {
-      if (!processorTierMap.has("btcpay")) {
-        tipMessage.className = "status error";
-        tipMessage.textContent = processorErrors.get("btcpay") || "Crypto is currently unavailable.";
-        return;
-      }
-
-      if (activeTipProcessor !== "btcpay") {
-        renderProcessorTiers("btcpay");
-      }
-      tipForm.requestSubmit();
-    });
-  }
-
-  if (tipSubmit) {
-    tipSubmit.addEventListener("click", () => {
-      if (processorTierMap.has("stripe") && activeTipProcessor !== "stripe") {
-        renderProcessorTiers("stripe");
-      }
-    });
-  }
-
   tipForm.addEventListener("submit", async (event) => {
     event.preventDefault();
 
     const formData = new FormData(tipForm);
     const username = String(formData.get("username") || "").trim();
-    const processor = activeTipProcessor;
     const priceId = String(formData.get("priceId") || "").trim();
 
     tipMessage.className = "status";
-    if (processor === "btcpay") {
-      tipMessage.textContent = "Preparing BTCPay invoice...";
-    } else {
-      tipMessage.textContent = "Creating secure Stripe checkout...";
-    }
+    tipMessage.textContent = "Creating secure Stripe checkout...";
     tipSubmit.disabled = true;
 
     try {
@@ -262,7 +129,7 @@ if (tipForm) {
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({ username, priceId, processor })
+        body: JSON.stringify({ username, priceId, processor: "stripe" })
       });
 
       const data = await response.json();

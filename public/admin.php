@@ -536,7 +536,6 @@ $show_login     = !$needs_setup && !$show_dashboard;
             <button class="tab-btn" onclick="switchTab('moderation', event)">Moderation</button>
             <button class="tab-btn" onclick="switchTab('achievements', event)">Achievements</button>
             <button class="tab-btn" onclick="switchTab('payment-settings', event)">Payment Settings</button>
-            <button class="tab-btn" onclick="switchTab('crypto-settings', event)">Crypto Settings</button>
             <button class="tab-btn" onclick="switchTab('games', event)">Games</button>
             <button class="tab-btn" onclick="switchTab('webhooks', event)">Webhooks</button>
             <button class="tab-btn" onclick="switchTab('staff', event)">Staff</button>
@@ -614,9 +613,8 @@ $show_login     = !$needs_setup && !$show_dashboard;
                             <label for="activePaymentProcessor">Default Processor Fallback</label>
                             <select id="activePaymentProcessor">
                                 <option value="stripe">Stripe</option>
-                                <option value="btcpay">BTCPay (Crypto)</option>
                             </select>
-                            <div class="settings-note">Users can choose Stripe or Crypto on the tip page. This fallback is used only when a processor is not explicitly provided.</div>
+                            <div class="settings-note">Stripe is the active checkout provider for tip payments.</div>
                         </div>
                     </div>
 
@@ -679,14 +677,6 @@ $show_login     = !$needs_setup && !$show_dashboard;
                     <div class="wizard-nav" style="margin-top:0.2rem;">
                         <button class="btn" type="button" id="savePaymentProcessorsBtn" onclick="savePaymentProcessorsConfig()">Save Payment Settings</button>
                         <button class="btn btn-reject" type="button" id="resetStripeAccountBtn" onclick="resetStripeAccountConfig()">Reset Stripe Account</button>
-                    </div>
-
-                    <h3 style="margin-top:1.1rem;margin-bottom:0.65rem;">Crypto Moved To Dedicated Tab</h3>
-                    <p class="settings-note" style="margin-bottom:0.75rem;">
-                        Crypto checkout, wallet addresses, derivation settings, wallet overview, and transfer queue are now in the <strong>Crypto Settings</strong> tab.
-                    </p>
-                    <div class="wizard-nav" style="margin-top:0.2rem;">
-                        <button class="btn" type="button" onclick="switchTab('crypto-settings')">Open Crypto Settings</button>
                     </div>
 
                     <div class="settings-status" id="paymentProcessorsStatus"></div>
@@ -1430,12 +1420,6 @@ $show_login     = !$needs_setup && !$show_dashboard;
         if (tabName === 'overview') {
             refreshOverviewTick();
         }
-
-        if (tabName === 'crypto-settings') {
-            loadCryptoServiceHealth();
-            loadWalletOverview();
-            loadCryptoTransferQueue();
-        }
     }
 
     function isOverviewActive() {
@@ -1630,7 +1614,7 @@ $show_login     = !$needs_setup && !$show_dashboard;
     function renderPaymentProcessorsConfig(config) {
         paymentProcessorConfigState = config || null;
 
-        const activeProcessor = (config?.activeProcessor === 'coinbase') ? 'btcpay' : (config?.activeProcessor || 'stripe');
+        const activeProcessor = 'stripe';
         const btcpayConfig = config?.btcpay || config?.coinbase || {};
         document.getElementById('activePaymentProcessor').value = activeProcessor;
 
@@ -3203,7 +3187,6 @@ $show_login     = !$needs_setup && !$show_dashboard;
     loadPaymentProcessorsConfig();
     loadStripeOneTimeConfig();
     loadRuntimeConfig();
-    loadCryptoServiceHealth();
     loadStaffList();
     startOverviewPolling();
     startAdminEventsStream();
