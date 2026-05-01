@@ -40,6 +40,7 @@
       </section>
     </main>
 
+    <script src="progression.js"></script>
     <script src="leaderboard.js"></script>
     <script>
       const canvas = document.getElementById("crCanvas");
@@ -47,6 +48,7 @@
       const info = document.getElementById("crInfo");
       const restartButton = document.getElementById("crRestart");
       const leaderboard = createLeaderboardController({ game: "chainreactor", listId: "lbList", statusId: "lbStatus" });
+      const progression = createProgressionCurve({ start: 1, end: 2.4, warmup: 120, duration: 3200 });
 
       const cfg = {
         roundSeconds: 30,
@@ -62,6 +64,7 @@
       let seconds;
       let started;
       let over;
+      let elapsedFrames;
       let tick;
 
       function reset() {
@@ -72,6 +75,7 @@
         seconds = Math.max(5, Math.floor(cfg.roundSeconds));
         started = false;
         over = false;
+        elapsedFrames = 0;
         for (let i = 0; i < Math.max(8, Math.floor(cfg.coreCount)); i += 1) {
           cores.push({
             x: 20 + Math.random() * (canvas.width - 40),
@@ -118,6 +122,12 @@
           return;
         }
 
+        if (started) {
+          elapsedFrames += 1;
+        }
+
+        const curve = progression.at(elapsedFrames);
+
         cores.forEach((core) => {
           if (!core.triggered) {
             core.x += core.vx;
@@ -128,7 +138,7 @@
         });
 
         blasts.forEach((blast) => {
-          blast.r += cfg.baseBlastGrowth + blast.power * 0.15;
+          blast.r += cfg.baseBlastGrowth + blast.power * 0.15 + (curve - 1) * 0.11;
           blast.life -= 1;
         });
 

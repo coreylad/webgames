@@ -45,6 +45,7 @@
       </section>
     </main>
 
+    <script src="progression.js"></script>
     <script src="leaderboard.js"></script>
     <script>
       const canvas = document.getElementById("snakeCanvas");
@@ -54,6 +55,7 @@
       const pauseButton = document.getElementById("snakePause");
       const controlButtons = document.querySelectorAll("[data-dir]");
       const leaderboard = createLeaderboardController({ game: "snake", listId: "lbList", statusId: "lbStatus" });
+      const progression = createProgressionCurve({ start: 1, end: 2.4, warmup: 120, duration: 3200 });
 
       const tile = 21;
       const tilesPerRow = canvas.width / tile;
@@ -183,6 +185,8 @@
           return;
         }
 
+        const curve = progression.at(score * 10);
+
         direction = queuedDirection;
         const head = { ...snake[0] };
 
@@ -214,12 +218,12 @@
           placeFood();
           gained = true;
 
-          if (score % 60 === 0 && speed > 72) {
-            speed -= 7;
+          if (score % 60 === 0 && speed > 64) {
+            speed -= Math.max(5, Math.round(6 + (curve - 1) * 1.4));
             resetTick();
           }
 
-          if (!bonusFood && Math.random() < 0.35) {
+          if (!bonusFood && Math.random() < Math.min(0.62, 0.24 + (curve - 1) * 0.18)) {
             placeBonusFood();
           }
         }

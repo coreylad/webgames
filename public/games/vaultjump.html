@@ -40,6 +40,7 @@
       </section>
     </main>
 
+    <script src="progression.js"></script>
     <script src="leaderboard.js"></script>
     <script>
       const canvas = document.getElementById("vjCanvas");
@@ -47,6 +48,7 @@
       const info = document.getElementById("vjInfo");
       const restartButton = document.getElementById("vjRestart");
       const leaderboard = createLeaderboardController({ game: "vaultjump", listId: "lbList", statusId: "lbStatus" });
+      const progression = createProgressionCurve({ start: 1, end: 2.4, warmup: 120, duration: 3200 });
 
       const cfg = { gravity: 0.52, jumpVelocity: -9.6, baseSpeed: 4.6, spawnInterval: 88 };
 
@@ -88,9 +90,10 @@
         if (over) return;
 
         frame += 1;
-        const speed = cfg.baseSpeed + Math.min(5.8, frame / 380);
+        const curve = progression.at(frame);
+        const speed = cfg.baseSpeed + Math.min(6.3, (curve - 1) * 4.2);
 
-        if (frame % Math.max(42, Math.floor(cfg.spawnInterval - frame / 200)) === 0) {
+        if (frame % Math.max(34, Math.floor(cfg.spawnInterval - frame / 260 - (curve - 1) * 8)) === 0) {
           const h = 24 + Math.random() * 44;
           obstacles.push({ x: canvas.width + 20, y: 362 - h, w: 18 + Math.random() * 24, h, passed: false });
         }

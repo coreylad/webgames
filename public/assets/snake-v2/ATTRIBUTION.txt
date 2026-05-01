@@ -1,0 +1,16 @@
+Snake V2 sprite assets
+
+These PNG sprites are from Twemoji (Twitter Emoji), downloaded from:
+https://github.com/twitter/twemoji
+CDN source used: https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/
+
+License: CC-BY 4.0
+https://creativecommons.org/licenses/by/4.0/
+
+Files in this folder derived from Twemoji assets:
+- snake-head.png (1f40d)
+- snake-body.png (1f7e2)
+- food-apple.png (1f34e)
+- food-bonus.png (1f352)
+- gem.png (1f48e)
+- tile-bush.png (1f333)

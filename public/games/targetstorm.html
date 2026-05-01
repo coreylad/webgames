@@ -40,6 +40,7 @@
       </section>
     </main>
 
+    <script src="progression.js"></script>
     <script src="leaderboard.js"></script>
     <script>
       const canvas = document.getElementById("tsCanvas");
@@ -47,6 +48,7 @@
       const info = document.getElementById("tsInfo");
       const restartButton = document.getElementById("tsRestart");
       const leaderboard = createLeaderboardController({ game: "targetstorm", listId: "lbList", statusId: "lbStatus" });
+      const progression = createProgressionCurve({ start: 1, end: 2.4, warmup: 120, duration: 3200 });
 
       const cfg = { startingLives: 5, spawnInterval: 55, targetLifetime: 130, baseTargetSpeed: 1.1 };
 
@@ -71,7 +73,8 @@
       }
 
       function spawnTarget() {
-        const difficulty = Math.min(1, Math.max(0, (frame - graceFrames) / 2600));
+        const curve = progression.at(frame - graceFrames);
+        const difficulty = Math.min(1.2, Math.max(0, (curve - 1) / 1.2));
         const r = 16 + Math.random() * 10;
         targets.push({
           x: 30 + Math.random() * (canvas.width - 60),
@@ -103,7 +106,8 @@
         if (over) return;
 
         frame += 1;
-        const interval = Math.max(20, Math.floor(cfg.spawnInterval - score / 320));
+        const curve = progression.at(frame - graceFrames);
+        const interval = Math.max(16, Math.floor(cfg.spawnInterval - score / 420 - (curve - 1) * 7));
         if (frame % interval === 0) {
           spawnTarget();
         }

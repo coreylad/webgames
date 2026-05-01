@@ -40,6 +40,7 @@
       </section>
     </main>
 
+    <script src="progression.js"></script>
     <script src="leaderboard.js"></script>
     <script>
       const canvas = document.getElementById("hxCanvas");
@@ -47,6 +48,7 @@
       const info = document.getElementById("hxInfo");
       const restartButton = document.getElementById("hxRestart");
       const leaderboard = createLeaderboardController({ game: "hexavoid", listId: "lbList", statusId: "lbStatus" });
+      const progression = createProgressionCurve({ start: 1, end: 2.4, warmup: 120, duration: 3200 });
 
       const cfg = {
         startingLives: 3,
@@ -103,11 +105,14 @@
         }
 
         ticks += 1;
-        if (ticks % Math.max(20, Math.floor(cfg.cellSpawnInterval)) === 0 && cells.length < 5) {
+        const curve = progression.at(ticks);
+        const cellInterval = Math.max(16, Math.floor(cfg.cellSpawnInterval - (curve - 1) * 16));
+        const botInterval = Math.max(96, Math.floor(cfg.botSpawnInterval - (curve - 1) * 180));
+        if (ticks % cellInterval === 0 && cells.length < 5) {
           spawnCell();
         }
 
-        if (ticks % Math.max(120, Math.floor(cfg.botSpawnInterval)) === 0 && bots.length < 6) {
+        if (ticks % botInterval === 0 && bots.length < 6) {
           bots.push({
             x: 650 + Math.random() * 40,
             y: 30 + Math.random() * 360,
@@ -129,7 +134,7 @@
           const dx = player.x - bot.x;
           const dy = player.y - bot.y;
           const len = Math.max(1, Math.hypot(dx, dy));
-          const chase = 0.03 + bots.length * 0.002;
+          const chase = 0.03 + bots.length * 0.002 + (curve - 1) * 0.01;
           bot.vx += (dx / len) * chase;
           bot.vy += (dy / len) * chase;
           bot.vx *= 0.995;

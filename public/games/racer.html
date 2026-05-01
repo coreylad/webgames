@@ -40,6 +40,7 @@
       </section>
     </main>
 
+    <script src="progression.js"></script>
     <script src="leaderboard.js"></script>
     <script>
       const canvas = document.getElementById("racerCanvas");
@@ -47,6 +48,7 @@
       const info = document.getElementById("racerInfo");
       const restartBtn = document.getElementById("racerRestart");
       const leaderboard = createLeaderboardController({ game: "racer", listId: "lbList", statusId: "lbStatus" });
+      const progression = createProgressionCurve({ start: 1, end: 2.4, warmup: 120, duration: 3200 });
 
       const cfg = {
         startingShield: 4,
@@ -227,8 +229,9 @@
         updatePlayer();
 
         spawnTimer += 1;
-        const difficulty = Math.min(1, Math.max(0, (frameCount - graceFrames) / 2600));
-        const spawnThreshold = Math.max(24, cfg.spawnBaseline - difficulty * 28 - speed * 1.15);
+        const curve = progression.at(frameCount - graceFrames);
+        const difficulty = Math.min(1.2, Math.max(0, (curve - 1) / 1.2));
+        const spawnThreshold = Math.max(20, cfg.spawnBaseline - difficulty * 26 - speed * (1 + difficulty * 0.15));
         if (frameCount > 70 && spawnTimer >= spawnThreshold) {
           spawnTimer = 0;
           spawnCar();

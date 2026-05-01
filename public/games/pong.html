@@ -40,6 +40,7 @@
       </section>
     </main>
 
+    <script src="progression.js"></script>
     <script src="leaderboard.js"></script>
     <script>
       const canvas = document.getElementById("pongCanvas");
@@ -47,6 +48,7 @@
       const info = document.getElementById("pongInfo");
       const restartButton = document.getElementById("pongRestart");
       const leaderboard = createLeaderboardController({ game: "pong", listId: "lbList", statusId: "lbStatus" });
+      const progression = createProgressionCurve({ start: 1, end: 2.4, warmup: 120, duration: 3200 });
 
       const paddleHeight = 90;
       const paddleWidth = 12;
@@ -58,9 +60,11 @@
       let cpuScore = 0;
       let keys = { w: false, s: false };
       let ended = false;
+      let rallyHits = 0;
 
       function resetBall(direction = 1) {
         ball = { x: canvas.width / 2, y: canvas.height / 2, size: 10 };
+        rallyHits = 0;
         velocity = {
           x: 4 * direction,
           y: (Math.random() * 3 - 1.5) || 1.2
@@ -82,14 +86,16 @@
       }
 
       function updatePaddles() {
+        const curve = progression.at((playerScore + cpuScore) * 220 + rallyHits * 36);
         if (keys.w) playerY -= 6;
         if (keys.s) playerY += 6;
 
         playerY = clamp(playerY, 0, canvas.height - paddleHeight);
 
         const cpuCenter = cpuY + paddleHeight / 2;
-        if (cpuCenter < ball.y - 8) cpuY += 3.7;
-        if (cpuCenter > ball.y + 8) cpuY -= 3.7;
+        const cpuSpeed = 3.2 + Math.min(2.1, (curve - 1) * 1.2);
+        if (cpuCenter < ball.y - 8) cpuY += cpuSpeed;
+        if (cpuCenter > ball.y + 8) cpuY -= cpuSpeed;
         cpuY = clamp(cpuY, 0, canvas.height - paddleHeight);
       }
 
@@ -115,12 +121,14 @@
         }
 
         if (paddleCollision(16, playerY)) {
+          rallyHits += 1;
           ball.x = 16 + paddleWidth + ball.size;
           velocity.x = Math.abs(velocity.x) + 0.25;
           velocity.y += (ball.y - (playerY + paddleHeight / 2)) * 0.03;
         }
 
         if (paddleCollision(canvas.width - 28, cpuY)) {
+          rallyHits += 1;
           ball.x = canvas.width - 28 - ball.size;
           velocity.x = -Math.abs(velocity.x) - 0.25;
           velocity.y += (ball.y - (cpuY + paddleHeight / 2)) * 0.03;

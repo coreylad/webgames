@@ -40,6 +40,7 @@
       </section>
     </main>
 
+    <script src="progression.js"></script>
     <script src="leaderboard.js"></script>
     <script>
       const canvas = document.getElementById("odCanvas");
@@ -47,6 +48,7 @@
       const info = document.getElementById("odInfo");
       const restartButton = document.getElementById("odRestart");
       const leaderboard = createLeaderboardController({ game: "orbitaldash", listId: "lbList", statusId: "lbStatus" });
+      const progression = createProgressionCurve({ start: 1, end: 2.4, warmup: 120, duration: 3200 });
 
       const cfg = { orbitalSpeed: 0.038, dashSpeed: 6.4, dashCooldown: 34, mineSpawnInterval: 150 };
 
@@ -121,11 +123,15 @@
         if (over) return;
 
         frame += 1;
-        if (keys.left) angle -= cfg.orbitalSpeed;
-        if (keys.right) angle += cfg.orbitalSpeed;
+        const curve = progression.at(frame);
+        const turnRate = cfg.orbitalSpeed * Math.min(1.45, 0.92 + (curve - 1) * 0.38);
+        if (keys.left) angle -= turnRate;
+        if (keys.right) angle += turnRate;
 
-        if (frame % Math.max(40, Math.floor(cfg.mineSpawnInterval - score / 60)) === 0 && mines.length < 14) spawnMine();
-        if (frame % 96 === 0 && nodes.length < 7) spawnNode();
+        const mineInterval = Math.max(28, Math.floor(cfg.mineSpawnInterval - score / 72 - (curve - 1) * 12));
+        const nodeInterval = Math.max(60, Math.floor(96 - (curve - 1) * 14));
+        if (frame % mineInterval === 0 && mines.length < 14) spawnMine();
+        if (frame % nodeInterval === 0 && nodes.length < 7) spawnNode();
 
         if (dash) {
           radius += cfg.dashSpeed;

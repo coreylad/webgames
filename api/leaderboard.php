@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/common.php';
+require_once __DIR__ . '/leaderboard-advanced.php';
 
 function normalize_entries(array $entries): array
 {
@@ -67,6 +68,75 @@ function rate_limit_submit(string $game): array
     return ['ok' => true];
 }
 
+function average_score(array $entries): float
+{
+    if (count($entries) === 0) {
+        return 0.0;
+    }
+
+    $sum = 0.0;
+    foreach ($entries as $entry) {
+        $sum += (float)($entry['score'] ?? 0);
+    }
+
+    return $sum / count($entries);
+}
+
+function detect_suspicious_submission(string $game, string $username, int $score, array $entries): array
+{
+    $existingScore = null;
+    foreach ($entries as $entry) {
+        if (($entry['username'] ?? '') === $username) {
+            $existingScore = (int)($entry['score'] ?? 0);
+            break;
+        }
+    }
+
+    // Reuse anomaly scoring from advanced leaderboard logic.
+    $anomalyScore = get_score_anomaly_score($game, $score, $username);
+
+    $topScore = count($entries) > 0 ? (int)($entries[0]['score'] ?? 0) : 0;
+    $avgScore = average_score($entries);
+
+    $reason = '';
+    $maxReasonableFirstScore = 500000;
+    if ($existingScore !== null && $existingScore > 0 && $score > ($existingScore * 10)) {
+        $reason = 'Score jump too large for this player.';
+        $anomalyScore = max($anomalyScore, 0.9);
+    } elseif ($existingScore !== null && $score > ($existingScore + max(2500, (int)floor($existingScore * 0.5))) && $score > ($existingScore * 2)) {
+        $reason = 'Score increase is too large for one submission.';
+        $anomalyScore = max($anomalyScore, 0.82);
+    } elseif ($topScore > 0 && $score > ($topScore * 5)) {
+        $reason = 'Score is far above current leaderboard range.';
+        $anomalyScore = max($anomalyScore, 0.85);
+    } elseif ($existingScore === null && $topScore > 0 && $score > max($topScore * 2, $topScore + 5000)) {
+        $reason = 'First score is too far above existing leaderboard range.';
+        $anomalyScore = max($anomalyScore, 0.8);
+    } elseif ($existingScore === null && $topScore === 0 && $score > $maxReasonableFirstScore) {
+        $reason = 'First score exceeds sanity limit.';
+        $anomalyScore = max($anomalyScore, 0.8);
+    } elseif ($avgScore > 0 && $score > ($avgScore * 20) && $score > 5000) {
+        $reason = 'Score is a large statistical outlier.';
+        $anomalyScore = max($anomalyScore, 0.8);
+    } elseif ($anomalyScore >= 0.75) {
+        $reason = 'Score failed anti-cheat validation.';
+    }
+
+    if ($reason === '') {
+        return [
+            'blocked' => false,
+            'reason' => '',
+            'anomalyScore' => $anomalyScore
+        ];
+    }
+
+    return [
+        'blocked' => true,
+        'reason' => $reason,
+        'anomalyScore' => $anomalyScore
+    ];
+}
+
 $method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
 
 if ($method === 'GET') {
@@ -120,6 +190,17 @@ if ($method === 'POST') {
     $entries = $store['games'][$game] ?? [];
     if (!is_array($entries)) {
         $entries = [];
+    }
+
+    $entries = normalize_entries($entries);
+
+    $antiCheat = detect_suspicious_submission($game, $username, $score, $entries);
+    if (($antiCheat['blocked'] ?? false) === true) {
+        flag_suspicious_score($game, $username, $score, (float)($antiCheat['anomalyScore'] ?? 0.8));
+        json_response([
+            'error' => (string)($antiCheat['reason'] ?? 'Score rejected by anti-cheat'),
+            'code' => 'SUSPICIOUS_SCORE'
+        ], 422);
     }
 
     $existingIndex = -1;

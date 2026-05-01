@@ -40,6 +40,7 @@
       </section>
     </main>
 
+    <script src="progression.js"></script>
     <script src="leaderboard.js"></script>
     <script>
       const canvas = document.getElementById("dodgerCanvas");
@@ -47,6 +48,7 @@
       const info = document.getElementById("dodgerInfo");
       const restartButton = document.getElementById("dodgerRestart");
       const leaderboard = createLeaderboardController({ game: "dodger", listId: "lbList", statusId: "lbStatus" });
+      const progression = createProgressionCurve({ start: 1, end: 2.4, warmup: 120, duration: 3200 });
 
       let player;
       let hazards;
@@ -87,12 +89,14 @@
           return;
         }
 
+        const curve = progression.at(score * 12);
+
         if (left) player.x -= 6;
         if (right) player.x += 6;
         player.x = Math.max(0, Math.min(canvas.width - player.w, player.x));
 
         spawnTimer += 1;
-        if (spawnTimer > Math.max(12, 45 - score * 0.15)) {
+        if (spawnTimer > Math.max(10, 47 - score * 0.11 * curve)) {
           spawnTimer = 0;
           spawnHazard();
         }
@@ -108,7 +112,7 @@
         hazards = hazards.filter((hazard) => hazard.y < canvas.height + 60);
 
         score += 0.07;
-        speed = Math.min(7.2, 2.8 + score * 0.012);
+        speed = Math.min(7.8, 2.8 + score * 0.01 * curve);
 
         info.textContent = gameOver
           ? `Score: ${Math.floor(score)} | Crash! Press Restart.`

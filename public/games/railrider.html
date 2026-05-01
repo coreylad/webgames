@@ -40,6 +40,7 @@
       </section>
     </main>
 
+    <script src="progression.js"></script>
     <script src="leaderboard.js"></script>
     <script>
       const canvas = document.getElementById("rrCanvas");
@@ -47,6 +48,7 @@
       const info = document.getElementById("rrInfo");
       const restartButton = document.getElementById("rrRestart");
       const leaderboard = createLeaderboardController({ game: "railrider", listId: "lbList", statusId: "lbStatus" });
+      const progression = createProgressionCurve({ start: 1, end: 2.4, warmup: 120, duration: 3200 });
 
       const cfg = {
         baseTrainInterval: 70,
@@ -103,11 +105,12 @@
         }
 
         frame += 1;
-        speed = 0.85 + Math.min(2.2, frame / 3200);
+        const curve = progression.at(frame - graceFrames);
+        speed = 0.85 + Math.min(2.5, (curve - 1) * 1.7);
         rider.invuln = Math.max(0, rider.invuln - 1);
 
-        const difficulty = Math.min(1, Math.max(0, (frame - graceFrames) / 2600));
-        const spawnInterval = Math.max(42, Math.floor(cfg.baseTrainInterval - difficulty * 26 - speed * 4));
+        const difficulty = Math.min(1.2, Math.max(0, (curve - 1) / 1.2));
+        const spawnInterval = Math.max(36, Math.floor(cfg.baseTrainInterval - difficulty * 24 - speed * 5));
         if (frame > 70 && frame % spawnInterval === 0) {
           spawnTrain();
         }

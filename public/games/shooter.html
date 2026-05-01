@@ -39,6 +39,7 @@
       </section>
     </main>
 
+    <script src="progression.js"></script>
     <script src="leaderboard.js"></script>
     <script>
     (function () {
@@ -46,6 +47,7 @@
       const ctx    = canvas.getContext("2d");
       const W = canvas.width, H = canvas.height;
       const leaderboard = createLeaderboardController({ game: "shooter", listId: "lbList", statusId: "lbStatus" });
+      const progression = createProgressionCurve({ start: 1, end: 2.4, warmup: 120, duration: 3200 });
 
       // ── CONSTANTS ──────────────────────────────────────────────────────────
       const SHIP_W = 36, SHIP_H = 30;
@@ -122,6 +124,7 @@
 
       function spawnEnemy() {
         if (enemies.length >= 14) return;
+        const curve = progression.at(score + wave * 220);
         const types = enemyTypesForWave(wave);
         // weight towards advanced types as wave rises
         const type = types[Math.floor(Math.random() * Math.min(types.length, 1 + Math.floor(wave / 2)))];
@@ -132,7 +135,7 @@
           x, y: -def.h,
           w: def.w, h: def.h,
           hp: def.hp, maxHp: def.hp,
-          speed: def.speed(),
+          speed: def.speed() * Math.min(1.8, 0.95 + (curve - 1) * 0.45),
           angle: 0,        // for zigzag/kamikaze
           bombTimer: type === "bomber" ? 90 + Math.floor(Math.random() * 60) : 0,
           hitFlash: 0,
@@ -202,7 +205,8 @@
         // wave pacing
         waveCooldown = Math.max(0, waveCooldown - 1);
         if (waveKills < waveTarget && waveCooldown === 0) {
-          const spawnRate = Math.max(22, 55 - wave * 4);
+          const curve = progression.at(score + wave * 240);
+          const spawnRate = Math.max(16, Math.floor(55 - wave * 3.5 - (curve - 1) * 8));
           if (Math.random() < 1 / spawnRate) {
             spawnEnemy();
             waveCooldown = 4;

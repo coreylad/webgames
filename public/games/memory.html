@@ -72,12 +72,14 @@
       </section>
     </main>
 
+    <script src="progression.js"></script>
     <script src="leaderboard.js"></script>
     <script>
       const info = document.getElementById("memoryInfo");
       const grid = document.getElementById("memoryGrid");
       const restartButton = document.getElementById("memoryRestart");
       const leaderboard = createLeaderboardController({ game: "memory", listId: "lbList", statusId: "lbStatus" });
+      const progression = createProgressionCurve({ start: 1, end: 2.4, warmup: 120, duration: 3200 });
 
       const symbols = ["🎮", "🕹️", "⭐", "🚀", "💎", "🔥", "👾", "🏆"];
       let cards = [];
@@ -150,6 +152,7 @@
       function resolveTurn() {
         const first = cards[firstIndex];
         const second = cards[secondIndex];
+        const curve = progression.at(moves * 120 + matches * 180);
 
         if (first.value === second.value) {
           first.matched = true;
@@ -164,6 +167,7 @@
           return;
         }
 
+        const hideDelay = Math.max(220, Math.floor(650 - (curve - 1) * 180));
         setTimeout(() => {
           first.revealed = false;
           second.revealed = false;
@@ -172,7 +176,7 @@
           lockBoard = false;
           render();
           updateInfo();
-        }, 650);
+        }, hideDelay);
       }
 
       function flipCard(index) {

@@ -69,6 +69,7 @@
       </section>
     </main>
 
+    <script src="progression.js"></script>
     <script src="leaderboard.js"></script>
     <script>
       const grid = document.getElementById("tttGrid");
@@ -77,6 +78,7 @@
       const restartButton = document.getElementById("tttRestart");
       const resetButton = document.getElementById("tttReset");
       const leaderboard = createLeaderboardController({ game: "tictactoe", listId: "lbList", statusId: "lbStatus" });
+      const progression = createProgressionCurve({ start: 1, end: 2.4, warmup: 120, duration: 3200 });
 
       let board;
       let turn;
@@ -124,6 +126,58 @@
         return "";
       }
 
+      function bestMoveFor(symbol) {
+        const options = board
+          .map((cell, index) => (cell === "" ? index : -1))
+          .filter((index) => index >= 0);
+        for (const idx of options) {
+          board[idx] = symbol;
+          const w = winner();
+          board[idx] = "";
+          if (w === symbol) return idx;
+        }
+        return -1;
+      }
+
+      function pickAIMove() {
+        const rounds = score.X + score.O + score.draws;
+        const curve = progression.at(rounds * 240);
+        const smartChance = Math.min(0.95, 0.45 + (curve - 1) * 0.35);
+        const options = board
+          .map((cell, index) => (cell === "" ? index : -1))
+          .filter((index) => index >= 0);
+        if (!options.length) {
+          return -1;
+        }
+
+        if (Math.random() < smartChance) {
+          const winNow = bestMoveFor("O");
+          if (winNow >= 0) return winNow;
+          const blockNow = bestMoveFor("X");
+          if (blockNow >= 0) return blockNow;
+          if (board[4] === "") return 4;
+        }
+
+        return options[Math.floor(Math.random() * options.length)];
+      }
+
+      function maybeAIMove() {
+        if (ended || turn !== "O") {
+          return;
+        }
+
+        const delay = Math.max(170, 520 - (score.X + score.O + score.draws) * 20);
+        setTimeout(() => {
+          if (ended || turn !== "O") {
+            return;
+          }
+          const move = pickAIMove();
+          if (move >= 0) {
+            clickCell(move);
+          }
+        }, delay);
+      }
+
       function clickCell(index) {
         if (ended || board[index]) {
           return;
@@ -156,6 +210,7 @@
         turn = turn === "X" ? "O" : "X";
         info.textContent = `Turn: ${turn}`;
         render();
+        maybeAIMove();
       }
 
       function render() {

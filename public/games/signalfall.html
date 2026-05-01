@@ -40,6 +40,7 @@
       </section>
     </main>
 
+    <script src="progression.js"></script>
     <script src="leaderboard.js"></script>
     <script>
       const canvas = document.getElementById("sfCanvas");
@@ -47,6 +48,7 @@
       const info = document.getElementById("sfInfo");
       const restartButton = document.getElementById("sfRestart");
       const leaderboard = createLeaderboardController({ game: "signalfall", listId: "lbList", statusId: "lbStatus" });
+      const progression = createProgressionCurve({ start: 1, end: 2.4, warmup: 120, duration: 3200 });
 
       const cfg = { startingLives: 4, fallSpeed: 3.2, spawnInterval: 42, laneCount: 5 };
 
@@ -88,7 +90,8 @@
       }
 
       function spawnPacket() {
-        const difficulty = Math.min(1, Math.max(0, (frame - graceFrames) / 2600));
+        const curve = progression.at(frame - graceFrames);
+        const difficulty = Math.min(1.2, Math.max(0, (curve - 1) / 1.2));
         const badChance = 0.14 + difficulty * 0.24;
         packets.push({
           lane: Math.floor(Math.random() * lanes.length),
@@ -112,7 +115,8 @@
         if (over) return;
 
         frame += 1;
-        const interval = Math.max(18, Math.floor(cfg.spawnInterval - score / 520));
+        const curve = progression.at(frame - graceFrames);
+        const interval = Math.max(16, Math.floor(cfg.spawnInterval - score / 640 - (curve - 1) * 7));
         if (frame % interval === 0) spawnPacket();
 
         packets.forEach((p) => {

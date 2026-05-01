@@ -40,6 +40,7 @@
       </section>
     </main>
 
+    <script src="progression.js"></script>
     <script src="leaderboard.js"></script>
     <script>
       const canvas = document.getElementById("breakoutCanvas");
@@ -47,6 +48,7 @@
       const info = document.getElementById("breakoutInfo");
       const restartButton = document.getElementById("breakoutRestart");
       const leaderboard = createLeaderboardController({ game: "breakout", listId: "lbList", statusId: "lbStatus" });
+      const progression = createProgressionCurve({ start: 1, end: 2.4, warmup: 120, duration: 3200 });
 
       const paddle = { x: 320, y: 395, w: 120, h: 14, speed: 8 };
       const ball = { x: 380, y: 280, r: 8, dx: 4, dy: -4 };
@@ -185,6 +187,10 @@
           return;
         }
 
+        const curve = progression.at(score * 18);
+        paddle.w = Math.max(84, 120 - Math.floor((curve - 1) * 18));
+        paddle.speed = 8 + (curve - 1) * 0.8;
+
         if (leftPressed) {
           paddle.x = Math.max(0, paddle.x - paddle.speed);
         }
@@ -194,6 +200,9 @@
 
         ball.x += ball.dx;
         ball.y += ball.dy;
+        const cap = 4.8 + (curve - 1) * 1.7;
+        ball.dx = Math.max(-cap, Math.min(cap, ball.dx));
+        ball.dy = Math.max(-cap, Math.min(cap, ball.dy));
 
         handleCollisions();
 

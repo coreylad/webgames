@@ -40,6 +40,7 @@
       </section>
     </main>
 
+    <script src="progression.js"></script>
     <script src="leaderboard.js"></script>
     <script>
       const canvas = document.getElementById("meteorCanvas");
@@ -47,6 +48,7 @@
       const info = document.getElementById("meteorInfo");
       const restartBtn = document.getElementById("meteorRestart");
       const leaderboard = createLeaderboardController({ game: "meteor", listId: "lbList", statusId: "lbStatus" });
+      const progression = createProgressionCurve({ start: 1, end: 2.4, warmup: 120, duration: 3200 });
 
       const cfg = {
         startingHull: 120,
@@ -215,8 +217,9 @@
         updateShip();
 
         spawn += 1;
-        const difficulty = Math.min(1, Math.max(0, (frameCount - graceFrames) / 3000));
-        const spawnRate = Math.max(14, Math.floor(cfg.spawnBaseline - difficulty * 26 - wave * 0.8));
+        const curve = progression.at(frameCount - graceFrames);
+        const difficulty = Math.min(1.25, Math.max(0, (curve - 1) / 1.25));
+        const spawnRate = Math.max(12, Math.floor(cfg.spawnBaseline - difficulty * 24 - wave * 0.95));
         if (frameCount > 80 && spawn >= spawnRate) {
           spawn = 0;
           addRock();
@@ -227,7 +230,7 @@
         updateParticles();
 
         score += 0.13;
-        speed = Math.min(7.4, cfg.baseSpeed + score * 0.0065 + difficulty * 0.9);
+  speed = Math.min(7.8, cfg.baseSpeed + score * 0.0058 + difficulty * 1.05);
         wave = Math.max(1, Math.floor(score / 180) + 1);
 
         const onboarding = frameCount < graceFrames ? " | Stabilizing" : "";
