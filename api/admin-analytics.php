@@ -87,6 +87,122 @@ function forward_coinbase_transfer_request(array $tip): array
     ];
 }
 
+function normalize_leaderboard_admin_entries(array $entries): array
+{
+    $normalized = [];
+    foreach ($entries as $entry) {
+        if (!is_array($entry)) {
+            continue;
+        }
+
+        $username = trim((string)($entry['username'] ?? ''));
+        $score = (int)($entry['score'] ?? 0);
+        if (!is_valid_username($username) || $score < 0) {
+            continue;
+        }
+
+        $normalized[] = [
+            'username' => $username,
+            'score' => $score,
+            'createdAt' => (string)($entry['createdAt'] ?? now_iso()),
+            'updatedAt' => (string)($entry['updatedAt'] ?? now_iso())
+        ];
+    }
+
+    return $normalized;
+}
+
+function leaderboard_entries_for_game(array $store, string $game): array
+{
+    $games = $store['games'] ?? [];
+    if (!is_array($games)) {
+        return [];
+    }
+
+    // Legacy shape: { games: { gameSlug: [entries] } }
+    if (array_key_exists($game, $games) && is_array($games[$game])) {
+        return normalize_leaderboard_admin_entries($games[$game]);
+    }
+
+    // Advanced shape: { games: [ { game: gameSlug, entries: [...] } ] }
+    foreach ($games as $gameData) {
+        if (!is_array($gameData)) {
+            continue;
+        }
+        if (($gameData['game'] ?? '') !== $game) {
+            continue;
+        }
+
+        $entries = $gameData['entries'] ?? [];
+        if (!is_array($entries)) {
+            return [];
+        }
+
+        return normalize_leaderboard_admin_entries($entries);
+    }
+
+    return [];
+}
+
+function set_leaderboard_entries_for_game(array &$store, string $game, array $entries): void
+{
+    $games = $store['games'] ?? [];
+    if (!is_array($games)) {
+        $games = [];
+    }
+
+    // Update legacy associative shape when present.
+    if (array_key_exists($game, $games) && is_array($games[$game])) {
+        $games[$game] = array_values($entries);
+        $store['games'] = $games;
+        return;
+    }
+
+    // Update advanced list shape when present.
+    foreach ($games as $idx => $gameData) {
+        if (!is_array($gameData)) {
+            continue;
+        }
+        if (($gameData['game'] ?? '') !== $game) {
+            continue;
+        }
+
+        $games[$idx]['entries'] = array_values($entries);
+        $store['games'] = $games;
+        return;
+    }
+
+    // Default to legacy shape for new inserts.
+    $games[$game] = array_values($entries);
+    $store['games'] = $games;
+}
+
+function leaderboard_admin_rows(array $store): array
+{
+    $rows = [];
+    foreach (leaderboard_game_slugs() as $game) {
+        $entries = leaderboard_entries_for_game($store, $game);
+        foreach ($entries as $entry) {
+            $rows[] = [
+                'game' => $game,
+                'username' => (string)$entry['username'],
+                'score' => (int)$entry['score'],
+                'createdAt' => (string)$entry['createdAt'],
+                'updatedAt' => (string)$entry['updatedAt']
+            ];
+        }
+    }
+
+    usort($rows, static function (array $a, array $b): int {
+        if ($a['score'] === $b['score']) {
+            return strcmp((string)$b['updatedAt'], (string)$a['updatedAt']);
+        }
+        return (int)$b['score'] <=> (int)$a['score'];
+    });
+
+    return $rows;
+}
+
 // Admin API for analytics, moderation, and platform insights
 
 require_admin_token();
@@ -1269,6 +1385,112 @@ switch ($action) {
             'status' => 'ok',
             'message' => 'Score moderated',
             'action' => $action_type
+        ];
+        break;
+
+    case 'leaderboard-scores':
+        $game = trim((string)($_GET['game'] ?? ''));
+        $username = trim((string)($_GET['username'] ?? ''));
+        $limit = (int)($_GET['limit'] ?? 100);
+
+        if ($game !== '' && !is_valid_game_slug($game)) {
+            json_response(['error' => 'Invalid game'], 400);
+        }
+
+        if ($username !== '' && !preg_match('/^[a-zA-Z0-9_-]{1,24}$/', $username)) {
+            json_response(['error' => 'Invalid username filter'], 400);
+        }
+
+        $limit = max(1, min(500, $limit));
+
+        $store = read_leaderboard_store();
+        $rows = leaderboard_admin_rows($store);
+
+        if ($game !== '') {
+            $rows = array_values(array_filter($rows, static fn(array $row): bool => $row['game'] === $game));
+        }
+
+        if ($username !== '') {
+            $usernameLower = strtolower($username);
+            $rows = array_values(array_filter($rows, static fn(array $row): bool => stripos((string)$row['username'], $usernameLower) !== false));
+        }
+
+        $totalMatched = count($rows);
+        $rows = array_slice($rows, 0, $limit);
+
+        $output = [
+            'status' => 'ok',
+            'totalMatched' => $totalMatched,
+            'scores' => $rows
+        ];
+        break;
+
+    case 'delete-leaderboard-score':
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            json_response(['error' => 'Method not allowed'], 405);
+        }
+
+        $body = read_json_input();
+        $game = trim((string)($body['game'] ?? ''));
+        $username = trim((string)($body['username'] ?? ''));
+        $score = (int)($body['score'] ?? -1);
+        $createdAt = (string)($body['createdAt'] ?? '');
+        $updatedAt = (string)($body['updatedAt'] ?? '');
+
+        if (!is_valid_game_slug($game)) {
+            json_response(['error' => 'Invalid game'], 400);
+        }
+
+        if (!is_valid_username($username)) {
+            json_response(['error' => 'Invalid username'], 400);
+        }
+
+        if ($score < 0 || $score > 1000000000) {
+            json_response(['error' => 'Invalid score'], 400);
+        }
+
+        if ($createdAt === '' || $updatedAt === '') {
+            json_response(['error' => 'createdAt and updatedAt are required'], 400);
+        }
+
+        $store = read_leaderboard_store();
+        $entries = leaderboard_entries_for_game($store, $game);
+
+        $removeIndex = -1;
+        foreach ($entries as $idx => $entry) {
+            if ((string)($entry['username'] ?? '') !== $username) {
+                continue;
+            }
+            if ((int)($entry['score'] ?? -1) !== $score) {
+                continue;
+            }
+            if ((string)($entry['createdAt'] ?? '') !== $createdAt) {
+                continue;
+            }
+            if ((string)($entry['updatedAt'] ?? '') !== $updatedAt) {
+                continue;
+            }
+
+            $removeIndex = $idx;
+            break;
+        }
+
+        if ($removeIndex < 0) {
+            json_response(['error' => 'Leaderboard entry not found'], 404);
+        }
+
+        unset($entries[$removeIndex]);
+        set_leaderboard_entries_for_game($store, $game, array_values($entries));
+        write_leaderboard_store($store);
+
+        $output = [
+            'status' => 'ok',
+            'message' => 'Leaderboard score deleted',
+            'deleted' => [
+                'game' => $game,
+                'username' => $username,
+                'score' => $score
+            ]
         ];
         break;
 

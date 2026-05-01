@@ -575,6 +575,60 @@ $show_login     = !$needs_setup && !$show_dashboard;
                         <tbody id="suspiciousTbody"><tr><td colspan="6" class="loading">Loading suspicious scores</td></tr></tbody>
                     </table>
                 </div>
+
+                <h2 style="margin-top:1.4rem;">Leaderboard Scores</h2>
+                <div class="settings-panel">
+                    <div class="settings-grid" style="margin-bottom:0.4rem;">
+                        <div class="form-group">
+                            <label for="leaderboardAdminGameFilter">Game</label>
+                            <select id="leaderboardAdminGameFilter">
+                                <option value="">All games</option>
+                                <option value="snake">snake</option>
+                                <option value="pong">pong</option>
+                                <option value="memory">memory</option>
+                                <option value="breakout">breakout</option>
+                                <option value="dodger">dodger</option>
+                                <option value="shooter">shooter</option>
+                                <option value="tictactoe">tictactoe</option>
+                                <option value="racer">racer</option>
+                                <option value="meteor">meteor</option>
+                                <option value="skyhopper">skyhopper</option>
+                                <option value="gravitywell">gravitywell</option>
+                                <option value="pulserush">pulserush</option>
+                                <option value="hexavoid">hexavoid</option>
+                                <option value="railrider">railrider</option>
+                                <option value="chainreactor">chainreactor</option>
+                                <option value="vaultjump">vaultjump</option>
+                                <option value="targetstorm">targetstorm</option>
+                                <option value="orbitaldash">orbitaldash</option>
+                                <option value="signalfall">signalfall</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="leaderboardAdminUserFilter">Username contains</label>
+                            <input type="text" id="leaderboardAdminUserFilter" placeholder="player name" maxlength="24" />
+                        </div>
+                        <div class="form-group">
+                            <label for="leaderboardAdminLimitFilter">Max rows</label>
+                            <select id="leaderboardAdminLimitFilter">
+                                <option value="50">50</option>
+                                <option value="100" selected>100</option>
+                                <option value="200">200</option>
+                                <option value="500">500</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="wizard-nav" style="margin-top:0.3rem;">
+                        <button class="btn" type="button" onclick="loadLeaderboardAdminScores()">Load Scores</button>
+                    </div>
+                    <div class="settings-status" id="leaderboardAdminStatus"></div>
+                    <div class="table-responsive" style="margin-top:0.9rem;">
+                        <table>
+                            <thead><tr><th>Game</th><th>Player</th><th>Score</th><th>Updated</th><th>Actions</th></tr></thead>
+                            <tbody id="leaderboardAdminTbody"><tr><td colspan="5">No scores loaded yet.</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         </div>
         <?php endif; ?>
@@ -1419,6 +1473,12 @@ $show_login     = !$needs_setup && !$show_dashboard;
 
         if (tabName === 'overview') {
             refreshOverviewTick();
+            return;
+        }
+
+        if (tabName === 'moderation') {
+            loadSuspiciousScores();
+            loadLeaderboardAdminScores();
         }
     }
 
@@ -2529,6 +2589,137 @@ $show_login     = !$needs_setup && !$show_dashboard;
         } catch (err) { console.error('Moderation error:', err); }
     }
 
+    async function loadLeaderboardAdminScores() {
+        const tbody = document.getElementById('leaderboardAdminTbody');
+        const statusEl = document.getElementById('leaderboardAdminStatus');
+        if (!tbody || !statusEl) {
+            return;
+        }
+
+        statusEl.className = 'settings-status';
+        statusEl.textContent = 'Loading leaderboard scores...';
+
+        const game = String(document.getElementById('leaderboardAdminGameFilter')?.value || '').trim();
+        const username = String(document.getElementById('leaderboardAdminUserFilter')?.value || '').trim();
+        let limit = Number(document.getElementById('leaderboardAdminLimitFilter')?.value || 100);
+        if (!Number.isFinite(limit) || limit < 1) {
+            limit = 100;
+        }
+
+        try {
+            const data = await fetch_admin_api('leaderboard-scores', {
+                game,
+                username,
+                limit: String(Math.min(500, Math.max(1, Math.floor(limit))))
+            });
+
+            const scores = Array.isArray(data.scores) ? data.scores : [];
+            tbody.innerHTML = '';
+
+            if (!scores.length) {
+                tbody.innerHTML = '<tr><td colspan="5">No matching scores found.</td></tr>';
+                statusEl.className = 'settings-status';
+                statusEl.textContent = 'No scores matched this filter.';
+                return;
+            }
+
+            scores.forEach((entry) => {
+                const tr = document.createElement('tr');
+
+                const gameTd = document.createElement('td');
+                gameTd.textContent = String(entry.game || '');
+                tr.appendChild(gameTd);
+
+                const userTd = document.createElement('td');
+                userTd.textContent = String(entry.username || '');
+                tr.appendChild(userTd);
+
+                const scoreTd = document.createElement('td');
+                scoreTd.innerHTML = `<span class="score-high">${Number(entry.score || 0).toLocaleString()}</span>`;
+                tr.appendChild(scoreTd);
+
+                const updatedTd = document.createElement('td');
+                updatedTd.textContent = entry.updatedAt ? new Date(entry.updatedAt).toLocaleString() : '—';
+                tr.appendChild(updatedTd);
+
+                const actionTd = document.createElement('td');
+                const delBtn = document.createElement('button');
+                delBtn.className = 'btn btn-sm btn-reject';
+                delBtn.type = 'button';
+                delBtn.textContent = 'Delete';
+                delBtn.addEventListener('click', async () => {
+                    await deleteLeaderboardScore(entry);
+                });
+                actionTd.appendChild(delBtn);
+                tr.appendChild(actionTd);
+
+                tbody.appendChild(tr);
+            });
+
+            statusEl.className = 'settings-status success';
+            statusEl.textContent = `Loaded ${scores.length} score(s).`;
+        } catch (err) {
+            tbody.innerHTML = '<tr><td colspan="5">Unable to load scores.</td></tr>';
+            statusEl.className = 'settings-status error';
+            statusEl.textContent = err.message || 'Unable to load leaderboard scores.';
+        }
+    }
+
+    async function deleteLeaderboardScore(entry) {
+        if (!entry) {
+            return;
+        }
+
+        const game = String(entry.game || '');
+        const username = String(entry.username || '');
+        const score = Number(entry.score || 0);
+        const createdAt = String(entry.createdAt || '');
+        const updatedAt = String(entry.updatedAt || '');
+        const statusEl = document.getElementById('leaderboardAdminStatus');
+
+        if (!confirm(`Delete score ${score.toLocaleString()} for ${username} on ${game}?`)) {
+            return;
+        }
+
+        if (statusEl) {
+            statusEl.className = 'settings-status';
+            statusEl.textContent = 'Deleting leaderboard score...';
+        }
+
+        try {
+            const res = await fetch('/api/admin-analytics.php?action=delete-leaderboard-score', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Admin-Token': sessionToken },
+                body: JSON.stringify({
+                    game,
+                    username,
+                    score,
+                    createdAt,
+                    updatedAt,
+                    token: sessionToken
+                })
+            });
+
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || data.status !== 'ok') {
+                throw new Error(data.error || 'Unable to delete leaderboard score');
+            }
+
+            if (statusEl) {
+                statusEl.className = 'settings-status success';
+                statusEl.textContent = 'Leaderboard score deleted.';
+            }
+
+            await loadLeaderboardAdminScores();
+            await loadDashboard();
+        } catch (err) {
+            if (statusEl) {
+                statusEl.className = 'settings-status error';
+                statusEl.textContent = err.message;
+            }
+        }
+    }
+
     async function loadAchievementLeaderboard() {
         try {
             const data  = await fetch_admin_api('achievement-leaderboard');
@@ -3180,6 +3371,7 @@ $show_login     = !$needs_setup && !$show_dashboard;
     <?php if ($show_dashboard): ?>
     loadDashboard();
     loadSuspiciousScores();
+    loadLeaderboardAdminScores();
     loadAchievementLeaderboard();
     loadWebhookEvents();
     loadWebhookProxyConfig();
