@@ -62,6 +62,7 @@
 
       let score = 0;
       let lives = 3;
+      let round = 1;
       let playing = true;
       let leftPressed = false;
       let rightPressed = false;
@@ -84,6 +85,7 @@
       function restart() {
         score = 0;
         lives = 3;
+        round = 1;
         playing = true;
         paddle.x = canvas.width / 2 - paddle.w / 2;
         ball.x = canvas.width / 2;
@@ -168,17 +170,24 @@
             return;
           }
 
+          const roundSpeed = Math.min(9, 4 + (round - 1) * 0.45);
           ball.x = canvas.width / 2;
           ball.y = 280;
-          ball.dx = 4;
-          ball.dy = -4;
+          ball.dx = roundSpeed * (Math.random() < 0.5 ? -0.85 : 0.85);
+          ball.dy = -roundSpeed;
           paddle.x = canvas.width / 2 - paddle.w / 2;
         }
 
         if (bricks.every((brick) => brick.hp <= 0)) {
-          playing = false;
-          leaderboard.submit(score);
-          info.textContent = `Score: ${score} | You cleared the wall!`;
+          round += 1;
+          resetBricks();
+
+          const roundSpeed = Math.min(9, 4 + (round - 1) * 0.45);
+          ball.x = canvas.width / 2;
+          ball.y = 280;
+          ball.dx = roundSpeed * (Math.random() < 0.5 ? -0.85 : 0.85);
+          ball.dy = -roundSpeed;
+          paddle.x = canvas.width / 2 - paddle.w / 2;
         }
       }
 
@@ -200,13 +209,13 @@
 
         ball.x += ball.dx;
         ball.y += ball.dy;
-        const cap = 4.8 + (curve - 1) * 1.7;
+        const cap = 4.8 + (curve - 1) * 1.7 + (round - 1) * 0.55;
         ball.dx = Math.max(-cap, Math.min(cap, ball.dx));
         ball.dy = Math.max(-cap, Math.min(cap, ball.dy));
 
         handleCollisions();
 
-        info.textContent = `Score: ${score} | Lives: ${lives}`;
+        info.textContent = `Score: ${score} | Lives: ${lives} | Round: ${round}`;
       }
 
       function draw() {
